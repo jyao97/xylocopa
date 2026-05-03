@@ -2971,13 +2971,14 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     };
   }, [id]);
 
-  // Debug state for touch events (e-ink mode)
-  const [debugLog, setDebugLog] = useState([]);
+  // Debug state for touch events (e-ink mode) — send to backend
   const addDebugLog = useCallback((msg) => {
-    setDebugLog((prev) => {
-      const newLog = [{ time: new Date().toLocaleTimeString(), msg }, ...prev].slice(0, 10);
-      return newLog;
-    });
+    // Send to backend for logging
+    fetch("/api/logs/touch-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msg }),
+    }).catch(() => {}); // Silently ignore errors
   }, []);
 
   // Track e-ink mode state for gesture handlers
@@ -4946,18 +4947,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         messageId={noteForBookmarkId}
         onClose={() => setNoteForBookmarkId(null)}
       />
-
-      {/* E-ink gesture debug panel */}
-      {getEinkMode() && debugLog.length > 0 && (
-        <div className="fixed bottom-20 right-4 z-50 max-w-xs bg-black/90 text-white text-xs rounded-lg border border-green-500/50 p-2 space-y-1 font-mono">
-          <div className="text-green-400 font-semibold mb-1">Touch Events</div>
-          {debugLog.map((entry, i) => (
-            <div key={i} className="text-green-300">
-              <span className="text-green-500">{entry.time}</span> {entry.msg}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

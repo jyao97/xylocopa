@@ -2620,6 +2620,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   }, [showIdPopover]);
   const [syncRefreshing, setSyncRefreshing] = useState(false);
   const messagesEndRef = useRef(null);
+  const einkModeRef = useRef(false);
   const health = useHealthStatus();
   // Gate non-critical fetches (context-usage, suggestions) until after the
   // initial display load completes — keeps them off the critical path so
@@ -2970,23 +2971,26 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     };
   }, [id]);
 
+  // Track e-ink mode state for gesture handlers
+  useEffect(() => {
+    einkModeRef.current = getEinkMode();
+  }, []);
+
   // E-ink mode: gesture navigation (double-finger pitch, single-finger session nav)
   useEffect(() => {
-    if (!getEinkMode()) return;
-
     let touchState = null;
 
     const handleTouchStart = (e) => {
+      if (!einkModeRef.current) return;
       touchState = {
         touchCount: e.touches.length,
         startX: e.touches[0].clientX,
         startY: e.touches[0].clientY,
-        startTime: Date.now(),
       };
     };
 
     const handleTouchEnd = (e) => {
-      if (!touchState || e.touches.length > 0) {
+      if (!einkModeRef.current || !touchState || e.touches.length > 0) {
         touchState = null;
         return;
       }
@@ -3008,6 +3012,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
 
       if (isVertical && touchState.touchCount >= 2) {
         // Double-finger vertical: pitch up/down (scroll)
+        e.preventDefault();
         const sc = scrollContainerRef.current;
         if (sc) {
           const vh = sc.clientHeight;
@@ -3019,6 +3024,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         }
       } else if (!isVertical && touchState.touchCount === 1) {
         // Single-finger horizontal: navigate sessions
+        e.preventDefault();
         const isRight = deltaX > 0;
         const currentSessionId = agent?.session_id || agent?.id;
         const currentIdx = sessions.findIndex((s) => s.session_id === currentSessionId);
@@ -3037,16 +3043,13 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       touchState = null;
     };
 
-    const scrollContainer = scrollContainerRef.current;
-    if (scrollContainer) {
-      scrollContainer.addEventListener("touchstart", handleTouchStart, false);
-      scrollContainer.addEventListener("touchend", handleTouchEnd, false);
-      return () => {
-        scrollContainer.removeEventListener("touchstart", handleTouchStart);
-        scrollContainer.removeEventListener("touchend", handleTouchEnd);
-      };
-    }
-  }, [getEinkMode(), agent?.session_id, agent?.id, sessions, navigate, location.state]);
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [agent?.session_id, agent?.id, sessions, navigate, location.state]);
 
   // Check if any interactive cards are waiting for an answer
   // (must be before polling useEffect which depends on it)

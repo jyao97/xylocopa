@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-05-03
+
+### Added
+
+- **E-ink mode: two-finger horizontal swipe to page-scroll the chat.** Left swipe = page down, right swipe = page up. Saves the user from dragging the scrollbar on slow-refresh e-paper panels.
+
+### Fixed
+
+- **E-ink swipe gesture not firing.** `touchend` fires once per finger lift, and the handler was nulling `touchState` on every intermediate fire — so a 2-finger swipe only worked if both fingers happened to lift in the same frame. Now waits for `e.touches.length === 0` before processing, and preserves the original start point if a second finger lands mid-gesture.
+
+### Changed
+
+- **Skeleton cleanup, round 2.** `GitPage` and `ProjectDetailPage` were still flashing ghost shapes in the body during data loads (commit-row placeholders, branch pills, agent-row cards). Body region now stays empty during load, matching the prior simplification of `ChatSkeleton` / `ProjectDetailSkeleton` / `TaskDetailSkeleton` / `RouteFallback`. Header chrome (Git tab pills) preserved.
+
 ## [0.10.0] - 2026-05-02
 
 ### Added

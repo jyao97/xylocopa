@@ -95,6 +95,31 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   const [dispatching, setDispatching] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(null);
 
+  // After tap-to-expand, the browser dispatches a synthesized mousedown/click
+  // at the original tap coordinate — which now lands on the freshly-rendered
+  // contentEditable title/description. On mobile that focuses the field and
+  // pops the soft keyboard, even though the user only meant to expand. This
+  // ref is armed when handleClick triggers a collapsed→expanded transition,
+  // and the title/desc editors' onMouseDown/onClick consume the trailing
+  // event (preventDefault + skip placeCaretAtPoint) so editing requires a
+  // second deliberate tap.
+  const justExpandedRef = useRef(false);
+  const justExpandedTimerRef = useRef(null);
+  const armExpandFocusGuard = useCallback(() => {
+    justExpandedRef.current = true;
+    clearTimeout(justExpandedTimerRef.current);
+    justExpandedTimerRef.current = setTimeout(() => {
+      justExpandedRef.current = false;
+    }, 700);
+  }, []);
+  const consumeExpandFocusGuard = useCallback(() => {
+    if (!justExpandedRef.current) return false;
+    justExpandedRef.current = false;
+    clearTimeout(justExpandedTimerRef.current);
+    return true;
+  }, []);
+  useEffect(() => () => clearTimeout(justExpandedTimerRef.current), []);
+
   // --- inline title editing ---
   // Title is rendered as `inline-block max-w-full contentEditable` when the
   // card is expanded — the element box hugs the actual text, so empty space
@@ -232,7 +257,18 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
 
   const handleDescClick = (e) => {
     e.stopPropagation();
+    if (justExpandedRef.current) {
+      // Trailing click after tap-to-expand — consume without focusing.
+      consumeExpandFocusGuard();
+      return;
+    }
     if (editRef.current) placeCaretAtPoint(editRef.current, e.clientX, e.clientY);
+  };
+
+  const handleDescMouseDown = (e) => {
+    // Block native focus from the trailing synthesized mousedown that
+    // follows tap-to-expand.
+    if (consumeExpandFocusGuard()) e.preventDefault();
   };
 
   const handleDescBlur = useCallback(() => {
@@ -348,8 +384,12 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   // --- card actions ---
   const handleClick = () => {
     if (filePickerOpenRef.current) return;
-    if (selecting) onToggle?.(task.id);
-    else onExpand?.(task.id);
+    if (selecting) {
+      onToggle?.(task.id);
+      return;
+    }
+    if (!isExpanded) armExpandFocusGuard();
+    onExpand?.(task.id);
   };
 
   // Long-press → enter multi-select mode (only when not already selecting,
@@ -419,8 +459,19 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                     ref={titleRef}
                     contentEditable
                     suppressContentEditableWarning
+                    onMouseDown={(e) => {
+                      // Block native focus from the trailing synthesized
+                      // mousedown that follows tap-to-expand.
+                      if (consumeExpandFocusGuard()) e.preventDefault();
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (justExpandedRef.current) {
+                        // Trailing click after tap-to-expand — consume it
+                        // without placing the caret (which would re-focus).
+                        consumeExpandFocusGuard();
+                        return;
+                      }
                       // Synchronously override iOS word-snap caret placement
                       // with the exact click coords (no RAF — RAF caused a
                       // visible two-step jump between word-snap and target).
@@ -459,6 +510,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   ref={editRef}
                   contentEditable
                   suppressContentEditableWarning
+                  onMouseDown={handleDescMouseDown}
                   onClick={handleDescClick}
                   onBlur={handleDescBlur}
                   onPaste={handlePaste}

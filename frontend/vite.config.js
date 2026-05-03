@@ -22,6 +22,14 @@ const ICON_BASE = `https://cdn.jsdelivr.net/gh/jyao97/xylocopa@v${pkg.version}/f
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    // Inject __APP_VERSION__ placeholder in index.html with the current
+    // package.json version (used by the apple-touch-icon CDN URL).
+    {
+      name: 'inject-app-version',
+      transformIndexHtml(html) {
+        return html.replace(/__APP_VERSION__/g, pkg.version)
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({

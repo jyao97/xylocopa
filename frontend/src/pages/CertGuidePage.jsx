@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 
-const certSteps = [
+const detectPlatform = () => {
+  if (typeof navigator === "undefined") return "ios";
+  const ua = navigator.userAgent;
+  if (/Android/i.test(ua)) return "android";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+  return "ios";
+};
+
+const iosCertSteps = [
   {
     num: 1,
     title: "Download certificate",
@@ -10,16 +18,16 @@ const certSteps = [
   {
     num: 2,
     title: "Install profile",
-    desc: "Settings \u2192 General \u2192 VPN & Device Management \u2192 tap the downloaded profile \u2192 Install.",
+    desc: "Settings → General → VPN & Device Management → tap the downloaded profile → Install.",
   },
   {
     num: 3,
     title: "Enable trust",
-    desc: "Settings \u2192 General \u2192 About \u2192 Certificate Trust Settings \u2192 toggle on \"mkcert\" or \"xylocopa\".",
+    desc: "Settings → General → About → Certificate Trust Settings → toggle on \"mkcert\" or \"xylocopa\".",
   },
 ];
 
-const webClipSteps = [
+const iosWebClipSteps = [
   {
     num: 1,
     title: "Enter server IP",
@@ -28,12 +36,54 @@ const webClipSteps = [
   {
     num: 2,
     title: "Install profile",
-    desc: "Tap the button below \u2192 Allow \u2192 Settings \u2192 General \u2192 VPN & Device Management \u2192 tap \"Xylocopa\" \u2192 Install.",
+    desc: "Tap the button below → Allow → Settings → General → VPN & Device Management → tap \"Xylocopa\" → Install.",
   },
   {
     num: 3,
     title: "Done!",
     desc: "The Xylocopa icon appears on your Home Screen. Tap it and set your password.",
+  },
+];
+
+const androidCertSteps = [
+  {
+    num: 1,
+    title: "Download certificate",
+    desc: "",
+    link: { href: "/api/cert", label: "Tap here to download" },
+  },
+  {
+    num: 2,
+    title: "Set a screen lock first (if you haven't)",
+    desc: "Android won't let you install a CA without a PIN, pattern, or password. Settings → Security → Screen lock.",
+  },
+  {
+    num: 3,
+    title: "Install certificate",
+    desc: "Settings → Security → Encryption & credentials → Install a certificate → CA certificate → pick the downloaded file. Path varies by ROM — if you can't find it, search Settings for \"certificate\".",
+  },
+  {
+    num: 4,
+    title: "Confirm trust warning",
+    desc: "Tap \"Install anyway\" — Android warns that user-installed CAs are less trusted; that's expected.",
+  },
+];
+
+const androidPwaSteps = [
+  {
+    num: 1,
+    title: "Open Chrome menu",
+    desc: "Tap ⋮ (three dots, top right of Chrome).",
+  },
+  {
+    num: 2,
+    title: "Install app",
+    desc: "Tap \"Install app\" or \"Add to Home screen\". Confirm.",
+  },
+  {
+    num: 3,
+    title: "Done!",
+    desc: "The Xylocopa icon appears on your Home Screen. The bee icon loads from a public CDN, so it shows up correctly even though the server uses a private certificate.",
   },
 ];
 
@@ -67,18 +117,63 @@ function StepList({ steps }) {
 }
 
 export default function CertGuidePage() {
+  const [platform, setPlatform] = useState(detectPlatform);
   const [host, setHost] = useState(() => {
     if (typeof window === "undefined") return "";
     const h = window.location.hostname;
     return h === "localhost" || h === "127.0.0.1" ? "" : h;
   });
 
+  // Capture Chrome's beforeinstallprompt so the Android PWA install button
+  // can fire the native install dialog directly. May or may not fire
+  // depending on engagement heuristics — manual menu instructions stay
+  // visible as a fallback.
+  const [installPrompt, setInstallPrompt] = useState(null);
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleAndroidInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    try {
+      await installPrompt.userChoice;
+    } finally {
+      setInstallPrompt(null);
+    }
+  };
+
+  const isAndroid = platform === "android";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
       <div className="absolute inset-0 bg-page/60 backdrop-blur-2xl" />
 
       <div className="relative z-10 w-full max-w-sm mx-4 my-8">
+        {/* Platform toggle — UA detection isn't always right (e.g. desktop Chrome
+            request-mobile-site, or testing iOS flow on Android), let users override. */}
+        <div className="flex justify-center mb-4 gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setPlatform("ios")}
+            className={`px-3 py-1 rounded-full transition-colors ${platform === "ios" ? "bg-cyan-600 text-white" : "bg-surface/50 text-dim hover:text-heading"}`}
+          >
+            iOS
+          </button>
+          <button
+            type="button"
+            onClick={() => setPlatform("android")}
+            className={`px-3 py-1 rounded-full transition-colors ${platform === "android" ? "bg-cyan-600 text-white" : "bg-surface/50 text-dim hover:text-heading"}`}
+          >
+            Android
+          </button>
+        </div>
+
         {/* Section 1: CA Certificate (must be done first) */}
         <div className="text-center mb-5">
           <h1 className="text-lg font-semibold text-heading">Step 1: Trust Certificate</h1>
@@ -86,33 +181,56 @@ export default function CertGuidePage() {
         </div>
 
         <div className="rounded-2xl bg-surface/60 backdrop-blur-md border border-divider/50 p-5 shadow-lg">
-          <StepList steps={certSteps} />
+          <StepList steps={isAndroid ? androidCertSteps : iosCertSteps} />
         </div>
 
-        {/* Section 2: Add to Home Screen via Web Clip */}
+        {/* Section 2: Add to Home Screen */}
         <div className="text-center mt-8 mb-5">
           <h2 className="text-base font-semibold text-heading">Step 2: Add to Home Screen</h2>
-          <p className="text-sm text-dim mt-1">Install as an app with the correct icon</p>
+          <p className="text-sm text-dim mt-1">
+            {isAndroid ? "Install as a PWA from Chrome" : "Install as an app with the correct icon"}
+          </p>
         </div>
 
         <div className="rounded-2xl bg-surface/60 backdrop-blur-md border border-divider/50 p-5 shadow-lg">
-          <StepList steps={webClipSteps} />
+          {isAndroid ? (
+            <>
+              <StepList steps={androidPwaSteps} />
 
-          <input
-            type="text"
-            value={host}
-            onChange={(e) => setHost(e.target.value.trim())}
-            placeholder="e.g. 192.168.1.100 or 100.x.x.x"
-            className="mt-4 w-full px-4 py-3 rounded-xl bg-page/50 border border-divider text-heading placeholder-dim focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-colors text-sm"
-          />
+              {/* If Chrome already fired beforeinstallprompt, give a one-tap
+                  install button. Otherwise the user follows the manual
+                  steps above. */}
+              {installPrompt && (
+                <button
+                  type="button"
+                  onClick={handleAndroidInstall}
+                  className="mt-4 w-full py-3 rounded-xl font-medium bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98] text-white transition-all"
+                >
+                  Install Xylocopa App
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <StepList steps={iosWebClipSteps} />
 
-          <a
-            href={host ? `/api/webclip?host=${encodeURIComponent(host)}` : "#"}
-            onClick={(e) => { if (!host) e.preventDefault(); }}
-            className={`mt-3 w-full py-3 rounded-xl font-medium transition-all text-white text-center block ${host ? "bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98]" : "bg-cyan-600/40 cursor-not-allowed"}`}
-          >
-            Install Xylocopa App
-          </a>
+              <input
+                type="text"
+                value={host}
+                onChange={(e) => setHost(e.target.value.trim())}
+                placeholder="e.g. 192.168.1.100 or 100.x.x.x"
+                className="mt-4 w-full px-4 py-3 rounded-xl bg-page/50 border border-divider text-heading placeholder-dim focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-colors text-sm"
+              />
+
+              <a
+                href={host ? `/api/webclip?host=${encodeURIComponent(host)}` : "#"}
+                onClick={(e) => { if (!host) e.preventDefault(); }}
+                className={`mt-3 w-full py-3 rounded-xl font-medium transition-all text-white text-center block ${host ? "bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98]" : "bg-cyan-600/40 cursor-not-allowed"}`}
+              >
+                Install Xylocopa App
+              </a>
+            </>
+          )}
         </div>
 
         <p className="text-center mt-4">

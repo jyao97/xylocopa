@@ -2513,7 +2513,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   const [showTaskCard, setShowTaskCard] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [sessions, setSessions] = useState([]);
   // Sync generateSummary with per-project localStorage preference
   const generateSummaryInitialized = useRef(false);
   useEffect(() => {
@@ -2971,31 +2970,17 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     };
   }, [id]);
 
-  // Debug state for touch events (e-ink mode) — send to backend
-  const addDebugLog = useCallback((msg) => {
-    // Send to backend for logging
-    fetch("/api/logs/touch-events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ msg }),
-    }).catch(() => {}); // Silently ignore errors
-  }, []);
-
   // Track e-ink mode state for gesture handlers
   useEffect(() => {
     einkModeRef.current = getEinkMode();
-    addDebugLog(`E-ink mode: ${einkModeRef.current ? 'ON' : 'OFF'}`);
-  }, [addDebugLog]);
+  }, []);
 
-  // E-ink mode: gesture navigation (double-finger pitch, single-finger session nav)
+  // E-ink mode: double-finger horizontal swipe to page scroll (left=down, right=up)
   useEffect(() => {
     let touchState = null;
 
     const handleTouchStart = (e) => {
-      const einkOn = einkModeRef.current;
-      addDebugLog(`touchstart: ${e.touches.length} fingers (eink=${einkOn})`);
-      if (!einkOn) return;
-
+      if (!einkModeRef.current) return;
       touchState = {
         touchCount: e.touches.length,
         startX: e.touches[0].clientX,
@@ -3004,15 +2989,8 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     };
 
     const handleTouchEnd = (e) => {
-      const einkOn = einkModeRef.current;
-
-      if (!touchState) {
-        addDebugLog(`touchend: no touchState (eink=${einkOn})`);
-        return;
-      }
-
-      if (e.touches.length > 0) {
-        addDebugLog(`touchend: ${e.touches.length} still touching`);
+      if (!einkModeRef.current || !touchState || e.touches.length > 0) {
+        touchState = null;
         return;
       }
 
@@ -3022,36 +3000,23 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       const deltaY = endY - touchState.startY;
       const distance = Math.hypot(deltaX, deltaY);
 
-      addDebugLog(`touchend: Δx=${deltaX.toFixed(0)}, Δy=${deltaY.toFixed(0)}, dist=${distance.toFixed(0)}`);
-
-      // Minimum swipe distance (50px)
       if (distance < 50) {
-        addDebugLog(`  → too short`);
         touchState = null;
         return;
       }
 
-      // Only double-finger horizontal swipes
+      // Only double-finger horizontal swipes: left = scroll down, right = scroll up
       if (touchState.touchCount >= 2 && Math.abs(deltaX) > Math.abs(deltaY)) {
-        // Double-finger horizontal: left/right page scroll
-        const isLeftSwipe = deltaX < 0;
-        addDebugLog(`  → DOUBLE-FINGER ${isLeftSwipe ? 'LEFT' : 'RIGHT'} swipe`);
         e.preventDefault();
         const sc = scrollContainerRef.current;
         if (sc) {
           const vh = sc.clientHeight;
-          const oldTop = sc.scrollTop;
-          // Left swipe = scroll DOWN, Right swipe = scroll UP
+          const isLeftSwipe = deltaX < 0;
           const newScrollTop = isLeftSwipe
             ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
             : Math.max(sc.scrollTop - vh, 0);
           sc.scrollTop = newScrollTop;
-          addDebugLog(`  → scrolled ${oldTop}→${newScrollTop}`);
-        } else {
-          addDebugLog(`  → no scrollContainer!`);
         }
-      } else {
-        addDebugLog(`  → ignored (only double-finger horizontal supported)`);
       }
 
       touchState = null;
@@ -3063,7 +3028,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [agent?.session_id, agent?.id, agent?.name, sessions, navigate, location.state, addDebugLog]);
+  }, []);
 
   // Check if any interactive cards are waiting for an answer
   // (must be before polling useEffect which depends on it)
@@ -3148,13 +3113,12 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     }
   }, [id, messages.length, agent?.unread_count]);
 
-  // Fetch starred status and sessions list once agent is loaded
+  // Fetch starred status once agent is loaded
   useEffect(() => {
     if (!agent) return;
     const sessionId = agent.session_id || agent.id;
     fetchProjectSessions(agent.project)
       .then((fetchedSessions) => {
-        setSessions(fetchedSessions || []);
         const match = fetchedSessions.find((s) => s.session_id === sessionId);
         setStarred(match?.starred ?? false);
       })

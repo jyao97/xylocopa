@@ -3037,42 +3037,39 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
 
       if (isVertical && touchState.touchCount >= 2) {
         // Double-finger vertical: pitch up/down (scroll)
-        addDebugLog(`  → PITCH ${deltaY > 0 ? 'DOWN' : 'UP'}`);
+        // Note: deltaY > 0 means finger moved DOWN → scroll UP (pitch up)
+        const isPitchUp = deltaY > 0;
+        addDebugLog(`  → PITCH ${isPitchUp ? 'UP' : 'DOWN'}`);
         e.preventDefault();
         const sc = scrollContainerRef.current;
         if (sc) {
           const vh = sc.clientHeight;
-          const isDown = deltaY > 0;
           const oldTop = sc.scrollTop;
-          const newScrollTop = isDown
-            ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
-            : Math.max(sc.scrollTop - vh, 0);
+          const newScrollTop = isPitchUp
+            ? Math.max(sc.scrollTop - vh, 0)
+            : Math.min(sc.scrollTop + vh, sc.scrollHeight - vh);
           sc.scrollTop = newScrollTop;
           addDebugLog(`  → scrolled ${oldTop}→${newScrollTop}`);
         } else {
           addDebugLog(`  → no scrollContainer!`);
         }
       } else if (!isVertical && touchState.touchCount === 1) {
-        // Single-finger horizontal: navigate sessions
-        addDebugLog(`  → SWIPE ${deltaX > 0 ? 'RIGHT' : 'LEFT'}`);
+        // Single-finger horizontal: page scroll
+        // Note: deltaX > 0 means finger moved RIGHT → scroll DOWN (pitch down)
+        const isPitchDown = deltaX > 0;
+        addDebugLog(`  → SWIPE ${deltaX > 0 ? 'RIGHT' : 'LEFT'} (page scroll)`);
         e.preventDefault();
-        const isRight = deltaX > 0;
-        const currentSessionId = agent?.session_id || agent?.id;
-        const currentIdx = sessions.findIndex((s) => s.session_id === currentSessionId);
-
-        if (currentIdx >= 0) {
-          const nextIdx = isRight ? currentIdx - 1 : currentIdx + 1;
-          if (nextIdx >= 0 && nextIdx < sessions.length) {
-            const nextSession = sessions[nextIdx];
-            addDebugLog(`  → navigate to ${nextSession.name || nextSession.session_id}`);
-            navigate(`/chat/${nextSession.session_id}`, {
-              state: forwardState(location.state),
-            });
-          } else {
-            addDebugLog(`  → boundary (idx=${nextIdx}/${sessions.length})`);
-          }
+        const sc = scrollContainerRef.current;
+        if (sc) {
+          const vh = sc.clientHeight;
+          const oldTop = sc.scrollTop;
+          const newScrollTop = isPitchDown
+            ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
+            : Math.max(sc.scrollTop - vh, 0);
+          sc.scrollTop = newScrollTop;
+          addDebugLog(`  → scrolled ${oldTop}→${newScrollTop}`);
         } else {
-          addDebugLog(`  → session not found`);
+          addDebugLog(`  → no scrollContainer!`);
         }
       } else {
         addDebugLog(`  → no match (v=${isVertical}, f=${touchState.touchCount})`);

@@ -2971,6 +2971,15 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     };
   }, [id]);
 
+  // Debug state for touch events (e-ink mode)
+  const [debugLog, setDebugLog] = useState([]);
+  const addDebugLog = useCallback((msg) => {
+    setDebugLog((prev) => {
+      const newLog = [{ time: new Date().toLocaleTimeString(), msg }, ...prev].slice(0, 10);
+      return newLog;
+    });
+  }, []);
+
   // Track e-ink mode state for gesture handlers
   useEffect(() => {
     einkModeRef.current = getEinkMode();
@@ -2987,6 +2996,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         startX: e.touches[0].clientX,
         startY: e.touches[0].clientY,
       };
+      addDebugLog(`touchstart: ${e.touches.length} fingers`);
     };
 
     const handleTouchEnd = (e) => {
@@ -3001,8 +3011,11 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       const deltaY = endY - touchState.startY;
       const distance = Math.hypot(deltaX, deltaY);
 
+      addDebugLog(`touchend: Δx=${deltaX.toFixed(0)}, Δy=${deltaY.toFixed(0)}, dist=${distance.toFixed(0)}`);
+
       // Minimum swipe distance (50px)
       if (distance < 50) {
+        addDebugLog(`too short (${distance.toFixed(0)}px < 50px)`);
         touchState = null;
         return;
       }
@@ -3012,6 +3025,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
 
       if (isVertical && touchState.touchCount >= 2) {
         // Double-finger vertical: pitch up/down (scroll)
+        addDebugLog(`pitch ${deltaY > 0 ? 'down' : 'up'}`);
         e.preventDefault();
         const sc = scrollContainerRef.current;
         if (sc) {
@@ -3024,6 +3038,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         }
       } else if (!isVertical && touchState.touchCount === 1) {
         // Single-finger horizontal: navigate sessions
+        addDebugLog(`swipe ${deltaX > 0 ? 'right' : 'left'} (session nav)`);
         e.preventDefault();
         const isRight = deltaX > 0;
         const currentSessionId = agent?.session_id || agent?.id;
@@ -3049,7 +3064,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [agent?.session_id, agent?.id, sessions, navigate, location.state]);
+  }, [agent?.session_id, agent?.id, sessions, navigate, location.state, addDebugLog]);
 
   // Check if any interactive cards are waiting for an answer
   // (must be before polling useEffect which depends on it)
@@ -4909,6 +4924,18 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         messageId={noteForBookmarkId}
         onClose={() => setNoteForBookmarkId(null)}
       />
+
+      {/* E-ink gesture debug panel */}
+      {getEinkMode() && debugLog.length > 0 && (
+        <div className="fixed bottom-20 right-4 z-50 max-w-xs bg-black/90 text-white text-xs rounded-lg border border-green-500/50 p-2 space-y-1 font-mono">
+          <div className="text-green-400 font-semibold mb-1">Touch Events</div>
+          {debugLog.map((entry, i) => (
+            <div key={i} className="text-green-300">
+              <span className="text-green-500">{entry.time}</span> {entry.msg}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

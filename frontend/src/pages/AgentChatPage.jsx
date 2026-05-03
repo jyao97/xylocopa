@@ -2982,18 +2982,27 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
 
     const handleTouchStart = (e) => {
       if (!einkModeRef.current) return;
-      touchState = {
-        touchCount: e.touches.length,
-        startX: e.touches[0].clientX,
-        startY: e.touches[0].clientY,
-      };
+      if (!touchState) {
+        // First finger of a new gesture — capture start point.
+        touchState = {
+          touchCount: e.touches.length,
+          startX: e.touches[0].clientX,
+          startY: e.touches[0].clientY,
+        };
+      } else {
+        // Additional finger landed during ongoing gesture —
+        // record the peak finger count, keep the original start point.
+        touchState.touchCount = Math.max(touchState.touchCount, e.touches.length);
+      }
     };
 
     const handleTouchEnd = (e) => {
-      if (!einkModeRef.current || !touchState || e.touches.length > 0) {
-        touchState = null;
-        return;
-      }
+      if (!einkModeRef.current || !touchState) return;
+      // Wait until ALL fingers have lifted. touchend fires once per finger,
+      // so an intermediate fire (length > 0) means another finger is still
+      // down — don't drop touchState yet, or the multi-finger gesture
+      // never gets to run when fingers lift one-at-a-time.
+      if (e.touches.length > 0) return;
 
       const endX = e.changedTouches[0].clientX;
       const endY = e.changedTouches[0].clientY;

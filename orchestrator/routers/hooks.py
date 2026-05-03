@@ -141,14 +141,19 @@ async def hook_agent_session_end(request: Request):
 
 @router.post("/api/hooks/agent-user-prompt")
 async def hook_agent_user_prompt(request: Request):
-    """Receive UserPromptSubmit hook — ring the bell, let sync handle message state.
+    """Receive UserPromptSubmit hook — flip status, ring the bell.
 
-    Under the "hook wakes, sync writes" principle, this handler does NOT
-    touch Message rows or the display file. It does two hook-owned things:
+    This handler does NOT touch Message rows or the display file. It does
+    two hook-owned things:
 
-      1. Mark agent runtime status EXECUTING (in-memory set + DB status +
-         WS emit). This is not message state — JSONL's first tool_use arrives
-         seconds late so we need the hook for snappy UI feedback.
+      1. Flip agent.status IDLE/STARTING → EXECUTING (DB write + WS emit).
+         JSONL is the canonical truth for status, but the user turn isn't
+         always flushed within JSONL_FLUSH_DELAY (150ms). When wake_sync
+         sees "file unchanged" the sync-side EXECUTING write is missed and
+         the next poll is POLL_INTERVAL=300s away, so the hook itself
+         writes EXECUTING for snappy + reliable UI feedback. Stop-side
+         transitions still flow through sync (they need the JSONL
+         stop_hook entry first).
       2. Wake the sync loop after JSONL_FLUSH_DELAY so sync can import the
          newly-written user turn, match it to the pre-dispatched web message
          (if any), set delivered_at/jsonl_uuid/status in one commit, and
@@ -188,9 +193,34 @@ async def hook_agent_user_prompt(request: Request):
             ad._ack_promote_on_user_prompt(agent_id)
         except Exception:
             logger.exception("GHOST_PROBE ack_on_user_prompt failed")
-        # Hook only wakes sync — sync_engine reads the new user turn from
-        # JSONL and writes EXECUTING via _infer_status_from_signals. No
-        # direct DB write here under the state-machine refactor.
+        # Flip IDLE/STARTING → EXECUTING here for snappy UI feedback. The
+        # JSONL-driven path (sync_engine._infer_status_from_signals) is
+        # still the canonical writer, but it depends on CC having flushed
+        # the user turn within JSONL_FLUSH_DELAY (150ms). When that flush
+        # is slower, the next wake_sync sees "file unchanged" and bails,
+        # leaving the agent stuck IDLE until something else wakes sync —
+        # POLL_INTERVAL=300s makes that recovery window unbounded in
+        # practice. Stop-side transitions still flow through sync (they
+        # need the JSONL stop_hook entry to be promoted first).
+        try:
+            _db_usp = SessionLocal()
+            try:
+                _ag = _db_usp.get(Agent, agent_id)
+                if _ag and _ag.status in (AgentStatus.IDLE, AgentStatus.STARTING):
+                    _ag.status = AgentStatus.EXECUTING
+                    _db_usp.commit()
+                    from websocket import emit_agent_update as _eau
+                    ad._emit(_eau(agent_id, "EXECUTING", _ag.project))
+                    logger.info(
+                        "hook_agent_user_prompt: flipped %s IDLE→EXECUTING",
+                        agent_id[:8],
+                    )
+            finally:
+                _db_usp.close()
+        except Exception:
+            logger.exception("hook_agent_user_prompt: status flip failed")
+        # Wake sync so message-state writer (delivered tick, jsonl_uuid
+        # match) still runs once CC flushes the user turn.
         logger.info("hook_agent_user_prompt: waking sync for %s", agent_id[:8])
         async def _post_prompt_sync(_aid):
             from config import JSONL_FLUSH_DELAY

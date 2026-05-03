@@ -77,6 +77,7 @@ import {
 import { DATE_SHORT, TIME_SHORT } from "../lib/formatters";
 import VoiceRecorder from "../components/VoiceRecorder";
 import WorktreePill from "../components/WorktreePill";
+import PopoverArrow from "../components/PopoverArrow";
 import ContextUsagePill from "../components/ContextUsagePill";
 import useDraft from "../hooks/useDraft";
 import useVoiceRecorder from "../hooks/useVoiceRecorder";
@@ -4273,10 +4274,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                           Copy
                         </button>
                       </div>
-                      <div
-                        className="absolute left-1/2 w-2 h-2 bg-surface border-l border-t border-divider"
-                        style={{ top: -4, transform: "translateX(-50%) rotate(45deg)" }}
-                      />
+                      <PopoverArrow size={8} />
                     </div>
                   </div>,
                   document.body

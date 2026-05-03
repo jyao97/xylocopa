@@ -218,9 +218,13 @@ html.eink :where(*) {
    of muddy color washes. einkbro exposes this as a 10/30/50/70/100%
    slider; we apply the equivalent of ~contrast(1.1) which is a subtle
    but visible improvement on e-ink. Excludes SVG icons (currentColor)
-   so they retain their token colors. */
-html.eink :where(img:not([src*=".svg"])) {
+   so they retain their token colors. Attachments (chat-attachment-media)
+   keep color — user processes those on the device side. */
+html.eink :where(img:not([src*=".svg"]):not(.chat-attachment-media)) {
   filter: grayscale(100%) contrast(1.1);
+}
+html.eink :where(.chat-attachment-media) {
+  filter: none !important;
 }
 
 
@@ -272,6 +276,14 @@ html.eink .bg-skel {
 html.eink :where(.bg-surface, .bg-elevated, .bg-input, .bg-inset) {
   border: 1px solid var(--color-edge);
 }
+
+/* PopoverArrow SVG — fill matches popover bg, stroke matches popover border.
+   Defaults track the design tokens; e-ink overrides match the popover-bounds
+   override below (page bg + heading-color border). */
+.popover-arrow-fill   { fill: var(--color-surface); }
+.popover-arrow-stroke { stroke: var(--color-divider); }
+html.eink .popover-arrow-fill   { fill: var(--color-page); }
+html.eink .popover-arrow-stroke { stroke: var(--color-heading); }
 
 /* Popovers / floating menus / dropdowns: any element that combines a
    popover shadow (shadow-lg / shadow-xl / shadow-popover) with a

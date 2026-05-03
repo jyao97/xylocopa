@@ -618,7 +618,7 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
             const err = e.target.error;
             setVideoError(err ? `${err.message || "Cannot play this video"}` : "Video failed to load");
           }}
-          className="max-h-[90vh] max-w-[90vw] object-contain select-none"
+          className="chat-attachment-media max-h-[90vh] max-w-[90vw] object-contain select-none"
           style={transformStyle}
           onTransitionEnd={handleTransitionEnd}
         />
@@ -628,7 +628,7 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
           src={current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src}
           alt={current.filename || ""}
           draggable={false}
-          className="max-h-[90vh] max-w-[90vw] object-contain pointer-events-none select-none"
+          className="chat-attachment-media max-h-[90vh] max-w-[90vw] object-contain pointer-events-none select-none"
           style={transformStyle}
           onTransitionEnd={handleTransitionEnd}
         />

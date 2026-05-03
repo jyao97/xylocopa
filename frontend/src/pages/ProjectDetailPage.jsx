@@ -29,6 +29,7 @@ import {
 import { useAgents, useAgentsSeeded } from "../contexts/AgentsContext";
 import { useFolders } from "../contexts/FoldersContext";
 import BotIcon from "../components/BotIcon";
+import PopoverArrow from "../components/PopoverArrow";
 import ProjectRing from "../components/ProjectRing";
 import EmojiPicker from "../components/EmojiPicker";
 import AgentRow from "../components/AgentRow";
@@ -109,8 +110,7 @@ function ProjectStatsPopover({ stats, onClose, containerRef }) {
 
   return (
     <div className="absolute right-0 top-full mt-2 z-50" style={{ minWidth: 260 }}>
-      <div className="absolute -top-1.5 right-3"
-        style={{ width: 12, height: 12, transform: "rotate(45deg)", background: "var(--color-surface)", borderTop: "1px solid var(--color-edge)", borderLeft: "1px solid var(--color-edge)" }} />
+      <PopoverArrow size={12} align="right" offset={12} />
       <div className="bg-surface border border-edge rounded-xl shadow-lg overflow-hidden" style={{ boxShadow: "0 8px 30px var(--color-shadow)" }}>
         {/* Header */}
         <div className="px-4 pt-4 pb-3 flex items-center gap-3">

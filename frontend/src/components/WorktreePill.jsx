@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import PopoverArrow from "./PopoverArrow";
 
 const LONG_PRESS_DELAY = 500;
 
@@ -138,13 +139,7 @@ export default function WorktreePill({ name, padY = "py-px", onCopy }) {
                 </button>
               )}
             </div>
-            {/* Arrow — rendered after content so it paints on top, hiding the
-                content's border at the seam. Borders show only on the upper
-                edges (which after 45deg rotation become the visible triangle). */}
-            <div
-              className="absolute left-1/2 w-2 h-2 bg-surface border-l border-t border-divider"
-              style={{ top: -4, transform: "translateX(-50%) rotate(45deg)" }}
-            />
+            <PopoverArrow size={8} />
           </div>
         </div>,
         document.body

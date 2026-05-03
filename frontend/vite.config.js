@@ -11,6 +11,14 @@ const httpsConfig = fs.existsSync(path.join(certsDir, 'selfsigned.key'))
   ? { key: fs.readFileSync(path.join(certsDir, 'selfsigned.key')), cert: fs.readFileSync(path.join(certsDir, 'selfsigned.crt')) }
   : undefined
 
+// PWA manifest icons must be reachable from Google's WebAPK minting server
+// (public internet) — self-hosted Tailscale/LAN URLs aren't, so Android
+// falls back to "host first-letter" placeholder. jsDelivr mirrors GitHub
+// tagged releases on a public CDN; pin to the current version so each
+// release immutably points at its own icons.
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
+const ICON_BASE = `https://cdn.jsdelivr.net/gh/jyao97/xylocopa@v${pkg.version}/frontend/public`
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -85,9 +93,9 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icon-mask.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: `${ICON_BASE}/icon-192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `${ICON_BASE}/icon-512.png`, sizes: '512x512', type: 'image/png' },
+          { src: `${ICON_BASE}/icon-mask.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),

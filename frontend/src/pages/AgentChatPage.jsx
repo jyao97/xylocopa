@@ -2513,6 +2513,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   const [showTaskCard, setShowTaskCard] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [sessions, setSessions] = useState([]);
   // Sync generateSummary with per-project localStorage preference
   const generateSummaryInitialized = useRef(false);
   useEffect(() => {
@@ -2969,29 +2970,83 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     };
   }, [id]);
 
-  // E-ink mode: volume keys for page-down/page-up scrolling
+  // E-ink mode: gesture navigation (double-finger pitch, single-finger session nav)
   useEffect(() => {
     if (!getEinkMode()) return;
 
-    const handleVolumeKey = (e) => {
-      if (e.key === "AudioVolumeUp" || e.key === "AudioVolumeDown") {
-        e.preventDefault();
-        const sc = scrollContainerRef.current;
-        if (!sc) return;
+    let touchState = null;
 
-        const vh = sc.clientHeight;
-        const isDown = e.key === "AudioVolumeDown";
-        const newScrollTop = isDown
-          ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
-          : Math.max(sc.scrollTop - vh, 0);
-
-        sc.scrollTop = newScrollTop;
-      }
+    const handleTouchStart = (e) => {
+      touchState = {
+        touchCount: e.touches.length,
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startTime: Date.now(),
+      };
     };
 
-    document.addEventListener("keydown", handleVolumeKey, false);
-    return () => document.removeEventListener("keydown", handleVolumeKey);
-  }, []);
+    const handleTouchEnd = (e) => {
+      if (!touchState || e.touches.length > 0) {
+        touchState = null;
+        return;
+      }
+
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const deltaX = endX - touchState.startX;
+      const deltaY = endY - touchState.startY;
+      const distance = Math.hypot(deltaX, deltaY);
+
+      // Minimum swipe distance (50px)
+      if (distance < 50) {
+        touchState = null;
+        return;
+      }
+
+      // Determine primary direction
+      const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
+
+      if (isVertical && touchState.touchCount >= 2) {
+        // Double-finger vertical: pitch up/down (scroll)
+        const sc = scrollContainerRef.current;
+        if (sc) {
+          const vh = sc.clientHeight;
+          const isDown = deltaY > 0;
+          const newScrollTop = isDown
+            ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
+            : Math.max(sc.scrollTop - vh, 0);
+          sc.scrollTop = newScrollTop;
+        }
+      } else if (!isVertical && touchState.touchCount === 1) {
+        // Single-finger horizontal: navigate sessions
+        const isRight = deltaX > 0;
+        const currentSessionId = agent?.session_id || agent?.id;
+        const currentIdx = sessions.findIndex((s) => s.session_id === currentSessionId);
+
+        if (currentIdx >= 0) {
+          const nextIdx = isRight ? currentIdx - 1 : currentIdx + 1;
+          if (nextIdx >= 0 && nextIdx < sessions.length) {
+            const nextSession = sessions[nextIdx];
+            navigate(`/chat/${nextSession.session_id}`, {
+              state: forwardState(location.state),
+            });
+          }
+        }
+      }
+
+      touchState = null;
+    };
+
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener("touchstart", handleTouchStart, false);
+      scrollContainer.addEventListener("touchend", handleTouchEnd, false);
+      return () => {
+        scrollContainer.removeEventListener("touchstart", handleTouchStart);
+        scrollContainer.removeEventListener("touchend", handleTouchEnd);
+      };
+    }
+  }, [getEinkMode(), agent?.session_id, agent?.id, sessions, navigate, location.state]);
 
   // Check if any interactive cards are waiting for an answer
   // (must be before polling useEffect which depends on it)
@@ -3076,13 +3131,14 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     }
   }, [id, messages.length, agent?.unread_count]);
 
-  // Fetch starred status once agent is loaded
+  // Fetch starred status and sessions list once agent is loaded
   useEffect(() => {
     if (!agent) return;
     const sessionId = agent.session_id || agent.id;
     fetchProjectSessions(agent.project)
-      .then((sessions) => {
-        const match = sessions.find((s) => s.session_id === sessionId);
+      .then((fetchedSessions) => {
+        setSessions(fetchedSessions || []);
+        const match = fetchedSessions.find((s) => s.session_id === sessionId);
         setStarred(match?.starred ?? false);
       })
       .catch((err) => {

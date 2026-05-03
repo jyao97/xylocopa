@@ -2983,25 +2983,35 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // Track e-ink mode state for gesture handlers
   useEffect(() => {
     einkModeRef.current = getEinkMode();
-  }, []);
+    addDebugLog(`E-ink mode: ${einkModeRef.current ? 'ON' : 'OFF'}`);
+  }, [addDebugLog]);
 
   // E-ink mode: gesture navigation (double-finger pitch, single-finger session nav)
   useEffect(() => {
     let touchState = null;
 
     const handleTouchStart = (e) => {
-      if (!einkModeRef.current) return;
+      const einkOn = einkModeRef.current;
+      addDebugLog(`touchstart: ${e.touches.length} fingers (eink=${einkOn})`);
+      if (!einkOn) return;
+
       touchState = {
         touchCount: e.touches.length,
         startX: e.touches[0].clientX,
         startY: e.touches[0].clientY,
       };
-      addDebugLog(`touchstart: ${e.touches.length} fingers`);
     };
 
     const handleTouchEnd = (e) => {
-      if (!einkModeRef.current || !touchState || e.touches.length > 0) {
-        touchState = null;
+      const einkOn = einkModeRef.current;
+
+      if (!touchState) {
+        addDebugLog(`touchend: no touchState (eink=${einkOn})`);
+        return;
+      }
+
+      if (e.touches.length > 0) {
+        addDebugLog(`touchend: ${e.touches.length} still touching`);
         return;
       }
 
@@ -3015,30 +3025,35 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
 
       // Minimum swipe distance (50px)
       if (distance < 50) {
-        addDebugLog(`too short (${distance.toFixed(0)}px < 50px)`);
+        addDebugLog(`  → too short`);
         touchState = null;
         return;
       }
 
       // Determine primary direction
       const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
+      addDebugLog(`  → ${isVertical ? 'vertical' : 'horizontal'}, fingers=${touchState.touchCount}`);
 
       if (isVertical && touchState.touchCount >= 2) {
         // Double-finger vertical: pitch up/down (scroll)
-        addDebugLog(`pitch ${deltaY > 0 ? 'down' : 'up'}`);
+        addDebugLog(`  → PITCH ${deltaY > 0 ? 'DOWN' : 'UP'}`);
         e.preventDefault();
         const sc = scrollContainerRef.current;
         if (sc) {
           const vh = sc.clientHeight;
           const isDown = deltaY > 0;
+          const oldTop = sc.scrollTop;
           const newScrollTop = isDown
             ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
             : Math.max(sc.scrollTop - vh, 0);
           sc.scrollTop = newScrollTop;
+          addDebugLog(`  → scrolled ${oldTop}→${newScrollTop}`);
+        } else {
+          addDebugLog(`  → no scrollContainer!`);
         }
       } else if (!isVertical && touchState.touchCount === 1) {
         // Single-finger horizontal: navigate sessions
-        addDebugLog(`swipe ${deltaX > 0 ? 'right' : 'left'} (session nav)`);
+        addDebugLog(`  → SWIPE ${deltaX > 0 ? 'RIGHT' : 'LEFT'}`);
         e.preventDefault();
         const isRight = deltaX > 0;
         const currentSessionId = agent?.session_id || agent?.id;
@@ -3048,11 +3063,18 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
           const nextIdx = isRight ? currentIdx - 1 : currentIdx + 1;
           if (nextIdx >= 0 && nextIdx < sessions.length) {
             const nextSession = sessions[nextIdx];
+            addDebugLog(`  → navigate to ${nextSession.name || nextSession.session_id}`);
             navigate(`/chat/${nextSession.session_id}`, {
               state: forwardState(location.state),
             });
+          } else {
+            addDebugLog(`  → boundary (idx=${nextIdx}/${sessions.length})`);
           }
+        } else {
+          addDebugLog(`  → session not found`);
         }
+      } else {
+        addDebugLog(`  → no match (v=${isVertical}, f=${touchState.touchCount})`);
       }
 
       touchState = null;
@@ -3064,7 +3086,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [agent?.session_id, agent?.id, sessions, navigate, location.state, addDebugLog]);
+  }, [agent?.session_id, agent?.id, agent?.name, sessions, navigate, location.state, addDebugLog]);
 
   // Check if any interactive cards are waiting for an answer
   // (must be before polling useEffect which depends on it)

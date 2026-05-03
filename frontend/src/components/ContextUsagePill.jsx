@@ -3,9 +3,9 @@ import { useState, useRef } from "react";
 /**
  * Token budget pill — sits between Stop and Monitor in the chat header.
  *
- *   [● 12%]   cyan        <70%
- *   [● 75%]   orange      70-95%   (compact zone — CC auto-compacts ~83%)
- *   [● 96%]   red+pulse   >=95%
+ *   [● 12%]   cyan      <50%
+ *   [● 60%]   orange    >=50%   (compact zone — CC auto-compacts ~83%,
+ *                                so >=95% red band is unreachable in practice)
  *
  * Click → popover with per-component breakdown + suggestions.
  * Hover → tooltip via title attr with absolute numbers.
@@ -19,21 +19,18 @@ export default function ContextUsagePill({ usage, agentId }) {
   const total = hasData ? (usage.total || 0) : 0;
   const limit = usage?.limit || 200_000;
 
-  let chipCls, dotCls, pulse = false;
+  let chipCls, dotCls;
   if (!hasData) {
     chipCls = "bg-gray-500/15 text-gray-400";
     dotCls = "bg-gray-400";
-  } else if (pct < 70) {
+  } else if (pct < 50) {
     chipCls = "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
     dotCls = "bg-cyan-500";
-  } else if (pct < 95) {
+  } else {
     chipCls = "bg-orange-500/15 text-orange-600 dark:text-orange-400";
     dotCls = "bg-orange-500";
-  } else {
-    chipCls = "bg-red-500/20 text-red-500 dark:text-red-400";
-    dotCls = "bg-red-500";
-    pulse = true;
   }
+  const pulse = false;
 
   const label = hasData ? `${Math.round(pct)}%` : "—";
   const fmt = (n) => n.toLocaleString();

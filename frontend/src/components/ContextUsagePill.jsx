@@ -3,8 +3,8 @@ import { useState, useRef } from "react";
 /**
  * Token budget pill — sits between Stop and Monitor in the chat header.
  *
- *   [● 12%]   cyan      <50%
- *   [● 60%]   orange    >=50%   (compact zone — CC auto-compacts ~83%,
+ *   [● 12%]   cyan      <70%
+ *   [● 75%]   orange    >=70%   (compact zone — CC auto-compacts ~83%,
  *                                so >=95% red band is unreachable in practice)
  *
  * Click → popover with per-component breakdown + suggestions.
@@ -23,7 +23,7 @@ export default function ContextUsagePill({ usage, agentId }) {
   if (!hasData) {
     chipCls = "bg-gray-500/15 text-gray-400";
     dotCls = "bg-gray-400";
-  } else if (pct < 50) {
+  } else if (pct < 70) {
     chipCls = "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
     dotCls = "bg-cyan-500";
   } else {

@@ -1233,22 +1233,9 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
       {agentTab !== "graph" && (
         <div>
           {(loading || !agentsSeeded) && agents.length === 0 ? (
-            // Header was seeded from briefCache; the agent list comes from
-            // AgentsContext and may be empty until AgentsPage's first
-            // fetch completes. Show row placeholders that match AgentRow's
-            // height so the layout doesn't jump.
-            <div className="space-y-3">
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="rounded-2xl bg-surface px-5 py-[18px] flex items-start gap-3 animate-pulse">
-                  <div className="shrink-0 w-2.5 h-2.5 rounded-full bg-input self-center" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-1/2 rounded bg-input" />
-                    <div className="h-3 w-3/4 rounded bg-input" />
-                  </div>
-                  <div className="w-4 h-4 rounded bg-input self-center" />
-                </div>
-              ))}
-            </div>
+            // Header was seeded from briefCache; agent list still loading.
+            // Leave the body empty rather than flashing ghost rows.
+            <div className="min-h-[8rem]" />
           ) : filtered.length === 0 ? (
             <div className="text-center py-8 text-faint text-sm">
               No {agentTab === "all" ? "" : agentTab + " "}agents

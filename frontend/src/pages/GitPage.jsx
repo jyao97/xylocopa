@@ -407,34 +407,6 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
     }
   }, [selectedProject, cleaning, selectedCleanup, branches, addToast, navigate]);
 
-  // --- Loading skeleton for commits ---
-  function CommitSkeleton() {
-    return (
-      <div className="space-y-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-start gap-3 animate-pulse">
-            <div className="w-16 h-4 bg-skel rounded" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-4 bg-skel rounded w-3/4" />
-              <div className="h-3 bg-skel rounded w-1/3" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // --- Loading skeleton for branches ---
-  function BranchSkeleton() {
-    return (
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-8 w-28 bg-skel rounded-full animate-pulse" />
-        ))}
-      </div>
-    );
-  }
-
   // --- Render ---
   return (
     <div className="h-full flex flex-col">
@@ -503,11 +475,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
             )}
           </div>
           {loadingWorktrees ? (
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="h-8 w-32 bg-skel rounded-full animate-pulse" />
-              ))}
-            </div>
+            <div className="min-h-[2rem]" />
           ) : worktrees.length <= 1 ? (
             <p className="text-sm text-dim">No additional worktrees.</p>
           ) : (
@@ -596,7 +564,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
             )}
           </div>
           {loadingBranches ? (
-            <BranchSkeleton />
+            <div className="min-h-[2rem]" />
           ) : branches.length === 0 ? (
             <p className="text-sm text-dim">No branches found.</p>
           ) : (
@@ -728,7 +696,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
             )}
           </div>
           {loadingStatus ? (
-            <div className="h-6 w-40 bg-skel rounded animate-pulse" />
+            <div className="min-h-[1.5rem]" />
           ) : !status ? (
             <p className="text-sm text-dim">Could not fetch status.</p>
           ) : (
@@ -816,7 +784,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
             Commit Log
           </h2>
           {loadingCommits ? (
-            <CommitSkeleton />
+            <div className="min-h-[6rem]" />
           ) : commits.length === 0 ? (
             <p className="text-sm text-dim">No commits found.</p>
           ) : (

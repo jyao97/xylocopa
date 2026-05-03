@@ -3031,39 +3031,18 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         return;
       }
 
-      // Determine primary direction
-      const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
-      addDebugLog(`  → ${isVertical ? 'vertical' : 'horizontal'}, fingers=${touchState.touchCount}`);
-
-      if (isVertical && touchState.touchCount >= 2) {
-        // Double-finger vertical: pitch up/down (scroll)
-        // Note: deltaY > 0 means finger moved DOWN → scroll UP (pitch up)
-        const isPitchUp = deltaY > 0;
-        addDebugLog(`  → PITCH ${isPitchUp ? 'UP' : 'DOWN'}`);
+      // Only double-finger horizontal swipes
+      if (touchState.touchCount >= 2 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Double-finger horizontal: left/right page scroll
+        const isLeftSwipe = deltaX < 0;
+        addDebugLog(`  → DOUBLE-FINGER ${isLeftSwipe ? 'LEFT' : 'RIGHT'} swipe`);
         e.preventDefault();
         const sc = scrollContainerRef.current;
         if (sc) {
           const vh = sc.clientHeight;
           const oldTop = sc.scrollTop;
-          const newScrollTop = isPitchUp
-            ? Math.max(sc.scrollTop - vh, 0)
-            : Math.min(sc.scrollTop + vh, sc.scrollHeight - vh);
-          sc.scrollTop = newScrollTop;
-          addDebugLog(`  → scrolled ${oldTop}→${newScrollTop}`);
-        } else {
-          addDebugLog(`  → no scrollContainer!`);
-        }
-      } else if (!isVertical && touchState.touchCount === 1) {
-        // Single-finger horizontal: page scroll
-        // Note: deltaX > 0 means finger moved RIGHT → scroll DOWN (pitch down)
-        const isPitchDown = deltaX > 0;
-        addDebugLog(`  → SWIPE ${deltaX > 0 ? 'RIGHT' : 'LEFT'} (page scroll)`);
-        e.preventDefault();
-        const sc = scrollContainerRef.current;
-        if (sc) {
-          const vh = sc.clientHeight;
-          const oldTop = sc.scrollTop;
-          const newScrollTop = isPitchDown
+          // Left swipe = scroll DOWN, Right swipe = scroll UP
+          const newScrollTop = isLeftSwipe
             ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
             : Math.max(sc.scrollTop - vh, 0);
           sc.scrollTop = newScrollTop;
@@ -3072,7 +3051,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
           addDebugLog(`  → no scrollContainer!`);
         }
       } else {
-        addDebugLog(`  → no match (v=${isVertical}, f=${touchState.touchCount})`);
+        addDebugLog(`  → ignored (only double-finger horizontal supported)`);
       }
 
       touchState = null;

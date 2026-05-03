@@ -3,10 +3,9 @@ import { useState, useRef } from "react";
 /**
  * Token budget pill — sits between Stop and Monitor in the chat header.
  *
- *   [● 12%]   green   <60%
- *   [● 65%]   amber   60-80%
- *   [● 85%]   red     80-95%
- *   [● 96%]   red+pulse  >95%
+ *   [● 12%]   cyan        <70%
+ *   [● 75%]   orange      70-95%   (compact zone — CC auto-compacts ~83%)
+ *   [● 96%]   red+pulse   >=95%
  *
  * Click → popover with per-component breakdown + suggestions.
  * Hover → tooltip via title attr with absolute numbers.
@@ -24,15 +23,12 @@ export default function ContextUsagePill({ usage, agentId }) {
   if (!hasData) {
     chipCls = "bg-gray-500/15 text-gray-400";
     dotCls = "bg-gray-400";
-  } else if (pct < 60) {
+  } else if (pct < 70) {
     chipCls = "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
     dotCls = "bg-cyan-500";
-  } else if (pct < 80) {
-    chipCls = "bg-amber-500/15 text-amber-500 dark:text-amber-400";
-    dotCls = "bg-amber-500";
   } else if (pct < 95) {
-    chipCls = "bg-red-500/15 text-red-500 dark:text-red-400";
-    dotCls = "bg-red-500";
+    chipCls = "bg-orange-500/15 text-orange-600 dark:text-orange-400";
+    dotCls = "bg-orange-500";
   } else {
     chipCls = "bg-red-500/20 text-red-500 dark:text-red-400";
     dotCls = "bg-red-500";

@@ -373,6 +373,23 @@ html.eink code:not(pre code) {
   letter-spacing: 0.01em;
 }
 
+/* Segmented pill selectors (ModelSelector, EffortSelector) get visibly
+   wider in eink because body bumps to weight 600 and `.font-medium` →
+   700, which pushes the trailing Auto toggle out of row 1 in the new-task
+   composer. Tighten button padding and label font-weight on these
+   compact selectors only — they sit on a soft pill bg so the label is
+   already easy to find without the extra heft. */
+html.eink :where(.bg-elevated.p-0\.5) {
+  padding: 0.0625rem !important;
+}
+html.eink :where(.bg-elevated.p-0\.5) > button {
+  padding-left: 0.375rem !important;
+  padding-right: 0.375rem !important;
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+  font-weight: 600 !important;
+}
+
 /* All Tailwind colored utilities → grayscale. On e-ink, color coding
    is meaningless (everything renders as mid-gray) and worse, light
    tints look washed out and broken. Collapse the entire palette to

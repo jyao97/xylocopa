@@ -18,7 +18,7 @@ MODEL_LIMITS: dict[str, int] = {
     "claude-sonnet-4-6": 200_000,
     "claude-sonnet-4-5": 200_000,
     "claude-haiku-4-5": 200_000,
-    "claude-haiku-4-5-20251001": 1_000_000,
+    "claude-haiku-4-5-20251001": 200_000,
 }
 DEFAULT_LIMIT = 200_000
 

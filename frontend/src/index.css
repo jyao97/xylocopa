@@ -428,6 +428,17 @@ html.eink .composer-pill {
   gap: 0.25rem !important;
 }
 
+/* Active composer-pill (saturated bg) loses its 1px border via the
+   saturated-bg rule's `border: none`, while inactive siblings with
+   bg-elevated still have the edge border. Under box-sizing border-box,
+   this makes the active state visibly 2px shorter than the input next
+   to it. Restore a 1px heading-color border on composer-pills without
+   bg-elevated — invisible against the heading-color fill, but keeps
+   height parity with the bg-elevated input/button. */
+html.eink .composer-pill:not([class*="bg-elevated"]) {
+  border: 1px solid var(--color-heading) !important;
+}
+
 /* All Tailwind colored utilities → grayscale. On e-ink, color coding
    is meaningless (everything renders as mid-gray) and worse, light
    tints look washed out and broken. Collapse the entire palette to

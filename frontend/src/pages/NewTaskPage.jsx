@@ -627,7 +627,7 @@ export default function NewTaskPage({ embedded = false }) {
                 </div>
               </div>
               {/* Controls grid — matches project page */}
-              <div className="grid grid-cols-[max-content_1fr] gap-y-2 gap-x-2 items-center">
+              <div className="composer-controls grid grid-cols-[max-content_1fr] gap-y-2 gap-x-2 items-center">
                 <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                   <ModelSelector value={model} onChange={setModel} />
                   <EffortSelector value={effort} onChange={setEffort} />
@@ -654,7 +654,7 @@ export default function NewTaskPage({ embedded = false }) {
                       setWorktree(val);
                       try { localStorage.setItem("pref:worktree", val); } catch {}
                     }}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                    className={`composer-pill flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                       worktree
                         ? "bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30"
                         : "bg-elevated text-dim hover:text-label"

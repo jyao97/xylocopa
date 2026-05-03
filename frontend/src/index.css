@@ -373,13 +373,25 @@ html.eink code:not(pre code) {
   letter-spacing: 0.01em;
 }
 
-/* Segmented pill selectors (ModelSelector, EffortSelector) get visibly
-   wider in eink (body weight 600 + `.font-medium` → 700) and on narrow
-   screens, pushing the trailing Auto toggle out of row 1 in the new-task
-   composer. Tighten button padding on these compact selectors at narrow
-   widths and always in eink. They sit on a soft pill bg so the label is
-   already easy to find without the extra heft. */
-@media (max-width: 480px) {
+/* Composer controls row: Auto toggle has priority (sits in grid col 2,
+   `justify-self-end`). When the row gets narrow enough that ModelSelector
+   + EffortSelector can no longer leave room for Auto + the worktree pill,
+   shrink the segmented pill selectors and the worktree pill to recover
+   horizontal space. Uses container queries so it adapts to the actual
+   composer width, not the viewport — works correctly on tablets in
+   split view and inside floating cards too.
+
+   Threshold (~440px) chosen so the row shrinks just before Auto would
+   overflow the right edge in eink mode (worst case: bolder font widens
+   everything). Eink also force-applies the same compact treatment
+   regardless of width, since the bolder weight pushes overflow at all
+   composer sizes. */
+.composer-controls {
+  container-type: inline-size;
+  container-name: composer;
+}
+
+@container composer (max-width: 440px) {
   :where(.bg-elevated.p-0\.5) {
     padding: 0.0625rem;
   }
@@ -389,7 +401,15 @@ html.eink code:not(pre code) {
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
   }
+  .composer-pill {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    gap: 0.25rem;
+  }
 }
+
 html.eink :where(.bg-elevated.p-0\.5) {
   padding: 0.0625rem !important;
 }
@@ -399,6 +419,13 @@ html.eink :where(.bg-elevated.p-0\.5) > button {
   padding-top: 0.25rem !important;
   padding-bottom: 0.25rem !important;
   font-weight: 600 !important;
+}
+html.eink .composer-pill {
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+  gap: 0.25rem !important;
 }
 
 /* All Tailwind colored utilities → grayscale. On e-ink, color coding

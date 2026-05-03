@@ -41,6 +41,7 @@ import { relativeTime, renderMarkdown, extractFileAttachments, stripAttachmentTa
 import { serverNow } from "../lib/serverTime";
 import { uploadUrl } from "../lib/urls";
 import { forwardState, resolveBack } from "../lib/nav";
+import { getEinkMode } from "../lib/einkMode";
 
 // Mini error boundary that wraps individual markdown renders so a single
 // broken message doesn't crash the entire chat page.
@@ -2967,6 +2968,30 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       el.removeEventListener("pointerdown", onAct);
     };
   }, [id]);
+
+  // E-ink mode: volume keys for page-down/page-up scrolling
+  useEffect(() => {
+    if (!getEinkMode()) return;
+
+    const handleVolumeKey = (e) => {
+      if (e.key === "AudioVolumeUp" || e.key === "AudioVolumeDown") {
+        e.preventDefault();
+        const sc = scrollContainerRef.current;
+        if (!sc) return;
+
+        const vh = sc.clientHeight;
+        const isDown = e.key === "AudioVolumeDown";
+        const newScrollTop = isDown
+          ? Math.min(sc.scrollTop + vh, sc.scrollHeight - vh)
+          : Math.max(sc.scrollTop - vh, 0);
+
+        sc.scrollTop = newScrollTop;
+      }
+    };
+
+    document.addEventListener("keydown", handleVolumeKey, false);
+    return () => document.removeEventListener("keydown", handleVolumeKey);
+  }, []);
 
   // Check if any interactive cards are waiting for an answer
   // (must be before polling useEffect which depends on it)

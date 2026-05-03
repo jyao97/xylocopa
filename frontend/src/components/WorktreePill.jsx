@@ -113,6 +113,11 @@ export default function WorktreePill({ name, padY = "py-px", onCopy }) {
         <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 3v12M18 9a3 3 0 100-6 3 3 0 000 6zm0 0v3a3 3 0 01-3 3H9m-3 0a3 3 0 100 6 3 3 0 000-6z" />
         </svg>
+        {/* Zero-width spacer: contributes a text-[10px] line-box (15px) so the
+            inline-flex pill matches the height of text-only sibling pills,
+            which size from line-height. Without this the SVG-only pill is
+            ~3px shorter than text pills under any padY value. */}
+        <span aria-hidden="true" className="invisible w-0 overflow-hidden">x</span>
       </span>
       {open && pos && createPortal(
         <div

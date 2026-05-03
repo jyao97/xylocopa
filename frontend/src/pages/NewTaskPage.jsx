@@ -671,7 +671,8 @@ export default function NewTaskPage({ embedded = false }) {
                       type="text"
                       value={worktree === "auto" || worktree === "..." ? "" : worktree}
                       onChange={(e) => setWorktree(e.target.value || "auto")}
-                      className="flex-1 min-w-0 rounded-lg bg-elevated px-2.5 py-1.5 text-xs text-heading placeholder:text-faint outline-none focus:ring-1 focus:ring-purple-500/40"
+                      size={1}
+                      className="flex-1 w-0 min-w-0 rounded-lg bg-elevated px-2.5 py-1.5 text-xs text-heading placeholder:text-faint outline-none focus:ring-1 focus:ring-purple-500/40"
                       placeholder={worktree === "..." ? "generating..." : "worktree name"}
                     />
                   )}

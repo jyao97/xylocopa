@@ -84,8 +84,10 @@ if n != 1:
 p.write_text(new_text)
 PY
 
-# 3. commit
-git add package.json package-lock.json frontend/package.json frontend/package-lock.json CHANGELOG.md
+# 3. commit (only stage files that exist — root package-lock.json may be absent)
+STAGED=(package.json frontend/package.json frontend/package-lock.json CHANGELOG.md)
+[ -f package-lock.json ] && STAGED+=(package-lock.json)
+git add "${STAGED[@]}"
 git commit -m "[release] v${NEW}"
 
 # 4. tag (annotated)

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-05-03
+
+### Fixed
+
+- **Android PWA app icon now displays correctly.** Manifest icons previously pointed to local URLs (`/icon-192.png`), which Google's WebAPK minting server can't reach when the host is a private Tailscale or LAN IP — the launcher then fell back to "first character of host" (e.g. "1" for `100.x.x.x`). Manifest icons now point to a public jsDelivr CDN mirror of the GitHub release tag, which the minting server can fetch over the public internet. The version is read from `frontend/package.json` at build time so each release pins to its own immutable icon set.
+- **iOS Safari "Add to Home Screen" without mobileconfig** also affected by the same private-cert fetch issue. `apple-touch-icon` link in `index.html` now uses the same jsDelivr CDN URL (with `__APP_VERSION__` injected at build time via a small `transformIndexHtml` plugin), so iOS users who skip the Web Clip flow get the bee icon instead of a generic placeholder.
+
+### Added
+
+- **Android-aware cert-guide page.** `/cert-guide` detects the platform from UA and shows the appropriate install steps. Android Step 1 covers the actual Android cert-install path (download `.crt`, set screen lock first, Settings → Security → Encryption & credentials → Install a certificate, with a note that path varies by ROM and Settings search works). Android Step 2 covers PWA install via Chrome menu, and uses `beforeinstallprompt` to surface a one-tap install button when Chrome fires it. A manual iOS/Android toggle at the top of the page lets users override detection.
+- **`tools/bump-version.sh`** — bumps version across both `package.json` files, inserts a CHANGELOG stub, commits, and creates an annotated tag. Prints next-step reminders, including that the tag must be pushed before the build is shipped (jsDelivr won't serve icons from an unpushed tag).
+
 ## [0.10.1] - 2026-05-03
 
 ### Added

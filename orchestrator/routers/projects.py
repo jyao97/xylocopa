@@ -919,13 +919,33 @@ Task: {task_title}{reason_line}
 def _clear_generating_marker(task_id: str):
     """Clear :::generating::: so the UI shows the 'Generate summary' button."""
     own_db = SessionLocal()
+    project_name = ""
+    task_title = None
+    task_status = "INBOX"
+    cleared = False
     try:
         task = own_db.get(Task, task_id)
         if task and task.agent_summary == ":::generating:::":
             task.agent_summary = None
             own_db.commit()
+            project_name = task.project_name or ""
+            task_title = task.title
+            task_status = task.status.value
+            cleared = True
     finally:
         own_db.close()
+    if not cleared:
+        return
+    # Without this, the UI keeps showing "Generating summary..." indefinitely
+    # — the failure path here used to silently drop the marker without telling
+    # the frontend.
+    from websocket import emit_task_update
+    loop = _main_event_loop
+    if loop and loop.is_running():
+        asyncio.run_coroutine_threadsafe(
+            emit_task_update(task_id, task_status, project_name, title=task_title),
+            loop,
+        )
 
 
 # ---- Project directory browser (read-only) ----

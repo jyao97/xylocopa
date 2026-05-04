@@ -36,9 +36,19 @@ export function InboxTasksProvider({ children }) {
       const t1 = performance.now();
       const list = Array.isArray(data) ? data : [];
       cacheTaskBriefs(list);
-      // Hash by id+status+updated_at so we can skip setState on no-op polls.
-      // Stable array identity = downstream useMemo (sorted, filtered) hits.
-      const hash = list.map((t) => `${t.id}|${t.status}|${t.updated_at || ""}|${t.sort_order ?? ""}`).join(",");
+      // Hash UI-rendered fields so we skip setState on truly no-op polls but
+      // still pick up edits (project, model, summary, notify_at, etc).
+      // Tasks have no `updated_at` column, so we can't shortcut via a single
+      // version stamp — list every field the InboxCard reads.
+      const hash = list.map((t) => [
+        t.id, t.status, t.sort_order ?? "",
+        t.title || "", (t.description || "").length,
+        t.project_name || "", t.priority ?? 0,
+        t.attempt_number ?? 1, t.agent_summary || "",
+        t.retry_context || "", t.model || "", t.effort || "",
+        t.skip_permissions ? 1 : 0, t.use_worktree ? 1 : 0,
+        t.worktree_name || "", t.notify_at || "", t.deferred_to || "",
+      ].join("|")).join(",");
       const changed = hash !== prevHashRef.current;
       prevHashRef.current = hash;
       clog(`[tasks] fetch ${(t1 - t0).toFixed(0)}ms n=${list.length}${changed ? "" : " (no change)"}`);

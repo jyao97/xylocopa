@@ -3151,17 +3151,23 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   const handleToggleStar = async () => {
     if (!agent || starLoading) return;
     const sessionId = agent.session_id || agent.id;
+    const prevStarred = starred;
+    const nextStarred = !starred;
+    // Optimistic: flip the star immediately so iPhone (high-latency self-signed
+    // TLS over LAN) doesn't appear frozen for 1-3s waiting on the HTTP RTT.
+    setStarred(nextStarred);
+    window.dispatchEvent(new CustomEvent("agent-star-changed", { detail: { agentId: id, starred: nextStarred } }));
     setStarLoading(true);
     try {
-      if (starred) {
+      if (prevStarred) {
         await unstarSession(agent.project, sessionId);
       } else {
         await starSession(agent.project, sessionId);
       }
-      const nextStarred = !starred;
-      setStarred(nextStarred);
-      window.dispatchEvent(new CustomEvent("agent-star-changed", { detail: { agentId: id, starred: nextStarred } }));
     } catch (err) {
+      // Rollback on failure
+      setStarred(prevStarred);
+      window.dispatchEvent(new CustomEvent("agent-star-changed", { detail: { agentId: id, starred: prevStarred } }));
       showToast("Failed to update star: " + err.message, "error");
     } finally {
       setStarLoading(false);

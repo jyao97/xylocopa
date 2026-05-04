@@ -116,7 +116,10 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
     const stillSameKey = !key || persistKeyRef.current === key;
     console.log("[voice] pipeline done, mounted:", mountedRef.current, "key:", key, "current:", persistKeyRef.current, "stillSameKey:", stillSameKey, "text:", finalText?.slice(0, 40));
     if (stillSameKey && mountedRef.current) {
-      onTranscriptRef.current?.(finalText);
+      // Defense-in-depth: pass the recording key alongside the text so the
+      // caller can independently verify it matches the chat it's writing to.
+      // Belt-and-suspenders against any future ref-update race we don't catch.
+      onTranscriptRef.current?.(finalText, key);
       if (key) {
         console.log("[voice] deleting entry (delivered)");
         deleteVoiceJob(key).catch(() => {});
@@ -149,7 +152,8 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       }
 
       if (job.status === "done") {
-        onTranscriptRef.current?.(job.text);
+        // Pass recoveryKey alongside text so the caller can verify routing.
+        onTranscriptRef.current?.(job.text, recoveryKey);
         deleteVoiceJob(recoveryKey).catch(() => {});
       } else if (job.status === "transcribed") {
         runPipeline(null, null, job.rawText, recoveryKey);

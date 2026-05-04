@@ -1959,10 +1959,29 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
   useEffect(() => {
     voiceTargetRef.current = voiceTarget || setText;
   }, [voiceTarget, setText]);
+  // Snapshot the chat id this ChatInput render is for. Used as the source of
+  // truth at delivery time — the recording key from the hook must match this.
+  const persistKey = agentId ? `voice:chat:${agentId}` : null;
+  const persistKeyForCallbackRef = useRef(persistKey);
+  useEffect(() => { persistKeyForCallbackRef.current = persistKey; }, [persistKey]);
   const voice = useVoiceRecorder({
-    onTranscript: (t) => voiceTargetRef.current((prev) => (prev ? prev + " " + t : t)),
+    onTranscript: (t, recordingKey) => {
+      // Defense-in-depth: the hook already gates delivery on persistKey match,
+      // but verify here too. If recordingKey doesn't match THIS render's chat,
+      // drop the delivery — something raced and the hook's guard is being
+      // bypassed. Skipping here is safer than appending to a wrong chat.
+      if (recordingKey && recordingKey !== persistKeyForCallbackRef.current) {
+        console.warn("[voice-write] DROP: recording key mismatch", {
+          recordingKey,
+          currentKey: persistKeyForCallbackRef.current,
+          textPreview: (t || "").slice(0, 40),
+        });
+        return;
+      }
+      voiceTargetRef.current((prev) => (prev ? prev + " " + t : t));
+    },
     onError: (msg) => setVoiceError(msg),
-    persistKey: agentId ? `voice:chat:${agentId}` : null,
+    persistKey,
   });
   const [voiceError, setVoiceError] = useState(null);
   useEffect(() => {

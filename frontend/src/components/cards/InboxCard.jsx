@@ -122,14 +122,16 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
 
   // --- inline title editing ---
   // Title uses a contentEditable state-toggle to avoid iOS Safari's
-  // word-snap two-step caret placement. While `titleEditing` is false the
-  // element is non-editable, so iOS skips its native caret hit-test on
-  // touchend. The first click flips state → next-frame focus +
-  // placeCaretAtPoint lands the caret in one step. Inline-block layout is
-  // preserved so empty-space clicks bubble to the card root's collapse
-  // handler.
+  // word-snap two-step caret placement. The first click stashes the click
+  // coordinates in a ref and flips `titleEditing` to true. A
+  // useLayoutEffect (which runs synchronously after the React commit but
+  // *before* the browser paints — the same primitive use-editable relies
+  // on) then focuses the element and places the caret. No paint happens
+  // between contentEditable becoming true and the caret landing, so iOS
+  // never has a frame to render a default-position or word-snap caret.
   const titleRef = useRef(null);
   const [titleEditing, setTitleEditing] = useState(false);
+  const titleCaretRef = useRef(null);
 
   const handleCardEmptyClick = (e) => {
     if (!isExpanded) return;
@@ -150,10 +152,11 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   }, [task.id, task.title, onRefresh]);
 
   // --- inline description editing ---
-  // Same state-toggle pattern as the title (see comment above). Content is
+  // Same state-toggle + useLayoutEffect pattern as the title. Content is
   // set imperatively (innerText) so React doesn't fight the user's typing.
   const editRef = useRef(null);
   const [descEditing, setDescEditing] = useState(false);
+  const descCaretRef = useRef(null);
   const fileInputRef = useRef(null);
   const filePickerOpenRef = useRef(false);
 
@@ -219,6 +222,37 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
     if (editRef.current) editRef.current.innerText = descText;
   }, [isExpanded, task.id]);
 
+  // Sync caret placement on the very same paint frame that flips
+  // contentEditable=true. Runs after React commits the DOM (so the
+  // attribute is live and focus() can take) but *before* the browser
+  // paints (so iOS never gets a chance to render a default-position
+  // caret in between). This is the same trick `use-editable` uses.
+  useLayoutEffect(() => {
+    if (!titleEditing) return;
+    const coords = titleCaretRef.current;
+    if (!coords) return;
+    titleCaretRef.current = null;
+    const el = titleRef.current;
+    if (!el) return;
+    el.focus();
+    placeCaretAtPoint(el, coords.x, coords.y);
+  }, [titleEditing]);
+
+  useLayoutEffect(() => {
+    if (!descEditing) return;
+    const coords = descCaretRef.current;
+    if (!coords) return;
+    descCaretRef.current = null;
+    const el = editRef.current;
+    if (!el) return;
+    if (!el.innerText) el.innerText = descText;
+    el.focus();
+    placeCaretAtPoint(el, coords.x, coords.y);
+    // descText is intentionally read from closure (only a fallback when
+    // the existing useLayoutEffect above hasn't populated innerText yet).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descEditing]);
+
   useEffect(() => {
     if (!isExpanded) return;
     const titleEl = titleRef.current;
@@ -267,21 +301,14 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
     }
     const { clientX, clientY } = e;
     if (!descEditing) {
-      // First edit-tap: flip contentEditable on. iOS didn't paint a
-      // word-snap caret because the element wasn't editable at touchend.
-      // After re-render, focus + placeCaretAtPoint in rAF lands the caret
-      // exactly where the user tapped — single step.
+      // First edit-tap: stash coords + flip state. The useLayoutEffect
+      // does the actual focus+placeCaret synchronously between commit
+      // and paint (see comment near the effect).
+      descCaretRef.current = { x: clientX, y: clientY };
       setDescEditing(true);
-      requestAnimationFrame(() => {
-        const el = editRef.current;
-        if (!el) return;
-        if (!el.innerText) el.innerText = descText;
-        el.focus();
-        placeCaretAtPoint(el, clientX, clientY);
-      });
-    } else {
+    } else if (editRef.current) {
       // Already editing — synchronously override iOS word-snap.
-      if (editRef.current) placeCaretAtPoint(editRef.current, clientX, clientY);
+      placeCaretAtPoint(editRef.current, clientX, clientY);
     }
   };
 
@@ -495,18 +522,13 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                       }
                       const { clientX, clientY } = e;
                       if (!titleEditing) {
-                        // First edit-tap: flip contentEditable on. iOS skipped
-                        // its native caret hit-test on touchend because the
-                        // element wasn't editable. After re-render, focus +
-                        // placeCaretAtPoint in rAF lands the caret in one
-                        // step — no word-snap to fight.
+                        // First edit-tap: stash coords + flip state. The
+                        // useLayoutEffect handles the actual focus +
+                        // placeCaret synchronously between React's commit
+                        // and the browser's next paint, so iOS never has a
+                        // chance to draw a default-position caret.
+                        titleCaretRef.current = { x: clientX, y: clientY };
                         setTitleEditing(true);
-                        requestAnimationFrame(() => {
-                          const el = titleRef.current;
-                          if (!el) return;
-                          el.focus();
-                          placeCaretAtPoint(el, clientX, clientY);
-                        });
                       } else if (titleRef.current) {
                         placeCaretAtPoint(titleRef.current, clientX, clientY);
                       }

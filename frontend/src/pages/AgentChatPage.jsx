@@ -3639,15 +3639,12 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   }, []);
   useWsEvent((event) => {
     // Project-scoped events have no agent_id; check before the agent_id guard.
-    // Other device starred/unstarred this session — refresh the star button.
-    if (event.type === "project_update" && agent?.project && event.data?.name === agent.project) {
+    // Targeted star event — payload carries the new boolean, no refetch needed.
+    if (event.type === "session_star_changed" && agent?.project && event.data?.project === agent.project) {
       const sessionId = agent.session_id || agent.id;
-      fetchProjectSessions(agent.project)
-        .then((fetchedSessions) => {
-          const match = fetchedSessions.find((s) => s.session_id === sessionId);
-          setStarred(match?.starred ?? false);
-        })
-        .catch(() => {});
+      if (event.data.session_id === sessionId) {
+        setStarred(!!event.data.starred);
+      }
       return;
     }
 

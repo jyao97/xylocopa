@@ -2077,8 +2077,9 @@ async def star_session(name: str, session_id: str, db: Session = Depends(get_db)
     if not existing:
         db.add(StarredSession(session_id=session_id, project=name))
         db.commit()
-        from websocket import emit_project_update
-        asyncio.ensure_future(emit_project_update(name))
+    # Always emit so other devices' UI converges even on a duplicate request.
+    from websocket import emit_session_star_changed
+    asyncio.ensure_future(emit_session_star_changed(name, session_id, True))
     return {"starred": True}
 
 
@@ -2089,8 +2090,8 @@ async def unstar_session(name: str, session_id: str, db: Session = Depends(get_d
     if existing:
         db.delete(existing)
         db.commit()
-        from websocket import emit_project_update
-        asyncio.ensure_future(emit_project_update(name))
+    from websocket import emit_session_star_changed
+    asyncio.ensure_future(emit_session_star_changed(name, session_id, False))
     return {"starred": False}
 
 

@@ -317,6 +317,17 @@ async def emit_project_update(name: str):
     await ws_manager.broadcast("project_update", {"name": name})
 
 
+async def emit_session_star_changed(project: str, session_id: str, starred: bool):
+    """Targeted signal: a single session's star flag flipped. Carries the
+    new state so subscribers (chat page star button) can setState directly
+    without a 250-360ms /sessions refetch."""
+    await ws_manager.broadcast("session_star_changed", {
+        "project": project,
+        "session_id": session_id,
+        "starred": starred,
+    })
+
+
 # ---- Chat-message event emitters ----
 #
 # Signal-only by design: each event carries only {agent_id, message_id}.

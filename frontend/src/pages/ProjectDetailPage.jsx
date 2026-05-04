@@ -7,7 +7,6 @@ import {
   archiveProject as archiveProjectApi,
   renameProject as renameProjectApi,
   fetchProjectBookmarks,
-  createBookmark,
   deleteBookmark,
   scanAgents,
   fetchProjectFile,
@@ -261,11 +260,6 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
   const agents = useAgents(agentFilterRef.current);
   const agentsSeeded = useAgentsSeeded();
   const [bookmarks, setBookmarks] = useState(initialCached?.bookmarks || []);
-  // Rows the user removed in this mount session. We re-inject them into the
-  // displayed list after every poll so they don't vanish under their finger
-  // when the 5s loadData() refresh comes back without them. Cleared on
-  // navigate-away (component unmount) or full page reload.
-  const removedTombstonesRef = useRef(new Map());
   // Cache hit → no spinner, just paint cached data and refetch silently.
   const [loading, setLoading] = useState(!initialCached);
   const [loadError, setLoadError] = useState(null);
@@ -322,13 +316,46 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
     }
   }, []);
 
+  // Deferred bookmark removal — same shape as pendingUnstars. Tapping the
+  // bookmark icon only flips the pending entry; the row stays visible
+  // (loadData keeps fetching it from the API since the row hasn't actually
+  // been deleted) and the icon renders outline. Flush on navigate-away.
+  const [pendingBookmarkDeletes, setPendingBookmarkDeletes] = useState(() => new Set());
+  const pendingBookmarkDeletesRef = useRef(pendingBookmarkDeletes);
+  useEffect(() => { pendingBookmarkDeletesRef.current = pendingBookmarkDeletes; }, [pendingBookmarkDeletes]);
+
+  const handleTogglePendingBookmarkDelete = useCallback((messageId) => {
+    setPendingBookmarkDeletes((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const flushPendingBookmarkDeletes = useCallback(() => {
+    const set = pendingBookmarkDeletesRef.current;
+    if (!set || set.size === 0) return;
+    const ids = Array.from(set);
+    pendingBookmarkDeletesRef.current = new Set();
+    setPendingBookmarkDeletes(new Set());
+    for (const messageId of ids) {
+      deleteBookmark(name, messageId).catch((err) => {
+        console.warn("[project] deferred bookmark delete failed", messageId, err);
+      });
+    }
+  }, [name]);
+
   // Flush on unmount (route change away from /projects/:name) and on
   // project name change (navigating between two projects without
   // unmounting). AgentsPage uses isActive instead — ProjectDetailPage isn't
   // in the keep-mounted shell, so unmount is the natural signal.
   useEffect(() => {
-    return () => { flushPendingUnstars(); };
-  }, [name, flushPendingUnstars]);
+    return () => {
+      flushPendingUnstars();
+      flushPendingBookmarkDeletes();
+    };
+  }, [name, flushPendingUnstars, flushPendingBookmarkDeletes]);
 
   // Reconcile pending entries against the latest store snapshot — drop
   // entries for agents that are no longer starred (chat-page unstar, WS
@@ -506,19 +533,8 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
       ]);
       if (stats) setProjectStats(stats);
       const fresh = bookmarkList || [];
-      const freshIds = new Set(fresh.map((b) => b.message_id));
-      const ghosts = [];
-      for (const [id, snap] of removedTombstonesRef.current) {
-        if (!freshIds.has(id)) ghosts.push(snap);
-      }
-      const merged = ghosts.length
-        ? [...fresh, ...ghosts].sort((a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        : fresh;
-      setBookmarks(merged);
+      setBookmarks(fresh);
       setLoadError(null);
-      // Update module-level cache so the next mount paints from cache.
-      // Tombstones / agents intentionally NOT cached here.
       projectDetailCache.set(name, {
         project: projectDetailCache.get(name)?.project || null,
         stats: stats || null,
@@ -1357,30 +1373,8 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
       <BookmarksSection
         projectName={name}
         items={bookmarks}
-        onDelete={async (messageId) => {
-          // Soft delete: snapshot the row into tombstones BEFORE backend call
-          // so the next poll re-injects it. Stays visible until the user
-          // navigates away (or hard-refreshes), at which point the ref is
-          // wiped and the now-deleted row genuinely disappears.
-          const snapshot = bookmarks.find((b) => b.message_id === messageId);
-          if (snapshot) removedTombstonesRef.current.set(messageId, snapshot);
-          try {
-            await deleteBookmark(name, messageId);
-          } catch (err) {
-            removedTombstonesRef.current.delete(messageId); // rollback
-            showToast("Failed to remove bookmark: " + (err?.message || "unknown"), "error");
-          }
-        }}
-        onRestore={async (messageId) => {
-          // Re-bookmark a row the user just removed in this session: drop the
-          // tombstone so the live row from the next poll is the source of truth.
-          removedTombstonesRef.current.delete(messageId);
-          try {
-            await createBookmark(name, messageId);
-          } catch (err) {
-            showToast("Failed to re-bookmark: " + (err?.message || "unknown"), "error");
-          }
-        }}
+        pendingDeletes={pendingBookmarkDeletes}
+        onTogglePendingDelete={handleTogglePendingBookmarkDelete}
         onPatched={(messageId, updated) => {
           setBookmarks((prev) =>
             prev.map((b) => (b.message_id === messageId ? { ...b, ...updated } : b)),

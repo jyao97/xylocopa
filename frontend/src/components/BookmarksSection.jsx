@@ -18,9 +18,8 @@ function pickEmoji(item) {
   return KIND_FALLBACK_EMOJI[item.kind] || "💬";
 }
 
-function BookmarkRow({ projectName, item, onOpen, onDelete, onRestore, onPatched }) {
+function BookmarkRow({ projectName, item, onOpen, isPendingDelete, onTogglePendingDelete, onPatched }) {
   const isFile = item.kind === "file";
-  const [locallyRemoved, setLocallyRemoved] = useState(false);
   const meta = item.created_at ? relativeTime(item.created_at) : "";
 
   // Editing state for the top text (the user-editable "title" — backed by user_note).
@@ -44,7 +43,7 @@ function BookmarkRow({ projectName, item, onOpen, onDelete, onRestore, onPatched
 
   const startEditing = (e) => {
     e?.stopPropagation();
-    if (locallyRemoved || editing) return;
+    if (isPendingDelete || editing) return;
     setDraft(item.body || "");
     setEditing(true);
   };
@@ -145,7 +144,7 @@ function BookmarkRow({ projectName, item, onOpen, onDelete, onRestore, onPatched
               >
                 {item.title || "(untitled)"}
               </p>
-              {!locallyRemoved && (
+              {!isPendingDelete && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); startEditing(e); }}
@@ -166,40 +165,28 @@ function BookmarkRow({ projectName, item, onOpen, onDelete, onRestore, onPatched
                   </svg>
                 </button>
               )}
-              {typeof onDelete === "function" && (
+              {typeof onTogglePendingDelete === "function" && (
                 <span
                   role="button"
                   tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (locallyRemoved) {
-                      setLocallyRemoved(false);
-                      onRestore?.(item.message_id);
-                    } else {
-                      setLocallyRemoved(true);
-                      onDelete(item.message_id);
-                    }
+                    onTogglePendingDelete(item.message_id);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.stopPropagation();
-                      if (locallyRemoved) {
-                        setLocallyRemoved(false);
-                        onRestore?.(item.message_id);
-                      } else {
-                        setLocallyRemoved(true);
-                        onDelete(item.message_id);
-                      }
+                      onTogglePendingDelete(item.message_id);
                     }
                   }}
-                  title={locallyRemoved ? "Re-bookmark" : "Remove bookmark"}
+                  title={isPendingDelete ? "Re-bookmark" : "Remove bookmark"}
                   className={`shrink-0 p-0.5 -my-0.5 rounded transition-colors cursor-pointer ${
-                    locallyRemoved
+                    isPendingDelete
                       ? "text-faint hover:text-amber-500 hover:bg-amber-500/10"
                       : "text-amber-500 hover:bg-amber-500/15"
                   }`}
                 >
-                  <svg className="w-[15px] h-[15px] block" fill={locallyRemoved ? "none" : "currentColor"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <svg className="w-[15px] h-[15px] block" fill={isPendingDelete ? "none" : "currentColor"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
                 </span>
@@ -212,7 +199,7 @@ function BookmarkRow({ projectName, item, onOpen, onDelete, onRestore, onPatched
   );
 }
 
-export default function BookmarksSection({ projectName, items, onDelete, onRestore, onPatched }) {
+export default function BookmarksSection({ projectName, items, pendingDeletes, onTogglePendingDelete, onPatched }) {
   const navigate = useNavigate();
   const location = useLocation();
   const bookmarks = items || [];
@@ -255,8 +242,8 @@ export default function BookmarksSection({ projectName, items, onDelete, onResto
             projectName={projectName}
             item={item}
             onOpen={() => handleOpen(item)}
-            onDelete={onDelete}
-            onRestore={onRestore}
+            isPendingDelete={pendingDeletes?.has?.(item.message_id) ?? false}
+            onTogglePendingDelete={onTogglePendingDelete}
             onPatched={onPatched}
           />
         ))}

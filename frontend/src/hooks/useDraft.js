@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { getVoiceDraftChannel } from "../lib/voiceStore";
+import { getVoiceDraftChannel, subscribeVoiceDraft } from "../lib/voiceStore";
 
 /**
  * Persist a draft value in localStorage across navigation and refresh.
@@ -56,8 +56,10 @@ export default function useDraft(key, initialValue = "") {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, stringMode]);
 
-  // Subscribe to external writes to this storageKey (cross-tab `storage` event,
-  // same-tab BroadcastChannel from voice pipeline). Re-read when our key fires.
+  // Subscribe to external writes to this storageKey:
+  //   - same-tab: in-memory subscriber set (voice pipeline calls this when
+  //     it appends; BroadcastChannel does NOT self-deliver in same context)
+  //   - cross-tab: native `storage` event + BroadcastChannel
   // localStorage is the single source of truth — React state is just a view.
   useEffect(() => {
     if (!storageKey) return;
@@ -73,17 +75,23 @@ export default function useDraft(key, initialValue = "") {
         console.warn("useDraft: failed to re-read on external update:", err);
       }
     };
+    // Same-tab voice updates (in-memory subscription; BC won't self-deliver).
+    const unsubVoice = subscribeVoiceDraft((payload) => {
+      if (payload?.key === storageKey) reread();
+    });
+    // Cross-tab via native storage event (key null on clear()).
     const onStorage = (e) => {
-      // `storage` event fires only for OTHER tabs; key may be null on clear()
       if (e.key === null || e.key === storageKey) reread();
     };
     window.addEventListener("storage", onStorage);
+    // Cross-tab via BroadcastChannel (only delivers to OTHER browsing contexts).
     const ch = getVoiceDraftChannel();
     const onChannel = (e) => {
       if (e?.data?.key === storageKey) reread();
     };
     if (ch) ch.addEventListener("message", onChannel);
     return () => {
+      unsubVoice();
       window.removeEventListener("storage", onStorage);
       if (ch) ch.removeEventListener("message", onChannel);
     };

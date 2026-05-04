@@ -52,9 +52,13 @@ export async function deleteVoiceJob(key) {
 // possibly land in the wrong chat. Read-modify-write is synchronous in JS
 // (localStorage is sync API), so concurrent user keystrokes cannot interleave.
 //
-// `voice-draft-updated` BroadcastChannel notifies same-tab listeners (the
-// useDraft hook subscribes) so the textarea re-reads localStorage immediately;
-// cross-tab updates flow through the native `storage` event.
+// Notification fan-out:
+//   - Same-tab listeners: an in-memory Set of subscribers (BroadcastChannel
+//     does NOT redeliver messages to the same browsing context that posted
+//     them, so we can't rely on it for in-tab notifications).
+//   - Other-tab listeners: the BroadcastChannel below (cross-context).
+//   - The native `storage` event also fires in other tabs as a fallback.
+const _localListeners = new Set();
 let _voiceBC = null;
 function _voiceChannel() {
   if (_voiceBC) return _voiceBC;
@@ -63,15 +67,27 @@ function _voiceChannel() {
   return _voiceBC;
 }
 export function getVoiceDraftChannel() { return _voiceChannel(); }
+// Subscribe to same-tab voice-draft updates. Handler receives {key, value}.
+// Returns an unsubscribe function.
+export function subscribeVoiceDraft(handler) {
+  _localListeners.add(handler);
+  return () => { _localListeners.delete(handler); };
+}
 export function appendVoiceDraft(storageKey, text) {
   if (!storageKey || !text) return;
   try {
     const cur = localStorage.getItem(storageKey) || "";
     const next = cur ? cur + " " + text : text;
     localStorage.setItem(storageKey, next);
+    const payload = { key: storageKey, value: next };
+    // Same-tab fan-out (BroadcastChannel does not self-deliver).
+    for (const h of _localListeners) {
+      try { h(payload); } catch (err) { console.warn("[voice] subscriber threw:", err); }
+    }
+    // Cross-tab fan-out.
     const ch = _voiceChannel();
     if (ch) {
-      try { ch.postMessage({ key: storageKey, value: next }); } catch { /* ignore */ }
+      try { ch.postMessage(payload); } catch { /* ignore */ }
     }
   } catch (err) {
     console.warn("[voice] appendVoiceDraft failed:", err);

@@ -9,7 +9,56 @@ _(empty)_
 
 ## Medium
 
-_(empty)_
+### Detect CC TUI modal dialogs before dispatching tmux messages
+`dispatch_pending_message` (`agent_dispatcher.py:2647`) only checks
+`agent.status == EXECUTING` before pasting + sending Enter. If Claude Code
+is showing a modal dialog (Resume from summary, permission prompt,
+ExitPlanMode, AskUserQuestion) the agent's xylo-side status is still IDLE
+and our Enter accepts the menu's default option instead of submitting the
+queued message — which is silently lost. Concrete prior incident:
+2026-05-03 22:44 agent `d6129b61`, msg `03609fef` ("又发生了" + image)
+was eaten by the Resume-from-summary menu, default "1. Resume from summary"
+fired /compact, JSONL got rewritten, message vanished.
+
+**Why it can't be detected via files / hooks.** TUI dialog state is pure
+React/Ink render state — never written to JSONL, no hook fires on
+"dialog opened/closed". Tmux's own pane vars are useless too:
+`alternate_on=0` (Ink renders inline), `cursor_x/y` lands on the input
+box even with a menu floating above, `pane_in_mode` is tmux's own
+copy-mode flag. **Only signal available is `tmux capture-pane` text
+matching.**
+
+**Proposed design.**
+- Add `pane_is_in_modal(pane_id) -> bool` helper that captures the last
+  ~10 lines and matches known modal signatures:
+  - Generic: `"Enter to confirm · Esc to cancel"` (all select-menus)
+  - Numbered options: regex `❯ \d+\. ` + at least one more numbered line
+  - Permission dialog: regex `^\s*\d+\.\s+(Yes|No|Allow|Deny)` multiline
+  - Cost-threshold dialog, ExitPlanMode, AskUserQuestion as we discover
+    their signatures
+- Call it in `dispatch_pending_message` and `_dispatch_pending_messages`
+  (scheduled path) right before `send_tmux_message`. On hit: leave message
+  PENDING, log a structured warning, let the next stop-hook cycle retry.
+- Add small unit-test fixture set with known pane_tail strings from
+  GHOST_PROBE logs (we already have one for Resume-from-summary).
+
+**Open questions.**
+- Retry cadence: stop hook fires when CC actually idles after the user
+  closes the dialog manually. But if dialog stays up indefinitely (user
+  walked away), how does the queued message ever get sent? Possibly
+  surface a UI affordance: "agent waiting on dialog — view pane / send
+  Esc to dismiss".
+- ANSI handling: capture-pane returns rendered text but Ink can use
+  invisible chars / cursor positioning. Need to test signature stability
+  with `-e` (escape sequences) vs default.
+
+**Already done (2026-05-04, related):** suppressed the most common
+trigger by setting `CLAUDE_CODE_RESUME_TOKEN_THRESHOLD=999999999` /
+`CLAUDE_CODE_RESUME_THRESHOLD_MINUTES=999999` on every CC launch
+(`route_helpers.py` `create_tmux_claude_session`). This kills the
+Resume-from-summary menu specifically. Permission / ExitPlanMode /
+AskUserQuestion dialogs still leave the same message-loss surface
+exposed — which is why this Medium-priority item exists.
 
 ## Low
 

@@ -176,6 +176,14 @@ def create_tmux_claude_session(
     # intercepting Enter).
     env_setup = "unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT XYLOCOPA_MANAGED AGENTHIVE_MANAGED CLAUDE_CODE_OAUTH_TOKEN"
     env_setup += " && export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false"
+    # Suppress CC's "Resume from summary?" interactive menu on resume of old/large
+    # sessions. The menu's default ("1. Resume from summary") triggers /compact, and
+    # any tmux send-keys Enter from xylocopa's dispatch path lands on it instead of
+    # the input box — silently losing the queued message and rewriting the session.
+    # AND-gated: breaking either threshold suppresses the menu; we set both for
+    # defense in depth against env name churn.
+    env_setup += " && export CLAUDE_CODE_RESUME_TOKEN_THRESHOLD=999999999"
+    env_setup += " && export CLAUDE_CODE_RESUME_THRESHOLD_MINUTES=999999"
     if agent_id:
         env_setup += f" && export XY_AGENT_ID={agent_id} && export AHIVE_AGENT_ID={agent_id}"
     _sp.run(["tmux", "send-keys", "-t", pane_id, env_setup, "Enter"],

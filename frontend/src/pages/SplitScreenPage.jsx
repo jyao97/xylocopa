@@ -33,7 +33,6 @@ const TasksPage = lazy(() => import("./TasksPage"));
 const TaskDetailPage = lazy(() => import("./TaskDetailPage"));
 const MonitorPage = lazy(() => import("./MonitorPage"));
 const NewPage = lazy(() => import("./NewPage"));
-const NewTaskPage = lazy(() => import("./NewTaskPage"));
 const GitPage = lazy(() => import("./GitPage"));
 
 // --- Layout definitions ---
@@ -160,16 +159,10 @@ function PaneShell({ theme, onToggleTheme, onPathChange, navigateRef }) {
             <Route path="/agents/:id" element={<AgentChatPage {...themeProps} embedded onClose={onCloseChat} onNavigateAgent={onNavigateAgent} />} />
             <Route path="/tasks" element={<TasksPage {...themeProps} />} />
             <Route path="/tasks/:id" element={<TaskDetailPage {...themeProps} />} />
-            {!bgLocation && <Route path="/new/task" element={<NewTaskPage embedded />} />}
             <Route path="/new" element={<NewPage {...themeProps} />} />
             <Route path="/monitor" element={<MonitorPage {...themeProps} />} />
             <Route path="/git" element={<GitPage {...themeProps} />} />
           </Routes>
-          {bgLocation && (
-            <Routes>
-              <Route path="/new/task" element={<NewTaskPage embedded />} />
-            </Routes>
-          )}
         </Suspense>
       </main>
 

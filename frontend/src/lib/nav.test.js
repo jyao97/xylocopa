@@ -20,9 +20,8 @@ describe("pageLevel", () => {
     expect(pageLevel("/tasks/t-42")).toBe(2);
   });
 
-  it("assigns level 3 to /new and /new/task", () => {
+  it("assigns level 3 to /new", () => {
     expect(pageLevel("/new")).toBe(3);
-    expect(pageLevel("/new/task")).toBe(3);
   });
 });
 
@@ -39,9 +38,9 @@ describe("forwardState", () => {
   });
 
   it("unwraps backgroundLocation for modal pages", () => {
-    // /new/task opened over /projects/p — forward should treat /projects/p as the parent.
+    // Modal page opened over /projects/p — forward should treat /projects/p as the parent.
     const bg = { pathname: "/projects/p", search: "", state: { from: "/projects", fromState: null } };
-    const loc = { pathname: "/new/task", search: "", state: { backgroundLocation: bg } };
+    const loc = { pathname: "/some/modal", search: "", state: { backgroundLocation: bg } };
     expect(forwardState(loc)).toEqual({
       from: "/projects/p",
       fromState: { from: "/projects", fromState: null },

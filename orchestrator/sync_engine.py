@@ -1224,27 +1224,28 @@ async def sync_full_scan(ad, ctx: SyncContext, reason: str = "startup"):
         if _changes_made:
             db.commit()
 
-        # Rebuild display file after compact — purge stale pre-compact entries
+        # Append targeted _replace lines for rows whose status changed in
+        # the compact block above. We deliberately do NOT call rebuild_agent
+        # here: the display file is an event log of what the user has seen,
+        # not a projection of current DB state. Rebuilding would (a) drop
+        # SENT-but-undelivered USER orphans like messages eaten by a TUI
+        # modal during compact, (b) silently erase cli-orphan rows the user
+        # already saw, and (c) re-shuffle display_seq based on the post-
+        # compact session_seq even though the visible timeline shouldn't
+        # change. update_last keeps the existing entries intact and only
+        # appends the status transitions.
         if reason == "compact":
-            from display_writer import rebuild_agent as _rebuild_display
-            _rebuild_display(ctx.agent_id)
-
-            # Frontend WS signals: display file is already refreshed by
-            # rebuild_agent; these are just signals so clients refetch
-            # without waiting for the next poll.
+            from display_writer import update_last as _update_last
             if _compact_finalized_msg_id:
                 _compact_msg_re = db.get(Message, _compact_finalized_msg_id)
                 if _compact_msg_re and _compact_msg_re.completed_at:
+                    _update_last(ctx.agent_id, _compact_finalized_msg_id)
                     from websocket import emit_message_executed
                     asyncio.ensure_future(emit_message_executed(
                         ctx.agent_id, _compact_finalized_msg_id,
                     ))
-            # The compact tool_activity row's status flipped to COMPLETED
-            # in _end_compact_activity but its display _replace line was
-            # never written (rebuild_agent re-emits from DB so the row IS
-            # now in the file with the new status). Signal the change so
-            # frontend refetches and shows the ended Compact bubble.
             if _compact_activity_id:
+                _update_last(ctx.agent_id, _compact_activity_id)
                 from websocket import emit_message_update
                 asyncio.ensure_future(emit_message_update(
                     ctx.agent_id, _compact_activity_id,

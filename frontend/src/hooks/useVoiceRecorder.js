@@ -103,11 +103,14 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       }
     }
 
-    // Step 3 — persist final result. From here on, IDB is the single source
-    // of truth for "this transcript exists and has not yet been delivered."
-    // If we have no persistKey (rare — caller didn't pass one), fall back to
-    // direct delivery without IDB participation.
+    // Step 3 — persist + deliver. The caller is responsible for routing the
+    // transcript to a destination structurally bound to `key` (e.g. ChatInput
+    // derives `draft:chat:<id>` from the persistKey and writes localStorage
+    // directly), so misroute is structurally impossible regardless of where
+    // the user is currently viewing. We pass `key` through onTranscript as
+    // the routing identifier.
     if (!key) {
+      // No persistKey — fallback caller (NewPage etc.) gets direct delivery.
       if (mountedRef.current) onTranscriptRef.current?.(finalText, key);
       return;
     }
@@ -115,26 +118,10 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       console.warn("[voice] failed to save done entry:", e);
     });
 
-    // Routing gate: don't attempt to claim if we're no longer in the chat
-    // this recording was made in. Leave the "done" entry for recovery to
-    // pick up when the user returns. (claimVoiceJob would also succeed here,
-    // but the wrong chat's setText would be invoked.)
-    const stillSameKey = persistKeyRef.current === key;
-    console.log("[voice] pipeline done, mounted:", mountedRef.current, "key:", key, "current:", persistKeyRef.current, "stillSameKey:", stillSameKey, "text:", finalText?.slice(0, 40));
-    if (!stillSameKey) {
-      console.log("[voice] keeping entry (persistKey changed; user navigated)");
-      return;
-    }
-    if (!mountedRef.current) {
-      console.log("[voice] keeping entry (component unmounted)");
-      return;
-    }
-
     // Atomic claim: read-and-delete in a single IDB transaction. If recovery
-    // already claimed this job (e.g. user did A→B→A and recovery's claim ran
-    // first), claimVoiceJob returns null and we MUST NOT deliver — recovery
-    // already handled it. Single source of truth: whoever holds the IDB row
-    // owns the delivery. In-memory finalText is no longer trusted on its own.
+    // (re-mounted after A→B→A) already claimed this job, claimVoiceJob returns
+    // null and we yield. IDB is the single source of truth for "this
+    // transcript still needs delivering."
     const claimed = await claimVoiceJob(key).catch((e) => {
       console.warn("[voice] claim failed:", e);
       return null;
@@ -143,9 +130,14 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       console.log("[voice] pipeline yielded — recovery already claimed");
       return;
     }
-    console.log("[voice] pipeline claimed, delivering");
-    // Use claimed.text (read from IDB), not the in-memory finalText, so the
-    // caller sees data that came through the single-truth path.
+    if (!mountedRef.current) {
+      // Hook itself unmounted (whole ChatInput torn down — rare). Re-save so
+      // the next mount's recovery can pick it up.
+      console.log("[voice] hook unmounted post-claim; re-saving for recovery");
+      await saveVoiceJob(key, { status: "done", text: claimed.text }).catch(() => {});
+      return;
+    }
+    console.log("[voice] pipeline claimed, delivering to", key);
     onTranscriptRef.current?.(claimed.text, key);
   }, []);
 
@@ -159,26 +151,17 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
     console.log("[voice] recovery check for key:", persistKey);
     // Peek (read-only) first so we can branch on status. Only the "done"
     // branch races with the pipeline — for "transcribed" and "pending" we
-    // need to resume the pipeline anyway, so reading without claiming is
-    // fine; the pipeline's claim at the end is the single arbiter.
+    // resume the pipeline; the pipeline's atomic claim is the arbiter.
     getVoiceJob(persistKey).then(async (job) => {
-      if (cancelled) { console.log("[voice] recovery cancelled (unmounted)"); return; }
+      if (cancelled) { console.log("[voice] recovery cancelled (effect re-ran)"); return; }
       if (!job) { console.log("[voice] no pending job found"); return; }
       console.log("[voice] recovery found job:", job.status, "text:", (job.text || job.rawText || "")?.slice(0, 40));
 
-      // Routing gate (still useful as an early exit): if user navigated away
-      // between the IDB read and now, don't claim — let the next mount of
-      // recoveryKey try again. This avoids deleting a "done" job we then
-      // can't deliver to the right chat.
-      if (persistKeyRef.current !== recoveryKey) {
-        console.log("[voice] recovery aborted — persistKey changed:", persistKeyRef.current);
-        return;
-      }
-
       if (job.status === "done") {
-        // Atomic claim: only one of {pipeline, recovery} can win the read.
-        // If the pipeline is mid-delivery and beat us to the IDB write, our
-        // claim returns null and we silently yield — pipeline handles it.
+        // Atomic claim: only one of {pipeline, recovery} wins the read.
+        // Either way the caller routes via recoveryKey (structural binding
+        // to chat ID), so the destination is correct regardless of which
+        // chat the user is currently looking at.
         const claimed = await claimVoiceJob(recoveryKey).catch((e) => {
           console.warn("[voice] recovery claim failed:", e);
           return null;
@@ -187,7 +170,15 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
           console.log("[voice] recovery yielded — pipeline already claimed");
           return;
         }
-        console.log("[voice] recovery claimed, delivering");
+        if (!mountedRef.current) {
+          // Hook unmounted between getVoiceJob and claim — re-save so the
+          // next mount can pick it up. Only relevant for non-chat callers
+          // whose onTranscript needs a live React component; ChatInput's
+          // localStorage-based delivery would survive unmount fine.
+          await saveVoiceJob(recoveryKey, { status: "done", text: claimed.text }).catch(() => {});
+          return;
+        }
+        console.log("[voice] recovery claimed, delivering to", recoveryKey);
         onTranscriptRef.current?.(claimed.text, recoveryKey);
       } else if (job.status === "transcribed") {
         runPipeline(null, null, job.rawText, recoveryKey);

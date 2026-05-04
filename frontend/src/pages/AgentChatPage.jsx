@@ -77,6 +77,7 @@ import {
 } from "../lib/constants";
 import { DATE_SHORT, TIME_SHORT } from "../lib/formatters";
 import VoiceRecorder from "../components/VoiceRecorder";
+import { appendVoiceDraft } from "../lib/voiceStore";
 import WorktreePill from "../components/WorktreePill";
 import PopoverArrow from "../components/PopoverArrow";
 import ContextUsagePill from "../components/ContextUsagePill";
@@ -1905,7 +1906,7 @@ import SkillPickerPanel from "../components/SkillPickerPanel";
 
 // --- Chat Input ---
 
-function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledReason, isBusy, tmuxMode, onEscape, escapeUrgent, escapeAvailable = true, escapeDisabled = false, voiceTarget, scrollButton, kbOpen = false }) {
+function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledReason, isBusy, tmuxMode, onEscape, escapeUrgent, escapeAvailable = true, escapeDisabled = false, scrollButton, kbOpen = false }) {
   const [text, setText] = useDraft(agentId ? `chat:${agentId}` : null, "");
   const [showPicker, setShowPicker] = useState(false);
   const [skillsDismissed, setSkillsDismissed] = useState(false);
@@ -1953,36 +1954,25 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
   const fileInputRef = useRef(null);
   const pendingSendRef = useRef(null);
 
-  // Voice target ref — redirects transcription to feedback textarea when stop modal is open.
-  // setText must be in deps: useDraft returns a new setter when storageKey (agentId) changes,
-  // and without re-binding, the voice transcript callback would fire the previous chat's setter.
-  const voiceTargetRef = useRef(setText);
-  useEffect(() => {
-    voiceTargetRef.current = voiceTarget || setText;
-  }, [voiceTarget, setText]);
-  // Snapshot the chat id this ChatInput render is for. Used as the source of
-  // truth at delivery time — the recording key from the hook must match this.
-  const persistKey = agentId ? `voice:chat:${agentId}` : null;
-  const persistKeyForCallbackRef = useRef(persistKey);
-  useEffect(() => { persistKeyForCallbackRef.current = persistKey; }, [persistKey]);
+  // Voice transcript delivery: append directly to the chat's draft localStorage
+  // key. localStorage is the single source of truth for chat drafts; the key
+  // (`draft:chat:<agentId>`) is structurally bound to the chat ID, so cross-
+  // chat misroute is physically impossible — no ref-snapshotting, no guards.
+  // useDraft listens for BroadcastChannel + storage events and re-reads the
+  // value into React state, so the textarea updates immediately whether or not
+  // the chat is currently mounted on screen.
+  //
+  // The hook's atomic `claimVoiceJob` already ensures pipeline+recovery cannot
+  // both deliver the same recording. The hook's persistKey-match gate still
+  // prevents claiming when the user is in a different chat (so the IDB job is
+  // preserved for recovery on return). Beyond those, no caller-side guards.
   const voice = useVoiceRecorder({
-    onTranscript: (t, recordingKey) => {
-      // Defense-in-depth: the hook already gates delivery on persistKey match,
-      // but verify here too. If recordingKey doesn't match THIS render's chat,
-      // drop the delivery — something raced and the hook's guard is being
-      // bypassed. Skipping here is safer than appending to a wrong chat.
-      if (recordingKey && recordingKey !== persistKeyForCallbackRef.current) {
-        console.warn("[voice-write] DROP: recording key mismatch", {
-          recordingKey,
-          currentKey: persistKeyForCallbackRef.current,
-          textPreview: (t || "").slice(0, 40),
-        });
-        return;
-      }
-      voiceTargetRef.current((prev) => (prev ? prev + " " + t : t));
+    onTranscript: (t) => {
+      const draftKey = agentId ? `draft:chat:${agentId}` : null;
+      if (draftKey) appendVoiceDraft(draftKey, t);
     },
     onError: (msg) => setVoiceError(msg),
-    persistKey,
+    persistKey: agentId ? `voice:chat:${agentId}` : null,
   });
   const [voiceError, setVoiceError] = useState(null);
   useEffect(() => {

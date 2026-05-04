@@ -45,6 +45,39 @@ export async function deleteVoiceJob(key) {
   });
 }
 
+// Append voice transcript text directly to a localStorage draft key.
+// This is the canonical delivery path: localStorage is the single source of
+// truth for chat drafts, and the draft key (e.g. "draft:chat:<agentId>") is
+// structurally bound to the chat ID — so writing to the right key cannot
+// possibly land in the wrong chat. Read-modify-write is synchronous in JS
+// (localStorage is sync API), so concurrent user keystrokes cannot interleave.
+//
+// `voice-draft-updated` BroadcastChannel notifies same-tab listeners (the
+// useDraft hook subscribes) so the textarea re-reads localStorage immediately;
+// cross-tab updates flow through the native `storage` event.
+let _voiceBC = null;
+function _voiceChannel() {
+  if (_voiceBC) return _voiceBC;
+  if (typeof BroadcastChannel === "undefined") return null;
+  try { _voiceBC = new BroadcastChannel("voice-draft-updated"); } catch { _voiceBC = null; }
+  return _voiceBC;
+}
+export function getVoiceDraftChannel() { return _voiceChannel(); }
+export function appendVoiceDraft(storageKey, text) {
+  if (!storageKey || !text) return;
+  try {
+    const cur = localStorage.getItem(storageKey) || "";
+    const next = cur ? cur + " " + text : text;
+    localStorage.setItem(storageKey, next);
+    const ch = _voiceChannel();
+    if (ch) {
+      try { ch.postMessage({ key: storageKey, value: next }); } catch { /* ignore */ }
+    }
+  } catch (err) {
+    console.warn("[voice] appendVoiceDraft failed:", err);
+  }
+}
+
 // Atomic read-and-delete in a single readwrite transaction.
 // Returns the job (with text/status) if it existed, null otherwise.
 // IndexedDB serializes concurrent transactions on the same store, so when

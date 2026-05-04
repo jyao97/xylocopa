@@ -680,11 +680,20 @@ async def reorder_tasks_v2(body: dict, db: Session = Depends(get_db)):
     task_ids = body.get("task_ids", [])
     if not task_ids:
         raise HTTPException(400, "task_ids required")
+    first_task = None
     for i, tid in enumerate(task_ids):
         task = db.get(Task, tid)
         if task:
             task.sort_order = i
+            if first_task is None:
+                first_task = task
     db.commit()
+    # Emit a single task_update on any reordered task — InboxTasksContext
+    # listens and refetches the whole list, which picks up the new order.
+    if first_task is not None:
+        asyncio.ensure_future(emit_task_update(
+            first_task.id, first_task.status.value, first_task.project_name or "",
+        ))
     return {"ok": True, "count": len(task_ids)}
 
 

@@ -311,6 +311,12 @@ async def emit_new_message(agent_id: str, message_id: str,
     })
 
 
+async def emit_project_update(name: str):
+    """Signal: a project's settings/grouping changed (emoji, toggles,
+    starred sessions). Frontend FoldersContext refetches the project list."""
+    await ws_manager.broadcast("project_update", {"name": name})
+
+
 # ---- Chat-message event emitters ----
 #
 # Signal-only by design: each event carries only {agent_id, message_id}.

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import { fetchAllFolders, fetchTrashFolders, clog } from "../lib/api";
 import { cacheProjectBriefs } from "../lib/detailCache";
 import usePageVisible from "../hooks/usePageVisible";
+import { useWsEvent } from "../hooks/useWebSocket";
 
 // Single source of truth for the project folder list. Replaces the
 // per-ProjectsPage useState + setInterval(load, 10000) so the keep-mounted
@@ -76,6 +77,12 @@ export function FoldersProvider({ children }) {
     window.addEventListener("projects-data-changed", onChanged);
     return () => window.removeEventListener("projects-data-changed", onChanged);
   }, [refetch]);
+
+  // Cross-device WS invalidation: another device changed project settings
+  // (emoji/toggles) or starred a session.
+  useWsEvent(useCallback((event) => {
+    if (event.type === "project_update") refetch();
+  }, [refetch]));
 
   const state = useMemo(() => ({ folders, trashFolders, loading, error, version, seeded }), [folders, trashFolders, loading, error, version, seeded]);
   const actions = useMemo(() => ({ refetch }), [refetch]);

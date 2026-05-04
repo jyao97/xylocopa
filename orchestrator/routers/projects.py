@@ -2077,6 +2077,8 @@ async def star_session(name: str, session_id: str, db: Session = Depends(get_db)
     if not existing:
         db.add(StarredSession(session_id=session_id, project=name))
         db.commit()
+        from websocket import emit_project_update
+        asyncio.ensure_future(emit_project_update(name))
     return {"starred": True}
 
 
@@ -2087,6 +2089,8 @@ async def unstar_session(name: str, session_id: str, db: Session = Depends(get_d
     if existing:
         db.delete(existing)
         db.commit()
+        from websocket import emit_project_update
+        asyncio.ensure_future(emit_project_update(name))
     return {"starred": False}
 
 
@@ -2480,6 +2484,8 @@ async def update_project_settings(name: str, request: Request, db: Session = Dep
             proj.emoji = str(raw)[:16]
     db.commit()
     db.refresh(proj)
+    from websocket import emit_project_update
+    asyncio.ensure_future(emit_project_update(name))
     return ProjectOut.model_validate(proj)
 
 

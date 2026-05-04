@@ -2978,6 +2978,7 @@ async def mark_agent_read(agent_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Agent not found")
     agent.unread_count = 0
     db.commit()
+    asyncio.ensure_future(emit_agent_update(agent.id, agent.status.value, agent.project))
     return {"detail": "ok"}
 
 

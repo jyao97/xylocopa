@@ -116,14 +116,21 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
     const stillSameKey = !key || persistKeyRef.current === key;
     console.log("[voice] pipeline done, mounted:", mountedRef.current, "key:", key, "current:", persistKeyRef.current, "stillSameKey:", stillSameKey, "text:", finalText?.slice(0, 40));
     if (stillSameKey && mountedRef.current) {
+      // CRITICAL ORDER: delete the IDB entry FIRST, then fire onTranscript.
+      // If deletion is fire-and-forget after delivery, an A→B→A navigation
+      // can re-trigger the recovery effect for A while the IDB delete is
+      // still in flight; recovery reads the stale "done" job and re-injects
+      // the same text into A's input. Awaiting the delete closes that race.
+      if (key) {
+        console.log("[voice] deleting entry (pre-delivery)");
+        await deleteVoiceJob(key).catch((e) => {
+          console.warn("[voice] failed to delete entry:", e);
+        });
+      }
       // Defense-in-depth: pass the recording key alongside the text so the
       // caller can independently verify it matches the chat it's writing to.
       // Belt-and-suspenders against any future ref-update race we don't catch.
       onTranscriptRef.current?.(finalText, key);
-      if (key) {
-        console.log("[voice] deleting entry (delivered)");
-        deleteVoiceJob(key).catch(() => {});
-      }
     } else if (!stillSameKey) {
       console.log("[voice] keeping entry (persistKey changed; user navigated)");
     } else {
@@ -139,7 +146,7 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
     const recoveryKey = persistKey;
 
     console.log("[voice] recovery check for key:", persistKey);
-    getVoiceJob(persistKey).then((job) => {
+    getVoiceJob(persistKey).then(async (job) => {
       if (cancelled) { console.log("[voice] recovery cancelled (unmounted)"); return; }
       if (!job) { console.log("[voice] no pending job found"); return; }
       console.log("[voice] recovery found job:", job.status, "text:", (job.text || job.rawText || "")?.slice(0, 40));
@@ -152,9 +159,13 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       }
 
       if (job.status === "done") {
+        // Delete BEFORE delivering so a subsequent re-mount of this same
+        // recoveryKey (e.g. quick A→B→A navigation) cannot read the same
+        // "done" job from IDB and re-inject the same text. See pipeline
+        // delivery for the symmetric ordering.
+        await deleteVoiceJob(recoveryKey).catch(() => {});
         // Pass recoveryKey alongside text so the caller can verify routing.
         onTranscriptRef.current?.(job.text, recoveryKey);
-        deleteVoiceJob(recoveryKey).catch(() => {});
       } else if (job.status === "transcribed") {
         runPipeline(null, null, job.rawText, recoveryKey);
       } else if (job.status === "pending" && job.audioBlob) {

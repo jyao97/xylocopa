@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 /**
  * Persist a draft value in localStorage across navigation and refresh.
@@ -24,6 +24,34 @@ export default function useDraft(key, initialValue = "") {
     }
     return initialValue;
   });
+
+  // Reload value when storageKey changes (e.g. ChatInput is reused across
+  // agentId navigation without remounting). Without this, the in-memory state
+  // from the previous key leaks into the new chat's textarea — including any
+  // voice transcript that just landed before navigation.
+  const lastKeyRef = useRef(storageKey);
+  useEffect(() => {
+    if (lastKeyRef.current === storageKey) return;
+    lastKeyRef.current = storageKey;
+    if (!storageKey) {
+      _setValue(initialValue);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored !== null) {
+        _setValue(stringMode ? stored : JSON.parse(stored));
+      } else {
+        _setValue(initialValue);
+      }
+    } catch (err) {
+      console.warn("useDraft: failed to reload draft from localStorage:", err);
+      _setValue(initialValue);
+    }
+    // initialValue intentionally omitted — capturing it would reset on every
+    // render when callers pass an inline default like `[]` or `""`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, stringMode]);
 
   const setValue = useCallback((v) => {
     _setValue((prev) => {

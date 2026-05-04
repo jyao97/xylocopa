@@ -22,6 +22,10 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
   const startTimeRef = useRef(null);
   const startingRef = useRef(false);
   const wakeLockRef = useRef(null);
+  // Snapshot of persistKey at recording-start time. Bound to this recording
+  // instance so the pipeline routes the transcript back to the conversation
+  // it was recorded in, even if the user navigates mid-pipeline.
+  const recordingKeyRef = useRef(null);
 
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
@@ -45,8 +49,12 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
   // Persists intermediate results to IndexedDB so the pipeline can
   // survive page freeze / kill and resume on next mount.
 
-  const runPipeline = useCallback(async (audioBlob, mimeType, rawText) => {
-    const key = persistKeyRef.current;
+  const runPipeline = useCallback(async (audioBlob, mimeType, rawText, capturedKey) => {
+    // capturedKey is the persistKey that was active when this pipeline started
+    // (recording-start or recovery). Use it so navigation mid-pipeline can't
+    // misroute the transcript. Falls back to the current ref only when caller
+    // didn't pass one (defensive — all internal call sites do).
+    const key = capturedKey !== undefined ? capturedKey : persistKeyRef.current;
 
     // Step 1 — transcribe (skip if we already have rawText)
     if (!rawText) {
@@ -95,24 +103,28 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       }
     }
 
-    // Step 3 — persist final result, then deliver
-    // Save "done" before attempting delivery so recovery can pick it up
-    // if the component unmounted while the pipeline was in-flight.
+    // Step 3 — persist final result, then deliver only if still on the
+    // same conversation. If persistKey has changed (user navigated to a
+    // different chat mid-pipeline), DO NOT call onTranscript — that would
+    // dump this transcript into the wrong textarea. Leave the "done" entry
+    // in IndexedDB so the recovery effect picks it up when the user returns.
     if (key) {
       await saveVoiceJob(key, { status: "done", text: finalText }).catch((e) => {
         console.warn("[voice] failed to save done entry:", e);
       });
     }
-    console.log("[voice] pipeline done, mounted:", mountedRef.current, "key:", key, "text:", finalText?.slice(0, 40));
-    onTranscriptRef.current?.(finalText);
-    // Only clear the entry when the component is still alive — if it
-    // unmounted mid-pipeline the setter was discarded by React, so the
-    // entry must survive for recovery on next mount.
-    if (key && mountedRef.current) {
-      console.log("[voice] deleting entry (component alive)");
-      deleteVoiceJob(key).catch(() => {});
-    } else if (key) {
-      console.log("[voice] keeping entry for recovery (component unmounted)");
+    const stillSameKey = !key || persistKeyRef.current === key;
+    console.log("[voice] pipeline done, mounted:", mountedRef.current, "key:", key, "current:", persistKeyRef.current, "stillSameKey:", stillSameKey, "text:", finalText?.slice(0, 40));
+    if (stillSameKey && mountedRef.current) {
+      onTranscriptRef.current?.(finalText);
+      if (key) {
+        console.log("[voice] deleting entry (delivered)");
+        deleteVoiceJob(key).catch(() => {});
+      }
+    } else if (!stillSameKey) {
+      console.log("[voice] keeping entry (persistKey changed; user navigated)");
+    } else {
+      console.log("[voice] keeping entry (component unmounted)");
     }
   }, []);
 
@@ -121,6 +133,7 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
   useEffect(() => {
     if (!persistKey) return;
     let cancelled = false;
+    const recoveryKey = persistKey;
 
     console.log("[voice] recovery check for key:", persistKey);
     getVoiceJob(persistKey).then((job) => {
@@ -128,13 +141,20 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
       if (!job) { console.log("[voice] no pending job found"); return; }
       console.log("[voice] recovery found job:", job.status, "text:", (job.text || job.rawText || "")?.slice(0, 40));
 
+      // Guard: another navigation may have happened between the IndexedDB
+      // read and now. Only deliver if we're still on the recovered chat.
+      if (persistKeyRef.current !== recoveryKey) {
+        console.log("[voice] recovery aborted — persistKey changed:", persistKeyRef.current);
+        return;
+      }
+
       if (job.status === "done") {
         onTranscriptRef.current?.(job.text);
-        deleteVoiceJob(persistKey).catch(() => {});
+        deleteVoiceJob(recoveryKey).catch(() => {});
       } else if (job.status === "transcribed") {
-        runPipeline(null, null, job.rawText);
+        runPipeline(null, null, job.rawText, recoveryKey);
       } else if (job.status === "pending" && job.audioBlob) {
-        runPipeline(job.audioBlob, job.mimeType, null);
+        runPipeline(job.audioBlob, job.mimeType, null, recoveryKey);
       }
     }).catch((e) => { console.warn("[voice] recovery error:", e); });
 
@@ -191,8 +211,12 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
     setMicError(null);
     chunksRef.current = [];
 
+    // Snapshot persistKey for this recording instance. Used by recorder.onstop
+    // and the pipeline so navigation mid-recording can't reroute the result.
+    recordingKeyRef.current = persistKeyRef.current;
+
     // Clear any stale pending job for this key
-    if (persistKeyRef.current) deleteVoiceJob(persistKeyRef.current).catch(() => {});
+    if (recordingKeyRef.current) deleteVoiceJob(recordingKeyRef.current).catch(() => {});
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       startingRef.current = false;
@@ -252,14 +276,16 @@ export default function useVoiceRecorder({ onTranscript, onError, maxDurationMs,
         if (chunks.length === 0) return;
         const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
         const mime = recorder.mimeType || "audio/webm";
-        const key = persistKeyRef.current;
+        // Use the snapshot from startRecording, not the live ref — the user
+        // may have navigated between recorder.stop() and onstop firing.
+        const key = recordingKeyRef.current;
 
         if (key) {
           saveVoiceJob(key, { status: "pending", audioBlob: blob, mimeType: mime })
-            .then(() => runPipeline(blob, mime, null))
-            .catch(() => runPipeline(blob, mime, null));
+            .then(() => runPipeline(blob, mime, null, key))
+            .catch(() => runPipeline(blob, mime, null, key));
         } else {
-          runPipeline(blob, mime, null);
+          runPipeline(blob, mime, null, key);
         }
       };
 

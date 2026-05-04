@@ -3951,11 +3951,15 @@ Here are the day's conversations (with timestamps):
         finally:
             db.close()
 
-        # Rebuild display file for the rotated session BEFORE emitting
-        # the WS signal — frontend's refetch must see the new file, not
-        # the pre-rotation state.
-        from display_writer import rebuild_agent as _rebuild_display
-        _rebuild_display(agent_id)
+        # Append-only display: flush the "CLI session continued"
+        # SYSTEM message added above into the display file. We deliberately
+        # do NOT rebuild — the display file is an event log of what the
+        # user has seen, not a projection of current DB state. Rebuilding
+        # here drops SENT-but-undelivered USER orphans (e.g. queued
+        # messages eaten by a TUI modal during compact) and collapses
+        # message-lifecycle intermediate entries.
+        from display_writer import flush_agent as _flush_display
+        _flush_display(agent_id)
 
         self._emit(emit_agent_update(agent_id, "IDLE", agent_project))
 

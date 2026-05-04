@@ -12,6 +12,29 @@ export function cardPadding(expanded, selecting) {
   return expanded && !selecting ? "py-5" : "py-[18px]";
 }
 
+/** Geometric collapse-zone check: a click target is "structural" (i.e., a
+ * collapse zone) iff it isn't inside any interactive element AND no ancestor
+ * up to `root` is an inline text element. Use this so card click handlers
+ * can collapse on empty-area taps without depending on every interactive
+ * child remembering to call e.stopPropagation. */
+const TEXT_TAGS = new Set([
+  "P", "SPAN", "STRONG", "EM", "CODE", "PRE", "LABEL",
+  "H1", "H2", "H3", "H4", "H5", "H6",
+]);
+export function isCollapseZone(target, root) {
+  if (!(target instanceof Element)) return false;
+  if (target.closest(
+    "button, input, textarea, select, a, [role='button'], " +
+    "[contenteditable='true'], [data-no-longpress], [data-no-collapse]"
+  )) return false;
+  let cur = target;
+  while (cur && cur !== root) {
+    if (TEXT_TAGS.has(cur.tagName)) return false;
+    cur = cur.parentElement;
+  }
+  return true;
+}
+
 /**
  * Shared card wrapper with pop-out expand effect + swipe gestures.
  * All task cards should use this as their outer container.

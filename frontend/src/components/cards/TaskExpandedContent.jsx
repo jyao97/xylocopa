@@ -82,9 +82,12 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
   };
 
   return (
+    // No blanket stopPropagation here — the parent card uses isCollapseZone
+    // to distinguish "tap a structural part" (collapse) from "tap text /
+    // input / button" (don't collapse). Stopping all clicks broke the
+    // tap-empty-space-to-collapse affordance.
     <div
       className={canEdit ? "px-5 pb-4 pt-1 space-y-2" : "border-t border-divider mx-4 pb-4 pt-3 space-y-3"}
-      onClick={(e) => e.stopPropagation()}
     >
       {/* ── COMPACT INLINE EDITOR for INBOX/PLANNING ── */}
       {canEdit ? (

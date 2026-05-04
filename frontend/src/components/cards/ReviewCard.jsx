@@ -1,5 +1,5 @@
 import { memo } from "react";
-import CardShell, { cardPadding } from "./CardShell";
+import CardShell, { cardPadding, isCollapseZone } from "./CardShell";
 import TaskExpandedContent from "./TaskExpandedContent";
 
 const STATUS_STYLE = {
@@ -13,20 +13,29 @@ export default memo(function ReviewCard({ task, selecting, selected, onToggle, m
   const { label: statusLabel, color: statusColor } =
     STATUS_STYLE[isMerging ? "MERGING" : task.status] || STATUS_STYLE.MERGING;
 
-  const handleClick = () => {
-    if (selecting) onToggle?.(task.id);
-    else onExpand?.(task.id);
+  const isExpanded = expanded && !selecting;
+  const handleClick = (e) => {
+    if (selecting) { onToggle?.(task.id); return; }
+    if (isExpanded && e && !isCollapseZone(e.target, e.currentTarget)) return;
+    onExpand?.(task.id);
   };
 
   return (
     <div className="relative">
-      <CardShell taskId={task.id} expanded={expanded} selecting={selecting} selected={selected} data-review-task={task.id}>
+      <CardShell
+        taskId={task.id}
+        expanded={expanded}
+        selecting={selecting}
+        selected={selected}
+        data-review-task={task.id}
+        className="cursor-pointer"
+        onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter") handleClick(); }}
+      >
         <div
-          className={`flex items-start gap-3 px-5 cursor-pointer transition-[padding] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${cardPadding(expanded, selecting)}`}
-          onClick={handleClick}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === "Enter") handleClick(); }}
+          className={`flex items-start gap-3 px-5 transition-[padding] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${cardPadding(expanded, selecting)}`}
         >
           {/* Content area */}
           <div className="flex-1 min-w-0">

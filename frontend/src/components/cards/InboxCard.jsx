@@ -7,7 +7,7 @@ import useVoiceRecorder from "../../hooks/useVoiceRecorder";
 import useDraft from "../../hooks/useDraft";
 import useLongPress from "../../hooks/useLongPress";
 import useProjects from "../../hooks/useProjects";
-import CardShell, { cardPadding } from "./CardShell";
+import CardShell, { cardPadding, isCollapseZone } from "./CardShell";
 import TagPicker from "./TagPicker";
 import ImageLightbox from "../ImageLightbox";
 import SendLaterPicker from "../SendLaterPicker";
@@ -129,27 +129,6 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   // clicks (timestamp, gap, post-text whitespace) → collapse the card.
   const titleRef = useRef(null);
 
-  // Collapse-zone detection: walk up from e.target. Anything interactive
-  // (button/input/contentEditable/tag-marker) OR an inline text element
-  // (the user might be selecting text) is NOT a collapse zone — everything
-  // else (layout divs, gaps, drag-handle padding, icon containers) is.
-  // This replaces the older "stopPropagation everywhere" convention with a
-  // single geometric check at the parent — adding new interactive children
-  // no longer needs them to remember stopPropagation.
-  const TEXT_TAGS = new Set(["P", "SPAN", "STRONG", "EM", "CODE", "PRE", "LABEL",
-    "H1", "H2", "H3", "H4", "H5", "H6"]);
-  const isCollapseZone = (target, root) => {
-    if (!(target instanceof Element)) return false;
-    if (target.closest("button, input, textarea, select, a, [role='button'], [contenteditable='true'], [data-no-longpress], [data-no-collapse]")) {
-      return false;
-    }
-    let cur = target;
-    while (cur && cur !== root) {
-      if (TEXT_TAGS.has(cur.tagName)) return false;
-      cur = cur.parentElement;
-    }
-    return true;
-  };
   const handleCardEmptyClick = (e) => {
     if (!isExpanded) return;
     if (!isCollapseZone(e.target, e.currentTarget)) return;

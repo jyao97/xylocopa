@@ -657,9 +657,37 @@ async def hook_agent_tool_activity(request: Request):
             if ctx_for_trigger:
                 ctx_for_trigger.compact_trigger = _trigger
             logger.info(
-                "PreCompact: trigger=%s for %s (status managed by sync)",
-                _trigger, agent_id[:8],
+                "PreCompact: trigger=%s for %s", _trigger, agent_id[:8],
             )
+
+        # Mark agent EXECUTING for the entire compact window. Compact runs
+        # for 30s-2min; during that span dispatch_pending_message must NOT
+        # fire (the pane is in a non-input state — paste/Enter would land
+        # somewhere wrong). PostCompact's sync_full_scan flips status back
+        # per trigger: manual → IDLE (the /compact turn is over), auto →
+        # keep EXECUTING (the user's original task continues).
+        # Doing this for both triggers is symmetric and defensive: even if
+        # CC's `trigger` field is unreliable or future modal-confirmation
+        # paths don't fit the manual/auto dichotomy, dispatch is still
+        # blocked until PostCompact resolves.
+        _db_status = SessionLocal()
+        try:
+            _ag = _db_status.get(Agent, agent_id)
+            if _ag and _ag.status not in (AgentStatus.STOPPED, AgentStatus.ERROR):
+                if _ag.status != AgentStatus.EXECUTING:
+                    _ag.status = AgentStatus.EXECUTING
+                    _db_status.commit()
+                    from websocket import emit_agent_update as _eau
+                    asyncio.ensure_future(_eau(agent_id, "EXECUTING", _ag.project))
+                    logger.info(
+                        "PreCompact: agent %s → EXECUTING for compact window",
+                        agent_id[:8],
+                    )
+        except Exception:
+            _db_status.rollback()
+            logger.exception("PreCompact: failed to set EXECUTING for %s", agent_id[:8])
+        finally:
+            _db_status.close()
         # Drain the old session's pending JSONL turns into the DB before
         # compact rewrites the file.  Without this, any turn produced in
         # the hook-silent window since the last sync (e.g. final assistant

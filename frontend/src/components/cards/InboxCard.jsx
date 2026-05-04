@@ -338,6 +338,15 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
     persistKey: `voice:inbox:${task.id}`,
   });
 
+  // Collapsing the card hides the mic button — without this, an in-flight
+  // recording would keep going invisibly until the 5-min timeout. Stop on
+  // collapse so the user has UI affordance for what's running. Pipeline
+  // still runs in the background; transcript appends via recovery on next
+  // expand (or wherever onTranscript routes).
+  useEffect(() => {
+    if (!isExpanded && voice.recording) voice.stopRecording();
+  }, [isExpanded, voice]);
+
   // --- file upload ---
   const addFiles = useCallback(async (fileList) => {
     const uploadedPaths = [];

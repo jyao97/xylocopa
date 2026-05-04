@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import useLongPress from "../hooks/useLongPress";
 
@@ -58,19 +59,20 @@ function CenterFab({ tab }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isActive = location.pathname === tab.to;
+  const longPressedRef = useRef(false);
 
-  // Long-press only: /new is now the New Project form (the only creation flow
-  // accessible from this entry point). Long-press gates the "create project"
-  // intent so accidental taps don't trigger it. Vibration confirms the gesture.
   const handlers = useLongPress(
+    // Long press → /new (New Project form; the deliberate "create project"
+    // gesture). Vibration confirms.
     () => {
+      longPressedRef.current = true;
       if (navigator.vibrate) navigator.vibrate(30);
       navigate("/new", { replace: true });
     },
-    // Normal tap is a no-op (intentional — agent/task creation lives in
-    // project context now; this button is reserved for project creation
-    // via long-press).
-    () => {},
+    // Normal tap → voice-first NewTaskPage overlay.
+    () => {
+      navigate("/new/task", { state: { backgroundLocation: location } });
+    },
     500,
   );
 

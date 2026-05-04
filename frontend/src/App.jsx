@@ -103,6 +103,7 @@ const NewPage = lazyPage(() => import("./pages/NewPage"));
 const MonitorPage = lazyPage(() => import("./pages/MonitorPage"));
 const GitPage = lazyPage(() => import("./pages/GitPage"));
 const TaskDetailPage = lazyPage(() => import("./pages/TaskDetailPage"));
+const NewTaskPage = lazyPage(() => import("./pages/NewTaskPage"));
 const SplitScreenPage = lazyPage(() => import("./pages/SplitScreenPage"));
 
 // Preload registry — lib/prefetchChunks.js reads window.__xylocopa_preloaders
@@ -114,6 +115,7 @@ if (typeof window !== "undefined") {
     AgentChatPage: () => AgentChatPage.preload(),
     ProjectDetailPage: () => ProjectDetailPage.preload(),
     TaskDetailPage: () => TaskDetailPage.preload(),
+    NewTaskPage: () => NewTaskPage.preload(),
   };
 }
 
@@ -304,9 +306,18 @@ function AppRoutes({ themeProps }) {
           <Route path="/projects/:name" element={<ProjectDetailPage {...themeProps} />} />
           <Route path="/agents/:id" element={<AgentChatPage {...themeProps} />} />
           <Route path="/tasks/:id" element={<TaskDetailPage {...themeProps} />} />
+          {/* Only render as a standalone page if no background location */}
+          {!bgLocation && <Route path="/new/task" element={<NewTaskPage />} />}
           <Route path="/new" element={<NewPage {...themeProps} />} />
           <Route path="/monitor" element={<MonitorPage {...themeProps} />} />
           <Route path="/split" element={<SplitScreenPage />} />
+        </Routes>
+      )}
+
+      {/* Overlay: NewTaskPage sheet rendered on top of whatever is below */}
+      {bgLocation && (
+        <Routes>
+          <Route path="/new/task" element={<NewTaskPage />} />
         </Routes>
       )}
     </div>

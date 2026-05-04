@@ -14,8 +14,8 @@ import { applyEinkModeFromStorage } from "./lib/einkMode";
 setupFrameLogger();
 
 // Idle-time preload for AgentChatPage / ProjectDetailPage / TaskDetailPage
-// chunks so first navigation into them doesn't show the Suspense
-// "Loading..." fallback.
+// / NewTaskPage chunks so first navigation into them doesn't show the
+// Suspense "Loading..." fallback.
 prefetchHeavyChunks();
 
 // Mark non-mobile Linux as glass-incapable: backdrop-filter parses on

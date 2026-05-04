@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { relativeTime, durationDisplay } from "../../lib/formatters";
-import CardShell, { cardPadding, isCollapseZone } from "./CardShell";
+import CardShell, { cardPadding } from "./CardShell";
 import TaskExpandedContent from "./TaskExpandedContent";
 
 const STATUS_ICON = {
@@ -15,11 +15,9 @@ export default memo(function DoneCard({ task, selecting, selected, onToggle, exp
   const si = STATUS_ICON[task.status] || STATUS_ICON.COMPLETE;
   const isCancelled = task.status === "CANCELLED";
 
-  const isExpanded = expanded && !selecting;
-  const handleClick = (e) => {
-    if (selecting) { onToggle?.(task.id); return; }
-    if (isExpanded && e && !isCollapseZone(e.target, e.currentTarget)) return;
-    onExpand?.(task.id);
+  const handleClick = () => {
+    if (selecting) onToggle?.(task.id);
+    else onExpand?.(task.id);
   };
 
   return (

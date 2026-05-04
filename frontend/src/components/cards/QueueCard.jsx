@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { modelDisplayName, MODEL_OPTIONS } from "../../lib/constants";
 import { updateTaskV2 } from "../../lib/api";
-import CardShell, { cardPadding, isCollapseZone } from "./CardShell";
+import CardShell, { cardPadding } from "./CardShell";
 import TagPicker from "./TagPicker";
 import TaskExpandedContent from "./TaskExpandedContent";
 
@@ -16,11 +16,9 @@ const EFFORT_PICKER = [
 export default memo(function QueueCard({ task, position, selecting, selected, onToggle, expanded, onExpand, onRefresh }) {
   const isExpanded = expanded && !selecting;
 
-  const handleClick = (e) => {
-    if (selecting) { onToggle?.(task.id); return; }
-    // Expanded: only collapse on a structural-zone click. Collapsed: any click expands.
-    if (isExpanded && e && !isCollapseZone(e.target, e.currentTarget)) return;
-    onExpand?.(task.id);
+  const handleClick = () => {
+    if (selecting) onToggle?.(task.id);
+    else onExpand?.(task.id);
   };
 
   const update = async (field, value) => {
@@ -30,19 +28,13 @@ export default memo(function QueueCard({ task, position, selecting, selected, on
 
   return (
     <div className="relative">
-      <CardShell
-        taskId={task.id}
-        expanded={expanded}
-        selecting={selecting}
-        selected={selected}
-        className="cursor-pointer"
-        onClick={handleClick}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter") handleClick(); }}
-      >
+      <CardShell taskId={task.id} expanded={expanded} selecting={selecting} selected={selected}>
         <div
-          className={`flex items-start gap-3 px-5 transition-[padding] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${cardPadding(expanded, selecting)}`}
+          className={`flex items-start gap-3 px-5 cursor-pointer transition-[padding] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${cardPadding(expanded, selecting)}`}
+          onClick={handleClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter") handleClick(); }}
         >
           <div className={`flex-1 min-w-0 ${isExpanded ? "flex flex-col min-h-[160px]" : ""}`}>
             <div className="flex items-center gap-2">

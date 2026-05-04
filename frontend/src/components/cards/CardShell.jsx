@@ -12,21 +12,39 @@ export function cardPadding(expanded, selecting) {
   return expanded && !selecting ? "py-5" : "py-[18px]";
 }
 
-/** Geometric collapse-zone check: a click target is "structural" (i.e., a
- * collapse zone) iff it isn't inside any interactive element AND no ancestor
- * up to `root` is an inline text element. Use this so card click handlers
- * can collapse on empty-area taps without depending on every interactive
- * child remembering to call e.stopPropagation. */
+/** Geometric collapse-zone check. Decision order:
+ *   1. Explicit opt-in [data-collapse-zone] → ALWAYS counts as collapse zone
+ *      (overrides interactive + text rules — use this for elements that
+ *      look like buttons/text but are semantically "chrome": timestamps,
+ *      status labels, drag handles, etc).
+ *   2. Explicit opt-out [data-no-collapse] / [data-no-longpress] → never
+ *      a collapse zone (existing tag-picker convention).
+ *   3. Inside any interactive element (button/input/textarea/select/a/
+ *      [role=button]/[contenteditable]) → not a collapse zone.
+ *   4. Any ancestor up to `root` is an inline text element → not a
+ *      collapse zone (the user might be selecting text).
+ *   5. Otherwise → collapse zone (layout div, gap, icon container).
+ */
 const TEXT_TAGS = new Set([
-  "P", "SPAN", "STRONG", "EM", "CODE", "PRE", "LABEL",
+  "P", "STRONG", "EM", "CODE", "PRE", "LABEL",
   "H1", "H2", "H3", "H4", "H5", "H6",
 ]);
 export function isCollapseZone(target, root) {
   if (!(target instanceof Element)) return false;
+  // 1. Explicit opt-in — wins over everything.
+  const optIn = target.closest("[data-collapse-zone]");
+  if (optIn && root.contains(optIn)) return true;
+  // 2. Explicit opt-out.
+  if (target.closest("[data-no-collapse], [data-no-longpress]")) return false;
+  // 3. Interactive element.
   if (target.closest(
-    "button, input, textarea, select, a, [role='button'], " +
-    "[contenteditable='true'], [data-no-longpress], [data-no-collapse]"
+    "button, input, textarea, select, a, [role='button'], [contenteditable='true']"
   )) return false;
+  // 4. Inline text content (note: SPAN is intentionally NOT in TEXT_TAGS —
+  //    spans are too generic to blanket-block, and chrome spans like
+  //    timestamps would otherwise need data-collapse-zone everywhere.
+  //    Real prose text is in <p>/<h*>; if you have a span you don't want
+  //    collapsing, wrap or mark with data-no-collapse).
   let cur = target;
   while (cur && cur !== root) {
     if (TEXT_TAGS.has(cur.tagName)) return false;

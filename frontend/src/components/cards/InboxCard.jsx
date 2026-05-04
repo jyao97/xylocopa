@@ -432,8 +432,8 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
               type="button"
               {...dragHandleProps.listeners}
               {...dragHandleProps.attributes}
+              data-collapse-zone
               className="touch-none p-1 -ml-2 mr-0 rounded text-ghost hover:text-faint transition-colors cursor-grab active:cursor-grabbing self-center"
-              onClick={(e) => e.stopPropagation()}
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
                 <rect x="3" y="4" width="10" height="1.5" rx="0.75" />
@@ -492,7 +492,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   {task.title}
                 </p>
               )}
-              <span className="text-[11px] text-faint shrink-0 mt-0.5">
+              <span data-collapse-zone className="text-[11px] text-faint shrink-0 mt-0.5">
                 {relativeTime(task.created_at)}
               </span>
             </div>

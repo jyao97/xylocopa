@@ -28,6 +28,7 @@ import {
 } from "../lib/api";
 import { useAgents, useAgentsSeeded } from "../contexts/AgentsContext";
 import { useFolders } from "../contexts/FoldersContext";
+import { useWsEvent } from "../hooks/useWebSocket";
 import BotIcon from "../components/BotIcon";
 import PopoverArrow from "../components/PopoverArrow";
 import ProjectRing from "../components/ProjectRing";
@@ -702,6 +703,16 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, [loadData, visible]);
+
+  // Cross-device WS invalidation: bookmark added/edited/deleted, session
+  // starred/unstarred, or project settings changed (emoji/toggles) on
+  // another device. loadData refreshes bookmarks + stats; the project
+  // emoji/toggles update via FoldersContext (which also listens).
+  useWsEvent(useCallback((event) => {
+    if (event.type === "project_update" && event.data?.name === name) {
+      loadData();
+    }
+  }, [name, loadData]));
 
   // Check CLAUDE.md / PROGRESS.md existence
   useEffect(() => {

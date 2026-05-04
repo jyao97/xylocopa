@@ -3752,7 +3752,18 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       loadData();
       showToast("Insights ready for review");
     }
-  }, [id]);
+
+    // Other device starred/unstarred this session — refresh the star button.
+    if (event.type === "project_update" && agent?.project && event.data?.name === agent.project) {
+      const sessionId = agent.session_id || agent.id;
+      fetchProjectSessions(agent.project)
+        .then((fetchedSessions) => {
+          const match = fetchedSessions.find((s) => s.session_id === sessionId);
+          setStarred(match?.starred ?? false);
+        })
+        .catch(() => {});
+    }
+  }, [id, agent?.project, agent?.session_id, agent?.id]);
 
   // Debug: POST rendered message state + DOM elements to backend every 1s
   // Enable via localStorage: localStorage.setItem("ah:debug-frontend-state", "1")

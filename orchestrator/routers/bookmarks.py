@@ -413,12 +413,15 @@ def create_bookmark(
     if agent is None or agent.project != name:
         raise HTTPException(400, "Message does not belong to this project")
 
+    from websocket import emit_project_update
+
     existing = db.get(BookmarkedMessage, message_id)
     if existing:
         # Idempotent: update user_note if provided, return existing
         if payload and payload.user_note is not None:
             existing.user_note = payload.user_note.strip() or None
             db.commit()
+            asyncio.ensure_future(emit_project_update(name))
         return _to_out(existing, msg, agent)
 
     media = _collect_neighborhood_media(db, msg)
@@ -437,6 +440,7 @@ def create_bookmark(
     db.add(bm)
     db.commit()
     db.refresh(bm)
+    asyncio.ensure_future(emit_project_update(name))
 
     # Fire-and-forget LLM summary
     background.add_task(_summarize_bookmark, message_id)
@@ -459,6 +463,8 @@ def update_bookmark(
         cleaned = payload.user_note.strip()
         bm.user_note = cleaned or None
     db.commit()
+    from websocket import emit_project_update
+    asyncio.ensure_future(emit_project_update(name))
     msg = db.get(Message, message_id)
     agent = db.get(Agent, bm.agent_id)
     return _to_out(bm, msg, agent)
@@ -471,4 +477,6 @@ def delete_bookmark(name: str, message_id: str, db: Session = Depends(get_db)):
         return {"deleted": False}
     db.delete(bm)
     db.commit()
+    from websocket import emit_project_update
+    asyncio.ensure_future(emit_project_update(name))
     return {"deleted": True}

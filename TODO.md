@@ -52,13 +52,23 @@ matching.**
   invisible chars / cursor positioning. Need to test signature stability
   with `-e` (escape sequences) vs default.
 
-**Already done (2026-05-04, related):** suppressed the most common
-trigger by setting `CLAUDE_CODE_RESUME_TOKEN_THRESHOLD=999999999` /
-`CLAUDE_CODE_RESUME_THRESHOLD_MINUTES=999999` on every CC launch
-(`route_helpers.py` `create_tmux_claude_session`). This kills the
-Resume-from-summary menu specifically. Permission / ExitPlanMode /
-AskUserQuestion dialogs still leave the same message-loss surface
-exposed — which is why this Medium-priority item exists.
+**Already done (2026-05-04, related):**
+- Suppressed the most common trigger by setting
+  `CLAUDE_CODE_RESUME_TOKEN_THRESHOLD=999999999` /
+  `CLAUDE_CODE_RESUME_THRESHOLD_MINUTES=999999` on every CC launch
+  (`route_helpers.py` `create_tmux_claude_session`, commit `f5be7c3`).
+  This kills the Resume-from-summary menu specifically.
+- Stopped silent UI scrubbing: replaced `rebuild_agent` with targeted
+  `update_last` calls in `sync_full_scan` compact path (`sync_engine.py`,
+  commit `ed1f905`). SENT-but-never-delivered USER orphans now stay
+  visible in the chat at status=SENT (single ✓) instead of vanishing
+  when compact runs. So a future modal-eaten message will at least be
+  *visibly stuck* rather than gone.
+
+Permission / ExitPlanMode / AskUserQuestion dialogs still leave the
+"Enter gets eaten" surface exposed — which is what this Medium-priority
+item is about. The orphan now being visible is a partial mitigation,
+not a fix; the message still doesn't reach Claude.
 
 ## Low
 

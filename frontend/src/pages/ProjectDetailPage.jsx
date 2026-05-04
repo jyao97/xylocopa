@@ -377,6 +377,26 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
     });
   }, [agents]);
 
+  // Same reconcile for bookmarks — drop pending deletes for bookmarks
+  // that have already disappeared from the list (deleted on another
+  // device, project_update WS triggered a loadData() that no longer
+  // returns them).
+  useEffect(() => {
+    setPendingBookmarkDeletes((prev) => {
+      if (prev.size === 0) return prev;
+      const liveIds = new Set(bookmarks.map((b) => b.message_id));
+      let changed = false;
+      const next = new Set(prev);
+      for (const id of Array.from(next)) {
+        if (!liveIds.has(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [bookmarks]);
+
   const enterSelectMode = useCallback((preSelectId) => {
     setSelecting(true);
     setSelected(preSelectId ? new Set([preSelectId]) : new Set());

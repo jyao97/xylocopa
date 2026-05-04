@@ -176,7 +176,12 @@ export default memo(function CardShell({
   };
 
   return (
-    <div data-card className="relative rounded-2xl overflow-hidden">
+    <div
+      data-card
+      className={`relative rounded-2xl overflow-hidden transition-[margin] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${
+        expanded && !selecting ? "my-2" : ""
+      }`}
+    >
       {/* Red delete background — always mounted, visible when card slides right */}
       <div
         className={`absolute inset-0 flex items-center rounded-2xl transition-colors duration-150 ${

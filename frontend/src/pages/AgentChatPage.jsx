@@ -2531,9 +2531,9 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // when the agent / project is known. Used to seed the initial filled state
   // of the bookmark icons in the action menu and on attachment ActionButtons.
   const [bookmarkedSet, setBookmarkedSet] = useState(() => new Set());
-  useEffect(() => {
+  const refreshBookmarkedSet = useCallback(() => {
     const proj = agent?.project;
-    if (!proj) return;
+    if (!proj) return () => {};
     let cancelled = false;
     fetchProjectBookmarks(proj)
       .then((rows) => {
@@ -2543,6 +2543,15 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       .catch(() => { /* non-fatal */ });
     return () => { cancelled = true; };
   }, [agent?.project]);
+  useEffect(() => refreshBookmarkedSet(), [refreshBookmarkedSet]);
+  // Cross-device invalidation: another device added/removed/edited a
+  // bookmark in this project → backend emits project_update → refetch so
+  // the inline bookmark icon on each chat bubble reflects truth.
+  useWsEvent(useCallback((event) => {
+    if (event.type !== "project_update") return;
+    if (event.data?.name !== agent?.project) return;
+    refreshBookmarkedSet();
+  }, [agent?.project, refreshBookmarkedSet]));
   // After a successful bookmark POST, prompt for an optional user note.
   const [noteForBookmarkId, setNoteForBookmarkId] = useState(null);
   const handleAfterBookmark = useCallback((messageId, action) => {

@@ -1,4 +1,4 @@
-import { memo, useRef, useState, useEffect, useLayoutEffect, useContext, createContext } from "react";
+import { memo, useRef, useState, useEffect, useContext, createContext } from "react";
 
 /** Context for swipe actions — provided by TasksPage */
 export const CardSwipeContext = createContext(null);
@@ -28,12 +28,6 @@ export default memo(function CardShell({
   const contentRef = useRef(null);
   const [phase, setPhase] = useState("idle"); // idle | revealed | removing
   const phaseRef = useRef("idle");
-  // Measured vertical overflow from the expand scale-up. scale-[1.02] grows
-  // the card by 1% on each side, which on tall cards (>400px) overshoots
-  // the 12px space-y-3 gap and visually overlaps the next card. Measure
-  // the actual rendered height each time and apply matching margin so the
-  // scaled box never touches its neighbor.
-  const [scaleOverflowPx, setScaleOverflowPx] = useState(0);
   const gestureRef = useRef({
     startX: 0, startY: 0, locked: null,
     dragging: false, currentX: 0, suppressClick: false,
@@ -52,30 +46,6 @@ export default memo(function CardShell({
       if (el) { el.style.transition = ""; el.style.transform = ""; }
     }
   }, [selecting, phase]);
-
-  // Outer-edge detection: measure the unscaled content height and reserve
-  // ceil(h * 0.01) + 1px on each side so the 1.02 scale-up never overlaps
-  // the next card. Re-runs on expand/collapse and on any inner content
-  // resize (description edit, summary fill-in, voice input, etc).
-  useLayoutEffect(() => {
-    if (!(expanded && !selecting)) {
-      setScaleOverflowPx(0);
-      return;
-    }
-    const el = contentRef.current;
-    if (!el) return;
-    const measure = () => {
-      // Use offsetHeight (unscaled) — getBoundingClientRect returns the
-      // post-transform size which would feed back into itself.
-      const grow = Math.ceil(el.offsetHeight * 0.01) + 1;
-      setScaleOverflowPx(grow);
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [expanded, selecting]);
 
   // Attach native touch listeners (passive: false needed for preventDefault in touchmove)
   useEffect(() => {
@@ -177,10 +147,14 @@ export default memo(function CardShell({
     };
   }, [canSwipe, taskId, swipeCtx]);
 
-  const baseClasses = `w-full text-left rounded-2xl bg-surface overflow-hidden transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${
+  // NOTE: don't use `transform: scale()` for elevation — it leaves the
+  // layout box unchanged but extends the visual bounds, which overlaps
+  // sibling cards in any flow layout. Express "expanded" through
+  // non-layout properties only: shadow, ring, brightness.
+  const baseClasses = `w-full text-left rounded-2xl bg-surface overflow-hidden transition-[box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${
     expanded && !selecting
-      ? "shadow-lg scale-[1.02] ring-1 ring-cyan-500/20 z-10"
-      : "shadow-card scale-100 active:bg-input"
+      ? "shadow-2xl ring-1 ring-cyan-500/30 z-10"
+      : "shadow-card active:bg-input"
   } ${selecting && selected ? "ring-2 ring-cyan-500/50 brightness-[0.88]" : ""} ${className}`;
 
   // No swipe support — plain card
@@ -206,14 +180,7 @@ export default memo(function CardShell({
   };
 
   return (
-    <div
-      data-card
-      className="relative rounded-2xl overflow-hidden transition-[margin] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)]"
-      style={{
-        marginTop: scaleOverflowPx,
-        marginBottom: scaleOverflowPx,
-      }}
-    >
+    <div data-card className="relative rounded-2xl overflow-hidden">
       {/* Red delete background — always mounted, visible when card slides right */}
       <div
         className={`absolute inset-0 flex items-center rounded-2xl transition-colors duration-150 ${

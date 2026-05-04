@@ -25,6 +25,7 @@ import {
   stopAgent,
   deleteAgent,
   markAgentRead,
+  unstarSession,
 } from "../lib/api";
 import { useAgents, useAgentsSeeded } from "../contexts/AgentsContext";
 import { useFolders } from "../contexts/FoldersContext";
@@ -291,6 +292,63 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+
+  // Deferred-unstar state. See AgentsPage for rationale: tapping the inline
+  // star only toggles a pending entry; the API call is deferred until the
+  // user navigates away from the project page (route change / unmount).
+  const [pendingUnstars, setPendingUnstars] = useState(() => new Map());
+  const pendingUnstarsRef = useRef(pendingUnstars);
+  useEffect(() => { pendingUnstarsRef.current = pendingUnstars; }, [pendingUnstars]);
+
+  const handleTogglePendingStar = useCallback((agentId, project, sessionId) => {
+    setPendingUnstars((prev) => {
+      const next = new Map(prev);
+      if (next.has(agentId)) next.delete(agentId);
+      else next.set(agentId, { project, sessionId });
+      return next;
+    });
+  }, []);
+
+  const flushPendingUnstars = useCallback(() => {
+    const map = pendingUnstarsRef.current;
+    if (!map || map.size === 0) return;
+    const entries = Array.from(map.entries());
+    pendingUnstarsRef.current = new Map();
+    setPendingUnstars(new Map());
+    for (const [agentId, { project, sessionId }] of entries) {
+      unstarSession(project, sessionId).catch((err) => {
+        console.warn("[project] deferred unstar failed", agentId, err);
+      });
+    }
+  }, []);
+
+  // Flush on unmount (route change away from /projects/:name) and on
+  // project name change (navigating between two projects without
+  // unmounting). AgentsPage uses isActive instead — ProjectDetailPage isn't
+  // in the keep-mounted shell, so unmount is the natural signal.
+  useEffect(() => {
+    return () => { flushPendingUnstars(); };
+  }, [name, flushPendingUnstars]);
+
+  // Reconcile pending entries against the latest store snapshot — drop
+  // entries for agents that are no longer starred (chat-page unstar, WS
+  // from another device, 5s poll), so the icon doesn't show a stale
+  // outline and we don't fire a redundant API on flush.
+  useEffect(() => {
+    setPendingUnstars((prev) => {
+      if (prev.size === 0) return prev;
+      let changed = false;
+      const next = new Map(prev);
+      for (const agentId of Array.from(next.keys())) {
+        const a = agents.find((x) => x.id === agentId);
+        if (!a || !a.starred) {
+          next.delete(agentId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [agents]);
 
   const enterSelectMode = useCallback((preSelectId) => {
     setSelecting(true);
@@ -1284,6 +1342,8 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                   selected={selected.has(agent.id)}
                   onToggle={toggleOne}
                   onEnterSelect={enterSelectMode}
+                  isPendingUnstar={pendingUnstars.has(agent.id)}
+                  onTogglePendingStar={handleTogglePendingStar}
                 />
               ))}
             </div>

@@ -1,11 +1,10 @@
-import { memo, useRef, useState } from "react";
+import { memo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Hourglass } from "lucide-react";
 import { relativeTime } from "../lib/formatters";
 import { modelDisplayName } from "../lib/constants";
 import useLongPress from "../hooks/useLongPress";
 import WorktreePill from "./WorktreePill";
-import { starSession, unstarSession } from "../lib/api";
 import { prefetchChatData } from "../lib/chatPrefetch";
 
 /**
@@ -13,13 +12,19 @@ import { prefetchChatData } from "../lib/chatPrefetch";
  * ProjectDetailPage.
  *
  * Props:
- *   agent           — agent object (name, status, last_message_*, project, …)
- *   onClick         — card click handler (navigate to /agents/:id)
- *   selecting       — multi-select mode on
- *   selected        — is this row selected
- *   onToggle        — (id) => void, multi-select toggle
- *   hideProjectTag  — skip the cyan "project" chip (use when already inside
- *                     a project page so the tag would be redundant)
+ *   agent              — agent object (name, status, last_message_*, project, …)
+ *   onClick            — card click handler (navigate to /agents/:id)
+ *   selecting          — multi-select mode on
+ *   selected           — is this row selected
+ *   onToggle           — (id) => void, multi-select toggle
+ *   hideProjectTag     — skip the cyan "project" chip (use when already inside
+ *                        a project page so the tag would be redundant)
+ *   isPendingUnstar    — true when the user has tapped unstar but the API call
+ *                        is deferred until they navigate away from the list.
+ *                        The row stays in the STARRED section (agent.starred is
+ *                        still true) but the icon renders as outline.
+ *   onTogglePendingStar — (agentId, project, sessionId) => void; toggles the
+ *                        deferred unstar in the parent page's pending map.
  */
 const AgentRow = memo(function AgentRow({
   agent,
@@ -29,33 +34,16 @@ const AgentRow = memo(function AgentRow({
   onToggle,
   onEnterSelect,
   hideProjectTag = false,
+  isPendingUnstar = false,
+  onTogglePendingStar,
 }) {
   const navigate = useNavigate();
 
-  // Soft-toggle for the inline star button — mirrors BookmarksSection's
-  // locallyRemoved pattern. The row stays visible in the STARRED section
-  // until the user navigates away, so an accidental tap can be undone with
-  // one more tap. Parent state isn't dispatched-to from here; the next
-  // poll/refresh reconciles agent.starred.
-  const [softUnstarred, setSoftUnstarred] = useState(false);
-  const [starBusy, setStarBusy] = useState(false);
-
-  const handleStarClick = async (e) => {
+  const handleStarClick = (e) => {
     e.stopPropagation();
-    if (starBusy) return;
     const sessionId = agent.session_id || agent.id;
     if (!agent.project || !sessionId) return;
-    setStarBusy(true);
-    const next = !softUnstarred;
-    setSoftUnstarred(next);
-    try {
-      if (next) await unstarSession(agent.project, sessionId);
-      else await starSession(agent.project, sessionId);
-    } catch {
-      setSoftUnstarred(!next); // rollback on error
-    } finally {
-      setStarBusy(false);
-    }
+    onTogglePendingStar?.(agent.id, agent.project, sessionId);
   };
 
   const handleClick = () => {
@@ -162,16 +150,16 @@ const AgentRow = memo(function AgentRow({
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") handleStarClick(e);
                   }}
-                  title={softUnstarred ? "Re-star" : "Unstar"}
+                  title={isPendingUnstar ? "Re-star" : "Unstar"}
                   className={`inline-flex items-center p-0.5 rounded transition-colors cursor-pointer ${
-                    softUnstarred
+                    isPendingUnstar
                       ? "text-faint hover:text-amber-500 hover:bg-amber-500/10"
                       : "text-amber-500 hover:bg-amber-500/15"
                   }`}
                 >
                   <svg
                     className="w-4 h-4"
-                    fill={softUnstarred ? "none" : "currentColor"}
+                    fill={isPendingUnstar ? "none" : "currentColor"}
                     stroke="currentColor"
                     strokeWidth={2}
                     viewBox="0 0 24 24"

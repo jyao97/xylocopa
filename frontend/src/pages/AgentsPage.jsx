@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Bell, BellOff, Link2, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, clog } from "../lib/api";
+import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, unstarSession, clog } from "../lib/api";
 import { relativeTime } from "../lib/formatters";
 import { POLL_INTERVAL, SYNC_SETTLE_DELAY_GLOBAL } from "../lib/constants";
 import PageHeader from "../components/PageHeader";
@@ -43,6 +43,38 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
   const [selected, setSelected] = useState(new Set());
   const [bulkStopping, setBulkStopping] = useState(false);
   const toast = useToast();
+
+  // Deferred-unstar state. Tapping the inline star on a row only toggles
+  // a pending entry — the API call (and the WS round-trip that would move
+  // the row out of STARRED) is deferred until the user navigates away.
+  // Mirrors the BookmarksSection soft-toggle intent: a mistap can be undone
+  // with one more tap, no flicker. Chat-page star/unstar is unchanged
+  // (immediate). Map<agentId, {project, sessionId}>.
+  const [pendingUnstars, setPendingUnstars] = useState(() => new Map());
+  const pendingUnstarsRef = useRef(pendingUnstars);
+  useEffect(() => { pendingUnstarsRef.current = pendingUnstars; }, [pendingUnstars]);
+
+  const handleTogglePendingStar = useCallback((agentId, project, sessionId) => {
+    setPendingUnstars((prev) => {
+      const next = new Map(prev);
+      if (next.has(agentId)) next.delete(agentId);
+      else next.set(agentId, { project, sessionId });
+      return next;
+    });
+  }, []);
+
+  const flushPendingUnstars = useCallback(() => {
+    const map = pendingUnstarsRef.current;
+    if (!map || map.size === 0) return;
+    const entries = Array.from(map.entries());
+    pendingUnstarsRef.current = new Map();
+    setPendingUnstars(new Map());
+    for (const [agentId, { project, sessionId }] of entries) {
+      unstarSession(project, sessionId).catch((err) => {
+        console.warn("[agents] deferred unstar failed", agentId, err);
+      });
+    }
+  }, []);
 
   const showToast = useCallback((message, type = "success") => {
     if (type === "error") toast.error(message);
@@ -180,6 +212,39 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
       window.removeEventListener("agent-star-changed", onStarChanged);
     };
   }, [load, loadUnlinked]);
+
+  // Flush deferred unstars when the page becomes inactive (user navigated
+  // off /agents). Also on unmount as a safety net. The WS handler picks up
+  // session_star_changed afterward and patches the store; on return, the
+  // row is correctly out of STARRED.
+  useEffect(() => {
+    if (isActive) return;
+    flushPendingUnstars();
+  }, [isActive, flushPendingUnstars]);
+
+  useEffect(() => {
+    return () => { flushPendingUnstars(); };
+  }, [flushPendingUnstars]);
+
+  // Reconcile pending entries against the latest store snapshot — if an
+  // agent's `starred` flipped to false externally (chat page, another
+  // device, the 5s poll), drop its pending entry so the icon stops showing
+  // a stale "pending unstar" outline and we don't fire a redundant API.
+  useEffect(() => {
+    setPendingUnstars((prev) => {
+      if (prev.size === 0) return prev;
+      let changed = false;
+      const next = new Map(prev);
+      for (const agentId of Array.from(next.keys())) {
+        const a = agents.find((x) => x.id === agentId);
+        if (!a || !a.starred) {
+          next.delete(agentId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [agents]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -713,6 +778,8 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
               selected={selected.has(agent.id)}
               onToggle={toggleOne}
               onEnterSelect={enterSelectMode}
+              isPendingUnstar={pendingUnstars.has(agent.id)}
+              onTogglePendingStar={handleTogglePendingStar}
             />
           ))}
         </div>

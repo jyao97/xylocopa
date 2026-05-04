@@ -12,43 +12,43 @@ export function cardPadding(expanded, selecting) {
   return expanded && !selecting ? "py-5" : "py-[18px]";
 }
 
-/** Geometric collapse-zone check. Decision order:
- *   1. Explicit opt-in [data-collapse-zone] → ALWAYS counts as collapse zone
- *      (overrides interactive + text rules — use this for elements that
- *      look like buttons/text but are semantically "chrome": timestamps,
- *      status labels, drag handles, etc).
- *   2. Explicit opt-out [data-no-collapse] / [data-no-longpress] → never
- *      a collapse zone (existing tag-picker convention).
- *   3. Inside any interactive element (button/input/textarea/select/a/
- *      [role=button]/[contenteditable]) → not a collapse zone.
- *   4. Any ancestor up to `root` is an inline text element → not a
- *      collapse zone (the user might be selecting text).
- *   5. Otherwise → collapse zone (layout div, gap, icon container).
+/** Collapse-zone check (blacklist model). Decision order:
+ *   1. Explicit opt-in [data-collapse-zone] → ALWAYS collapse (overrides
+ *      both blacklists — use for chrome that looks like a button or text:
+ *      timestamps, status labels, drag handles, etc).
+ *   2. Inside an interactive element (button/input/textarea/select/a/
+ *      [role=button]/[contenteditable]) OR explicit
+ *      [data-no-collapse]/[data-no-longpress] → don't collapse.
+ *   3. The click point falls on a text node (caretRangeFromPoint returns
+ *      a TEXT_NODE) → don't collapse, the user might be selecting text.
+ *   4. Otherwise → collapse zone.
+ *
+ * Note: takes the SyntheticEvent (not just target) because rule 3 needs
+ * clientX/clientY for hit-testing.
  */
-const TEXT_TAGS = new Set([
-  "P", "STRONG", "EM", "CODE", "PRE", "LABEL",
-  "H1", "H2", "H3", "H4", "H5", "H6",
-]);
-export function isCollapseZone(target, root) {
+export function isCollapseZone(event, root) {
+  const target = event?.target;
   if (!(target instanceof Element)) return false;
-  // 1. Explicit opt-in — wins over everything.
+  // 1. Explicit opt-in.
   const optIn = target.closest("[data-collapse-zone]");
   if (optIn && root.contains(optIn)) return true;
-  // 2. Explicit opt-out.
-  if (target.closest("[data-no-collapse], [data-no-longpress]")) return false;
-  // 3. Interactive element.
+  // 2. Interactive / explicit opt-out.
   if (target.closest(
-    "button, input, textarea, select, a, [role='button'], [contenteditable='true']"
+    "button, input, textarea, select, a, [role='button'], " +
+    "[contenteditable='true'], [data-no-collapse], [data-no-longpress]"
   )) return false;
-  // 4. Inline text content (note: SPAN is intentionally NOT in TEXT_TAGS —
-  //    spans are too generic to blanket-block, and chrome spans like
-  //    timestamps would otherwise need data-collapse-zone everywhere.
-  //    Real prose text is in <p>/<h*>; if you have a span you don't want
-  //    collapsing, wrap or mark with data-no-collapse).
-  let cur = target;
-  while (cur && cur !== root) {
-    if (TEXT_TAGS.has(cur.tagName)) return false;
-    cur = cur.parentElement;
+  // 3. Geometric text-hit-test. The browser knows exactly where it laid
+  //    glyphs out — let it tell us whether the click landed on text.
+  const x = event.clientX, y = event.clientY;
+  if (typeof x === "number" && typeof y === "number") {
+    const r = (typeof document.caretRangeFromPoint === "function")
+      ? document.caretRangeFromPoint(x, y)
+      : (typeof document.caretPositionFromPoint === "function"
+        ? document.caretPositionFromPoint(x, y) : null);
+    const node = r && (r.startContainer || r.offsetNode);
+    if (node && node.nodeType === Node.TEXT_NODE && root.contains(node)) {
+      return false;
+    }
   }
   return true;
 }

@@ -131,7 +131,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
 
   const handleCardEmptyClick = (e) => {
     if (!isExpanded) return;
-    if (!isCollapseZone(e.target, e.currentTarget)) return;
+    if (!isCollapseZone(e, e.currentTarget)) return;
     onExpand?.(task.id);
   };
 

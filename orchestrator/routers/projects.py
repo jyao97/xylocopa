@@ -2070,6 +2070,18 @@ async def list_project_sessions(name: str, db: Session = Depends(get_db)):
     return results
 
 
+def _resolve_agent_id_for_session(db: Session, session_id: str) -> str | None:
+    """Map session_id → agent.id. session_star_changed carries this so
+    AgentsPage can patch the AgentsContext store keyed by agent.id without
+    waiting for a /api/agents poll. Matches both the canonical (Agent.session_id)
+    and legacy (Agent.id-keyed star) cases — same predicate as
+    route_helpers.enrich_agent_briefs."""
+    row = db.query(Agent.id).filter(
+        (Agent.session_id == session_id) | (Agent.id == session_id)
+    ).first()
+    return row[0] if row else None
+
+
 @router.put("/api/projects/{name}/sessions/{session_id}/star")
 async def star_session(name: str, session_id: str, db: Session = Depends(get_db)):
     """Star a session."""
@@ -2079,7 +2091,8 @@ async def star_session(name: str, session_id: str, db: Session = Depends(get_db)
         db.commit()
     # Always emit so other devices' UI converges even on a duplicate request.
     from websocket import emit_session_star_changed
-    asyncio.ensure_future(emit_session_star_changed(name, session_id, True))
+    agent_id = _resolve_agent_id_for_session(db, session_id)
+    asyncio.ensure_future(emit_session_star_changed(name, session_id, True, agent_id))
     return {"starred": True}
 
 
@@ -2091,7 +2104,8 @@ async def unstar_session(name: str, session_id: str, db: Session = Depends(get_d
         db.delete(existing)
         db.commit()
     from websocket import emit_session_star_changed
-    asyncio.ensure_future(emit_session_star_changed(name, session_id, False))
+    agent_id = _resolve_agent_id_for_session(db, session_id)
+    asyncio.ensure_future(emit_session_star_changed(name, session_id, False, agent_id))
     return {"starred": False}
 
 

@@ -257,6 +257,17 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
     agentsActions.prepend(newAgent);
   }, [agentsActions]));
 
+  // Star toggled from any device → patch the shared store so STARRED
+  // section regrouping happens immediately, not after the 5s poll.
+  // Backend includes agent_id in the payload (resolved from session_id) so
+  // we can patch by id without maintaining a session→agent reverse index.
+  useWsEvent(useCallback((event) => {
+    if (event.type !== "session_star_changed") return;
+    const { agent_id, starred } = event.data || {};
+    if (!agent_id) return;
+    agentsActions.patchOne(agent_id, { starred: !!starred });
+  }, [agentsActions]));
+
   // Double-tap nav: scroll to first unread agent
   useEffect(() => {
     const handler = (e) => {

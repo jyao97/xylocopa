@@ -317,14 +317,21 @@ async def emit_project_update(name: str):
     await ws_manager.broadcast("project_update", {"name": name})
 
 
-async def emit_session_star_changed(project: str, session_id: str, starred: bool):
+async def emit_session_star_changed(project: str, session_id: str, starred: bool,
+                                    agent_id: str | None = None):
     """Targeted signal: a single session's star flag flipped. Carries the
     new state so subscribers (chat page star button) can setState directly
-    without a 250-360ms /sessions refetch."""
+    without a 250-360ms /sessions refetch.
+
+    `agent_id` (when known) lets AgentsPage patch the shared AgentsContext
+    store (which keys by agent.id) directly instead of waiting for the 5s
+    /api/agents poll — bookmark felt fast for the same reason: its
+    project_update signal is wired to the source of truth for its UI."""
     await ws_manager.broadcast("session_star_changed", {
         "project": project,
         "session_id": session_id,
         "starred": starred,
+        "agent_id": agent_id,
     })
 
 

@@ -77,7 +77,7 @@ import {
 } from "../lib/constants";
 import { DATE_SHORT, TIME_SHORT } from "../lib/formatters";
 import VoiceRecorder from "../components/VoiceRecorder";
-import { appendVoiceDraft } from "../lib/voiceStore";
+import { appendVoiceDraft, deleteVoiceJob } from "../lib/voiceStore";
 import WorktreePill from "../components/WorktreePill";
 import PopoverArrow from "../components/PopoverArrow";
 import ContextUsagePill from "../components/ContextUsagePill";
@@ -2569,10 +2569,31 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   const [feedbackAttachments, setFeedbackAttachments] = useState([]);
   const feedbackFileInputRef = useRef(null);
   const feedbackVoice = useVoiceRecorder({
-    onTranscript: (t) => setIncompleteReason((prev) => (prev ? prev + " " + t : t)),
+    // Drop the delivery if the user navigated to a different chat between
+    // recording-start and pipeline-finish. Without this guard, the latent
+    // setIncompleteReason setter would write to AgentChatPage's shared state
+    // under the wrong chat's modal context. Recovery is also blocked below.
+    onTranscript: (t, recordingKey) => {
+      const expected = id ? `voice:feedback:${id}` : null;
+      if (recordingKey !== expected) return;
+      setIncompleteReason((prev) => (prev ? prev + " " + t : t));
+    },
     onError: (msg) => console.warn("Feedback voice error:", msg),
     persistKey: id ? `voice:feedback:${id}` : null,
   });
+  // Navigating away from a chat while feedback voice is in flight: stop the
+  // recorder for the OUTGOING chat and wipe its IDB job so neither pipeline
+  // nor recovery can later inject into the current chat's modal. Together
+  // with the onTranscript guard above, this enforces "navigate out → drop
+  // the voice entirely" semantics for stop-modal feedback.
+  const feedbackVoiceRef = useRef(feedbackVoice);
+  feedbackVoiceRef.current = feedbackVoice;
+  useEffect(() => {
+    return () => {
+      if (feedbackVoiceRef.current?.recording) feedbackVoiceRef.current.stopRecording();
+      if (id) deleteVoiceJob(`voice:feedback:${id}`).catch(() => {});
+    };
+  }, [id]);
   const [showTaskCard, setShowTaskCard] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);

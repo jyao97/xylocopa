@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-05-04
+
+### Fixed
+
+- **Voice transcription delivery hardening.** Several races could swallow a transcript when the user navigated between chats while a recording was finishing. Delivery is now atomic: `claimVoiceJob` makes IndexedDB the single ground truth (no parallel guard layers), `deleteVoiceJob` is awaited before `onTranscript` fires, transcript routing is bound to the recording's `persistKey` (so a stale tab can't claim a transcript meant for a newer one), an in-tab subscriber set delivers same-context transcripts without round-tripping the storage event, and final delivery now uses a `localStorage` draft instead of direct setState. Caller-side `recordingKey` verification added as a belt-and-suspenders guard. `feedbackVoice` pipeline + IDB job are dropped when the chat changes; `InboxCard` stops the active recording on collapse.
+- **Bookmarks: deferred-delete avoids API thrash.** Per-message unbookmark now updates the local list immediately and defers the DELETE call until navigation away from the chat. `bookmarkedSet` reconciles pending deletes against the live list, and refreshes on cross-device `project_update` WS events so a bookmark removed on another device disappears here without a refetch.
+- **Star unbookmark on list pages: same deferred-delete pattern.** Avoids an HTTP round-trip per tap when bulk-cleaning starred items.
+- **Per-chat input state resets on agent change.** `ChatInput` and `useDraft` were retaining state across chat navigation when only the `agentId` (not the storage key) changed; both now reset/reload when their key changes, fixing stale draft bleed-through.
+- **ESC key clears input via `C-u` instead of double-Esc.** Old flow (`Esc Esc + Esc`) was racy; single `C-u` is reliable.
+- **Suppress Claude Code's "Resume from summary" menu on agent launch.** Menu was occasionally intercepting the first user message after a launch.
+- **Startup no longer re-queues SENT-but-undelivered messages.** Previously the migrate path treated unread messages as undispatched and re-sent on next boot.
+- **Startup no longer rebuilds the display file on every restart** — full rebuild was unnecessary now that incremental flush is the source of truth.
+
+### Changed
+
+- **Backend: `rebuild_agent` migration to `flush_agent` / targeted `_replace` appends.** `_rotate_agent_session` now uses `flush_agent`; sync compact path uses targeted `_replace` instead of a full rebuild; `PreCompact` flips agent status to `EXECUTING` so the compact window is visible in the UI. Removes the recurring full-display-file rewrites that previously fired on every compaction.
+- **`/new` entry: long-press `+` opens "New Project"; short-press opens `/new/task`.** Reverts the brief `/new`-as-only-New-Project layout from earlier in this cycle. The plus button on the inbox/agents bar is now the affordance for both flows.
+
 ## [0.10.2] - 2026-05-03
 
 ### Fixed

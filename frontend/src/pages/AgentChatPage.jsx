@@ -1952,11 +1952,13 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
   const fileInputRef = useRef(null);
   const pendingSendRef = useRef(null);
 
-  // Voice target ref — redirects transcription to feedback textarea when stop modal is open
+  // Voice target ref — redirects transcription to feedback textarea when stop modal is open.
+  // setText must be in deps: useDraft returns a new setter when storageKey (agentId) changes,
+  // and without re-binding, the voice transcript callback would fire the previous chat's setter.
   const voiceTargetRef = useRef(setText);
   useEffect(() => {
     voiceTargetRef.current = voiceTarget || setText;
-  }, [voiceTarget]);
+  }, [voiceTarget, setText]);
   const voice = useVoiceRecorder({
     onTranscript: (t) => voiceTargetRef.current((prev) => (prev ? prev + " " + t : t)),
     onError: (msg) => setVoiceError(msg),
@@ -1992,9 +1994,49 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync completed attachments to localStorage cache
+  // Reload per-chat state when agentId changes. ChatInput is reused across
+  // /agents/:id navigation (no key prop on the parent), so useState initializers
+  // don't re-run. Without this, attachments and transient UI state from the
+  // previous chat leak into the new one.
+  const lastAttachmentKeyRef = useRef(attachmentCacheKey);
+  useEffect(() => {
+    if (lastAttachmentKeyRef.current === attachmentCacheKey) return;
+    lastAttachmentKeyRef.current = attachmentCacheKey;
+    // Revoke any blob: URLs from outgoing chat before swapping
+    setAttachments((prev) => {
+      prev.forEach((a) => { if (a.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(a.previewUrl); });
+      if (!attachmentCacheKey) return [];
+      try {
+        const cached = localStorage.getItem(attachmentCacheKey);
+        if (cached) {
+          return JSON.parse(cached).map((a) => ({
+            ...a,
+            uploading: false,
+            file: null,
+            previewUrl: a.thumbnailUrl || null,
+          }));
+        }
+      } catch { /* ignore */ }
+      return [];
+    });
+    // Reset transient per-chat UI state
+    setAttPreviewIndex(null);
+    setShowPicker(false);
+    setSkillsDismissed(false);
+    setEscCooldown(false);
+    setDragOver(false);
+    dragCountRef.current = 0;
+    pendingSendRef.current = null;
+  }, [attachmentCacheKey]);
+
+  // Sync completed attachments to localStorage cache.
+  // Guard: skip until the reload effect above has caught up to the new key.
+  // Without this, on agentId change React fires both effects in the same
+  // commit; this one would read the previous chat's `attachments` state
+  // (setAttachments hasn't flushed yet) and write it under the NEW key.
   useEffect(() => {
     if (!attachmentCacheKey) return;
+    if (lastAttachmentKeyRef.current !== attachmentCacheKey) return;
     const completed = attachments.filter((a) => !a.uploading && a.uploadedPath);
     if (completed.length > 0) {
       const toCache = completed.map((a) => ({

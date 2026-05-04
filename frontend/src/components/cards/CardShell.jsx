@@ -29,16 +29,28 @@ export function cardPadding(expanded, selecting) {
 export function isCollapseZone(event, root) {
   const target = event?.target;
   if (!(target instanceof Element)) return false;
+
+  // Walk from target up to (but excluding) root. The card root itself
+  // commonly carries role='button' / cursor-pointer for collapsed-state
+  // tap-to-expand — if we let closest() cross it, every click would match
+  // [role=button] and nothing would ever count as a collapse zone.
+  const ancestorMatch = (sel) => {
+    let cur = target;
+    while (cur && cur !== root) {
+      if (cur.matches(sel)) return cur;
+      cur = cur.parentElement;
+    }
+    return null;
+  };
+
   // 1. Explicit opt-in.
-  const optIn = target.closest("[data-collapse-zone]");
-  if (optIn && root.contains(optIn)) return true;
+  if (ancestorMatch("[data-collapse-zone]")) return true;
   // 2. Interactive / explicit opt-out.
-  if (target.closest(
+  if (ancestorMatch(
     "button, input, textarea, select, a, [role='button'], " +
     "[contenteditable='true'], [data-no-collapse], [data-no-longpress]"
   )) return false;
-  // 3. Geometric text-hit-test. The browser knows exactly where it laid
-  //    glyphs out — let it tell us whether the click landed on text.
+  // 3. Geometric text-hit-test — the browser knows where it laid glyphs out.
   const x = event.clientX, y = event.clientY;
   if (typeof x === "number" && typeof y === "number") {
     const r = (typeof document.caretRangeFromPoint === "function")

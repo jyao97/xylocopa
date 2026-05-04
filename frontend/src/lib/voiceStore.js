@@ -44,3 +44,27 @@ export async function deleteVoiceJob(key) {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+// Atomic read-and-delete in a single readwrite transaction.
+// Returns the job (with text/status) if it existed, null otherwise.
+// IndexedDB serializes concurrent transactions on the same store, so when
+// pipeline and recovery race to claim the same key, exactly one of them gets
+// the job back (the other gets null). This makes IDB the single source of
+// truth for "has this transcript been claimed for delivery yet" and prevents
+// the same recording from being delivered twice via two parallel paths.
+export async function claimVoiceJob(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    let job = null;
+    const getReq = store.get(key);
+    getReq.onsuccess = () => {
+      job = getReq.result || null;
+      if (job) store.delete(key);
+    };
+    tx.oncomplete = () => resolve(job);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}

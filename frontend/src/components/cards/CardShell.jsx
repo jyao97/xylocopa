@@ -50,7 +50,14 @@ export function isCollapseZone(event, root) {
     "button, input, textarea, select, a, [role='button'], " +
     "[contenteditable='true'], [data-no-collapse], [data-no-longpress]"
   )) return false;
-  // 3. Geometric text-hit-test — the browser knows where it laid glyphs out.
+  // 3. Geometric text-hit-test — the browser knows where it laid glyphs
+  //    out. caretRangeFromPoint snaps to the nearest text node even when
+  //    the click is in surrounding padding/margin (its job is to give a
+  //    useful caret target for any click), so the snapped node alone
+  //    isn't enough — we also have to verify the click coords actually
+  //    fall within one of that node's rendered line rects. Otherwise
+  //    clicks in the card's outer px-5 padding would be reported as "on
+  //    text" (snapped to a description text node) and never collapse.
   const x = event.clientX, y = event.clientY;
   if (typeof x === "number" && typeof y === "number") {
     const r = (typeof document.caretRangeFromPoint === "function")
@@ -59,7 +66,17 @@ export function isCollapseZone(event, root) {
         ? document.caretPositionFromPoint(x, y) : null);
     const node = r && (r.startContainer || r.offsetNode);
     if (node && node.nodeType === Node.TEXT_NODE && root.contains(node)) {
-      return false;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const rects = range.getClientRects();
+      for (const rect of rects) {
+        if (x >= rect.left && x <= rect.right &&
+            y >= rect.top && y <= rect.bottom) {
+          return false; // genuinely on the text glyphs
+        }
+      }
+      // Snapped to nearby text but click was actually in whitespace —
+      // fall through to "collapse zone".
     }
   }
   return true;

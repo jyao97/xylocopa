@@ -2600,6 +2600,11 @@ async def update_agent(agent_id: str, request: Request, db: Session = Depends(ge
                 raise HTTPException(status_code=400, detail="deferred_to must be ISO datetime or null")
     db.commit()
     db.refresh(agent)
+    # Broadcast to other devices so they update their list grouping
+    # (deferred_to → Deferred section), mute icon, and name without waiting
+    # for the 5s poll. emit_agent_update fetches the row from DB so the
+    # payload reflects the just-committed state.
+    asyncio.ensure_future(emit_agent_update(agent.id, agent.status.value, agent.project))
     return agent
 
 

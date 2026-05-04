@@ -239,6 +239,9 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
     if (d.last_message_at !== undefined) partial.last_message_at = d.last_message_at;
     if (d.has_pending_suggestions !== undefined) partial.has_pending_suggestions = d.has_pending_suggestions;
     if (d.insight_status !== undefined) partial.insight_status = d.insight_status;
+    if (d.deferred_to !== undefined) partial.deferred_to = d.deferred_to;
+    if (d.muted !== undefined) partial.muted = d.muted;
+    if (d.name !== undefined) partial.name = d.name;
     if (Object.keys(partial).length > 0) agentsActions.patchOne(agent_id, partial);
   }, [agentsActions]));
 

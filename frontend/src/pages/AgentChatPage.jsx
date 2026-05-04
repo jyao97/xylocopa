@@ -3724,6 +3724,17 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         if ("insight_status" in event.data) {
           patch.insight_status = event.data.insight_status || null;
         }
+        if ("deferred_to" in event.data) {
+          patch.deferred_to = event.data.deferred_to || null;
+          setDeferredTo(event.data.deferred_to || null);
+        }
+        if ("muted" in event.data) {
+          patch.muted = !!event.data.muted;
+          setAgentMuted(id, !!event.data.muted);
+        }
+        if ("name" in event.data && event.data.name) {
+          patch.name = event.data.name;
+        }
         setAgent((prev) => prev ? { ...prev, ...patch } : prev);
       }
       if (status !== "EXECUTING" && status !== "IDLE") {

@@ -268,6 +268,11 @@ async def emit_agent_update(agent_id: str, status: str, project: str,
                     if _a.last_message_at else None
                 )
                 data["has_pending_suggestions"] = bool(_a.has_pending_suggestions)
+                data["deferred_to"] = (
+                    _a.deferred_to.isoformat() if _a.deferred_to else None
+                )
+                data["muted"] = bool(_a.muted)
+                data["name"] = _a.name or ""
         finally:
             _db.close()
     except Exception:

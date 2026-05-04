@@ -247,6 +247,8 @@ async def lifespan(app: FastAPI):
     # Make the event loop available to routers that need it for background threads
     from routers import projects as _projects_router
     _projects_router._main_event_loop = _main_event_loop
+    from routers import bookmarks as _bookmarks_router
+    _bookmarks_router._main_event_loop = _main_event_loop
 
     init_db()
     logger.info("Database initialized")

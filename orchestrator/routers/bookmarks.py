@@ -23,6 +23,20 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
+# Set during lifespan in main.py; needed because these endpoints are
+# sync `def` and run in AnyIO's thread pool, which has no event loop —
+# so asyncio.ensure_future fails. Use run_coroutine_threadsafe instead.
+_main_event_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _emit_ws(coro):
+    """Schedule a WS coroutine onto the main event loop from a worker thread."""
+    loop = _main_event_loop
+    if loop and loop.is_running():
+        asyncio.run_coroutine_threadsafe(coro, loop)
+    else:
+        coro.close()  # avoid "coroutine was never awaited" warning
+
 router = APIRouter()
 
 
@@ -421,7 +435,7 @@ def create_bookmark(
         if payload and payload.user_note is not None:
             existing.user_note = payload.user_note.strip() or None
             db.commit()
-            asyncio.ensure_future(emit_project_update(name))
+            _emit_ws(emit_project_update(name))
         return _to_out(existing, msg, agent)
 
     media = _collect_neighborhood_media(db, msg)
@@ -440,7 +454,7 @@ def create_bookmark(
     db.add(bm)
     db.commit()
     db.refresh(bm)
-    asyncio.ensure_future(emit_project_update(name))
+    _emit_ws(emit_project_update(name))
 
     # Fire-and-forget LLM summary
     background.add_task(_summarize_bookmark, message_id)
@@ -464,7 +478,7 @@ def update_bookmark(
         bm.user_note = cleaned or None
     db.commit()
     from websocket import emit_project_update
-    asyncio.ensure_future(emit_project_update(name))
+    _emit_ws(emit_project_update(name))
     msg = db.get(Message, message_id)
     agent = db.get(Agent, bm.agent_id)
     return _to_out(bm, msg, agent)
@@ -478,5 +492,5 @@ def delete_bookmark(name: str, message_id: str, db: Session = Depends(get_db)):
     db.delete(bm)
     db.commit()
     from websocket import emit_project_update
-    asyncio.ensure_future(emit_project_update(name))
+    _emit_ws(emit_project_update(name))
     return {"deleted": True}

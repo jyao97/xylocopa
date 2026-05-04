@@ -3627,20 +3627,19 @@ async def send_escape_to_agent(agent_id: str, request: Request, db: Session = De
         raise HTTPException(status_code=500, detail="Failed to send interrupt to tmux")
     # C-c interrupt may restore the prompt text to the input bar (CC's
     # behavior varies by version and by whether the prompt was typed vs
-    # pasted). Clear the input via CC's official "double-tap Esc" shortcut
-    # (per /help in v2.1.126); the trailing single Esc backs out of the
-    # Rewind menu in case the input was already empty (no-op otherwise).
-    # C-l worked through v2.1.123 but became a no-op in post-generation
-    # state in v2.1.126, leaving residual that corrupted the next message.
+    # pasted). Clear the input via C-u (readline-style "discard line"), which
+    # CC's TUI binds to a deterministic full-input clear regardless of state.
+    # History: C-l (v<=2.1.123) became a no-op in post-generation state in
+    # v2.1.126; "Esc Esc + sleep + Esc" worked but depended on CC's internal
+    # even/odd Esc parity (empty input + Esc Esc → Rewind menu, needs trailing
+    # Esc to back out) and was fragile across versions. C-u sidesteps both
+    # state machines — worst case it leaves residual rather than hanging.
     time.sleep(0.3)  # let C-c finish + prompt restore settle
-    send_tmux_keys(agent.tmux_pane, ["Escape", "Escape"], inter_key_delay=0)
-    time.sleep(0.15)  # let Rewind menu render or input clear settle
-    send_tmux_keys(agent.tmux_pane, ["Escape"], inter_key_delay=0)
+    send_tmux_keys(agent.tmux_pane, ["C-u"], inter_key_delay=0)
     # tmux send-keys returns when keys are written to the PTY, not when CC
-    # finishes rendering them. Give CC time to process the Esc sequence
-    # before we transition to IDLE + dispatch the next queued message —
-    # otherwise the next send_tmux_message can paste while CC's input bar
-    # is still mid-transition, leaving residual.
+    # finishes rendering them. Give CC time to process C-u before we
+    # transition to IDLE + dispatch the next queued message — otherwise the
+    # next send_tmux_message can paste while the input bar is mid-clear.
     time.sleep(0.1)
 
     # Escape is a privileged terminal signal: a user-initiated interrupt

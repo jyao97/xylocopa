@@ -219,12 +219,12 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Predelivery migration failed on startup")
 
-    # Rebuild display files for active agents
-    try:
-        from display_writer import startup_rebuild_all
-        startup_rebuild_all()
-    except Exception:
-        logger.exception("Failed to rebuild display files on startup")
+    # Display files: no rebuild on startup. Files are append-only mirrors
+    # of DB state, maintained consistent by the write paths
+    # (_promote_pre_sent_to_sent etc). Rebuild is reserved for compact
+    # (sync_engine) and session rotation (agent_dispatcher) paths where
+    # the JSONL identity actually changes. The pre-sent index loads
+    # lazily via _ensure_index_loaded on first read.
 
     # Mark interrupted insight generations as failed
     try:

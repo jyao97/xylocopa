@@ -121,13 +121,15 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   useEffect(() => () => clearTimeout(justExpandedTimerRef.current), []);
 
   // --- inline title editing ---
-  // Title is rendered as `inline-block max-w-full contentEditable` when the
-  // card is expanded — the element box hugs the actual text, so empty space
-  // within the title row is *outside* the editable element. Native browser
-  // cursor placement handles clicks on text (between letters works exactly
-  // as in any contentEditable). The flex-row's onClick handles empty-area
-  // clicks (timestamp, gap, post-text whitespace) → collapse the card.
+  // Title uses a contentEditable state-toggle to avoid iOS Safari's
+  // word-snap two-step caret placement. While `titleEditing` is false the
+  // element is non-editable, so iOS skips its native caret hit-test on
+  // touchend. The first click flips state → next-frame focus +
+  // placeCaretAtPoint lands the caret in one step. Inline-block layout is
+  // preserved so empty-space clicks bubble to the card root's collapse
+  // handler.
   const titleRef = useRef(null);
+  const [titleEditing, setTitleEditing] = useState(false);
 
   const handleCardEmptyClick = (e) => {
     if (!isExpanded) return;
@@ -139,6 +141,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
     const el = titleRef.current;
     if (!el) return;
     const text = el.innerText.trim();
+    setTitleEditing(false);
     if (text && text !== task.title) {
       await updateTaskV2(task.id, { title: text });
       onRefresh?.();
@@ -147,9 +150,10 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   }, [task.id, task.title, onRefresh]);
 
   // --- inline description editing ---
-  // Description is always contentEditable when expanded — content is set
-  // imperatively (innerText) so React doesn't fight the user's typing.
+  // Same state-toggle pattern as the title (see comment above). Content is
+  // set imperatively (innerText) so React doesn't fight the user's typing.
   const editRef = useRef(null);
+  const [descEditing, setDescEditing] = useState(false);
   const fileInputRef = useRef(null);
   const filePickerOpenRef = useRef(false);
 
@@ -196,9 +200,11 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   // Cleanup debounce timer on unmount
   useEffect(() => () => clearTimeout(saveTimerRef.current), []);
 
-  // Collapse: flush any pending description edits to server
+  // Collapse: flush any pending description edits to server, exit edit mode
   useEffect(() => {
     if (isExpanded) return;
+    setTitleEditing(false);
+    setDescEditing(false);
     flushServerSave();
   }, [isExpanded, flushServerSave]);
 
@@ -259,7 +265,24 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
       consumeExpandFocusGuard();
       return;
     }
-    if (editRef.current) placeCaretAtPoint(editRef.current, e.clientX, e.clientY);
+    const { clientX, clientY } = e;
+    if (!descEditing) {
+      // First edit-tap: flip contentEditable on. iOS didn't paint a
+      // word-snap caret because the element wasn't editable at touchend.
+      // After re-render, focus + placeCaretAtPoint in rAF lands the caret
+      // exactly where the user tapped — single step.
+      setDescEditing(true);
+      requestAnimationFrame(() => {
+        const el = editRef.current;
+        if (!el) return;
+        if (!el.innerText) el.innerText = descText;
+        el.focus();
+        placeCaretAtPoint(el, clientX, clientY);
+      });
+    } else {
+      // Already editing — synchronously override iOS word-snap.
+      if (editRef.current) placeCaretAtPoint(editRef.current, clientX, clientY);
+    }
   };
 
   const handleDescMouseDown = (e) => {
@@ -269,6 +292,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   };
 
   const handleDescBlur = useCallback(() => {
+    setDescEditing(false);
     flushServerSave();
   }, [flushServerSave]);
 
@@ -454,7 +478,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                 <div className="flex-1 min-w-0">
                   <div
                     ref={titleRef}
-                    contentEditable
+                    contentEditable={titleEditing}
                     suppressContentEditableWarning
                     onMouseDown={(e) => {
                       // Block native focus from the trailing synthesized
@@ -469,10 +493,23 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                         consumeExpandFocusGuard();
                         return;
                       }
-                      // Synchronously override iOS word-snap caret placement
-                      // with the exact click coords (no RAF — RAF caused a
-                      // visible two-step jump between word-snap and target).
-                      if (titleRef.current) placeCaretAtPoint(titleRef.current, e.clientX, e.clientY);
+                      const { clientX, clientY } = e;
+                      if (!titleEditing) {
+                        // First edit-tap: flip contentEditable on. iOS skipped
+                        // its native caret hit-test on touchend because the
+                        // element wasn't editable. After re-render, focus +
+                        // placeCaretAtPoint in rAF lands the caret in one
+                        // step — no word-snap to fight.
+                        setTitleEditing(true);
+                        requestAnimationFrame(() => {
+                          const el = titleRef.current;
+                          if (!el) return;
+                          el.focus();
+                          placeCaretAtPoint(el, clientX, clientY);
+                        });
+                      } else if (titleRef.current) {
+                        placeCaretAtPoint(titleRef.current, clientX, clientY);
+                      }
                     }}
                     onBlur={saveTitle}
                     onKeyDown={(e) => {
@@ -497,15 +534,17 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
               </span>
             </div>
 
-            {/* Description — always contentEditable when expanded; content
-                is set imperatively (innerText) to avoid React reconciling
+            {/* Description — contentEditable toggles on first click via
+                `descEditing` state so iOS Safari skips its word-snap caret
+                placement on touchend (see title block above). Content is
+                set imperatively (innerText) to avoid React reconciling
                 user-typed text. Placeholder is a sibling overlay so the
                 editable's hit-area maps cleanly to its own bounds. */}
             {isExpanded ? (
               <div className="mt-1.5 relative">
                 <div
                   ref={editRef}
-                  contentEditable
+                  contentEditable={descEditing}
                   suppressContentEditableWarning
                   onMouseDown={handleDescMouseDown}
                   onClick={handleDescClick}

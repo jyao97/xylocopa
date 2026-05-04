@@ -25,6 +25,7 @@ import {
   deleteAgent,
   markAgentRead,
   unstarSession,
+  clog,
 } from "../lib/api";
 import { useAgents, useAgentsSeeded } from "../contexts/AgentsContext";
 import { useFolders } from "../contexts/FoldersContext";
@@ -329,17 +330,20 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
       const next = new Set(prev);
       if (next.has(messageId)) next.delete(messageId);
       else next.add(messageId);
+      clog(`[project] toggle pending bookmark delete msg=${messageId} now-pending=${next.has(messageId)} size=${next.size}`);
       return next;
     });
   }, []);
 
   const flushPendingBookmarkDeletes = useCallback(() => {
     const set = pendingBookmarkDeletesRef.current;
+    clog(`[project] flushPendingBookmarkDeletes name=${name} size=${set?.size || 0}`);
     if (!set || set.size === 0) return;
     const ids = Array.from(set);
     pendingBookmarkDeletesRef.current = new Set();
     setPendingBookmarkDeletes(new Set());
     for (const messageId of ids) {
+      clog(`[project] firing deleteBookmark project=${name} msg=${messageId}`);
       deleteBookmark(name, messageId).catch((err) => {
         console.warn("[project] deferred bookmark delete failed", messageId, err);
       });

@@ -33,6 +33,7 @@ import {
   createBookmark,
   deleteBookmark,
   fetchProjectBookmarks,
+  clog,
 } from "../lib/api";
 import ProjectFileModal from "../components/ProjectFileModal";
 import FloatingTaskCard from "../components/FloatingTaskCard";
@@ -2549,6 +2550,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // the inline bookmark icon on each chat bubble reflects truth.
   useWsEvent(useCallback((event) => {
     if (event.type !== "project_update") return;
+    clog(`[chat] project_update WS event=${event.data?.name} my-project=${agent?.project} match=${event.data?.name === agent?.project}`);
     if (event.data?.name !== agent?.project) return;
     refreshBookmarkedSet();
   }, [agent?.project, refreshBookmarkedSet]));

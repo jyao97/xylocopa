@@ -3638,6 +3638,19 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     clearTimeout(refetchPreSentTimerRef.current);
   }, []);
   useWsEvent((event) => {
+    // Project-scoped events have no agent_id; check before the agent_id guard.
+    // Other device starred/unstarred this session — refresh the star button.
+    if (event.type === "project_update" && agent?.project && event.data?.name === agent.project) {
+      const sessionId = agent.session_id || agent.id;
+      fetchProjectSessions(agent.project)
+        .then((fetchedSessions) => {
+          const match = fetchedSessions.find((s) => s.session_id === sessionId);
+          setStarred(match?.starred ?? false);
+        })
+        .catch(() => {});
+      return;
+    }
+
     if (event.data?.agent_id !== id) return;
 
     if (event.type === "agent_stream_end") {
@@ -3753,16 +3766,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       showToast("Insights ready for review");
     }
 
-    // Other device starred/unstarred this session — refresh the star button.
-    if (event.type === "project_update" && agent?.project && event.data?.name === agent.project) {
-      const sessionId = agent.session_id || agent.id;
-      fetchProjectSessions(agent.project)
-        .then((fetchedSessions) => {
-          const match = fetchedSessions.find((s) => s.session_id === sessionId);
-          setStarred(match?.starred ?? false);
-        })
-        .catch(() => {});
-    }
   }, [id, agent?.project, agent?.session_id, agent?.id]);
 
   // Debug: POST rendered message state + DOM elements to backend every 1s

@@ -102,28 +102,27 @@ def _migrate_pre_sent_legacy():
 
     PENDING rows are pre-cleaned by database.py on enum load (the
     MessageStatus.PENDING value was removed); this function only
-    handles SENT and CANCELLED residue.
+    handles CANCELLED residue.
 
     Rules:
-      - SENT with delivered_at set: was actually delivered, legacy status
-        is stale; flip to COMPLETED, keep row.
-      - SENT without delivered_at (never confirmed): move to pre_sent
-        zone; delete row. CC may have received the message but we have no
-        UserPromptSubmit confirmation — user can re-send if needed.
       - CANCELLED with display_seq: was delivered then cancelled (historical
         quirk); flip to COMPLETED to honor the "DB only holds delivered"
         invariant; display-file tombstone already hides the bubble.
       - CANCELLED without display_seq: pure pre-sent cancel; display
         file already has the tombstone; just delete the row.
+      - SENT without delivered_at: tmux send already succeeded (the row
+        only enters DB after `_promote_pre_sent_to_sent` returns OK).
+        delivered_at=NULL just means UserPromptSubmit hook never fired —
+        could be a TUI modal, agent crashed, agent busy, etc. Leave the
+        row alone; user can manually re-send if they want. (Older code
+        re-queued these on every startup, which caused the same message
+        to be re-dispatched to tmux multiple times.)
 
     Idempotent. Runs on every startup; a clean DB makes it a no-op.
     """
-    import json
-    from models import Message, MessageRole, MessageStatus
-    from display_writer import pre_sent_create
+    from models import Message, MessageStatus
 
     db = SessionLocal()
-    migrated_pre = 0
     fixed_completed = 0
     deleted_cancelled = 0
     try:
@@ -131,73 +130,30 @@ def _migrate_pre_sent_legacy():
             db.query(Message)
             .filter(
                 Message.source.in_(("web", "task", "plan_continue")),
-                Message.status.in_((
-                    MessageStatus.SENT,
-                    MessageStatus.CANCELLED,
-                )),
+                Message.status == MessageStatus.CANCELLED,
             )
             .all()
         )
         for msg in legacy:
             try:
-                if msg.status == MessageStatus.CANCELLED:
-                    if msg.display_seq is not None:
-                        msg.status = MessageStatus.COMPLETED
-                        if not msg.completed_at:
-                            msg.completed_at = msg.delivered_at
-                        fixed_completed += 1
-                    else:
-                        db.delete(msg)
-                        deleted_cancelled += 1
-                    continue
-
-                # SENT
-                # NOTE: removed "SENT + delivered_at + display_seq → COMPLETED"
-                # branch (was here, deleted 2026-04-30). It paired with the
-                # database.py blind delivered_at backfill to fabricate
-                # delivered status for messages sync_engine never confirmed
-                # via JSONL — produced 12 ghost-delivered messages over an
-                # 8-day window. Verified zero call rate via GHOST_PROBE
-                # telemetry across 52 restarts before deletion.
-                #
-                # All SENT rows now fall through to the pre_sent_zone rescue
-                # below: the row goes back to the pre-sent file so the user
-                # can see it as "queued" and re-send if needed. status=COMPLETED
-                # is now exclusively written by sync_engine on JSONL match.
-
-                # Move to pre_sent zone.
-                entry_status = "scheduled" if msg.scheduled_at else "queued"
-                metadata = None
-                if msg.meta_json:
-                    try:
-                        metadata = json.loads(msg.meta_json)
-                    except (ValueError, TypeError):
-                        metadata = None
-                entry = {
-                    "id": msg.id,
-                    "role": "USER",
-                    "content": msg.content or "",
-                    "source": msg.source,
-                    "status": entry_status,
-                    "created_at": msg.created_at.isoformat() if msg.created_at else None,
-                    "scheduled_at": (
-                        msg.scheduled_at.isoformat() if msg.scheduled_at else None
-                    ),
-                    "metadata": metadata,
-                }
-                pre_sent_create(msg.agent_id, entry)
-                db.delete(msg)
-                migrated_pre += 1
+                if msg.display_seq is not None:
+                    msg.status = MessageStatus.COMPLETED
+                    if not msg.completed_at:
+                        msg.completed_at = msg.delivered_at
+                    fixed_completed += 1
+                else:
+                    db.delete(msg)
+                    deleted_cancelled += 1
             except Exception:
                 logger.exception(
                     "Predelivery migration: failed for msg %s (agent %s)",
                     msg.id[:8], msg.agent_id[:8],
                 )
         db.commit()
-        if migrated_pre or fixed_completed or deleted_cancelled:
+        if fixed_completed or deleted_cancelled:
             logger.info(
-                "Predelivery migration: moved=%d, completed=%d, cancelled-deleted=%d",
-                migrated_pre, fixed_completed, deleted_cancelled,
+                "Predelivery migration: completed=%d, cancelled-deleted=%d",
+                fixed_completed, deleted_cancelled,
             )
         else:
             logger.info("Predelivery migration: nothing to migrate")

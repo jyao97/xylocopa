@@ -43,9 +43,20 @@ function langFromExt(ext) {
   return map[ext] || "";
 }
 
-function downloadFile(project, path, filename) {
-  const url = fileUrl(project, path);
-  dlFile(url, filename);
+// Module-level guard so a double-tap (or even taps on different rows)
+// can't trigger overlapping navigator.share() calls.
+let _dlInFlight = false;
+async function downloadFile(project, path, filename) {
+  if (_dlInFlight) return;
+  _dlInFlight = true;
+  try {
+    const url = fileUrl(project, path);
+    await dlFile(url, filename);
+  } catch (err) {
+    if (err?.name !== "AbortError") console.error("download failed", err);
+  } finally {
+    _dlInFlight = false;
+  }
 }
 
 /* ---- folder / file icons (inline SVG) ---- */

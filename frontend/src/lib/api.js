@@ -543,6 +543,10 @@ export async function downloadFile(url, filename) {
         return "shared";
       } catch (err) {
         if (err.name === "AbortError") return "cancelled";
+        // iOS throws InvalidStateError when share() is called while the
+        // previous share sheet is still open (e.g. double-tap). Swallow
+        // it — the first share is still in flight.
+        if (err.name === "InvalidStateError") return "cancelled";
         throw err;
       }
     }

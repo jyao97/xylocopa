@@ -1,6 +1,7 @@
 """File serving routes — project files, thumbnails, uploads."""
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -45,20 +46,74 @@ def _mp4_has_faststart(path: str) -> bool:
         return True  # don't try to remux on read errors
 
 
-async def _ensure_faststart_mp4(full_path: str) -> str:
-    """If `full_path` is a non-faststart mp4, return a cached remuxed copy.
+async def _probe_video(path: str) -> dict | None:
+    """Returns first video stream's codec_name/profile/level/width/height,
+    or None on probe failure (e.g. ffprobe missing, file unreadable)."""
+    if not shutil.which("ffprobe"):
+        return None
+    try:
+        cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0",
+               "-show_entries", "stream=codec_name,profile,level,width,height",
+               "-of", "json", path]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            return None
+        streams = (json.loads(stdout) or {}).get("streams") or []
+        return streams[0] if streams else None
+    except (OSError, ValueError, asyncio.CancelledError):
+        return None
 
-    Falls back to `full_path` if ffmpeg is unavailable or remux fails.
-    The remux uses `-c copy` so it's a stream-copy (no re-encode) — fast
-    and lossless. Result is cached next to the original under .thumbcache/.
+
+def _ios_can_decode(probe: dict | None) -> bool:
+    """True if iOS Safari hardware decode is likely to accept this stream.
+
+    H.264 hardware decode caps at level 5.2 (level_idc 52); we use 4.2
+    as the conservative threshold so older iPads also play. Odd dimensions
+    occasionally trip the decoder even on supported codecs.
     """
-    if _mp4_has_faststart(full_path):
+    if not probe:
+        return True  # probe unavailable — don't trigger expensive transcode
+    codec = (probe.get("codec_name") or "").lower()
+    if codec not in ("h264", "hevc"):
+        return False
+    try:
+        level = int(probe.get("level") or 0)
+        w = int(probe.get("width") or 0)
+        h = int(probe.get("height") or 0)
+    except (TypeError, ValueError):
+        return False
+    if w <= 0 or h <= 0 or w % 2 or h % 2:
+        return False
+    if codec == "h264" and level > 42:
+        return False
+    if codec == "hevc" and level > 156:  # HEVC level 5.2
+        return False
+    return True
+
+
+async def _ensure_ios_compat_mp4(full_path: str) -> str:
+    """If `full_path` is an mp4 iOS Safari can't stream/decode, return a
+    cached compatible copy. Falls back to `full_path` on errors.
+
+    Two paths:
+      - Remux (`-c copy`): codec/level/dims OK but moov is at the end —
+        fast, lossless, just rewrites with `+faststart`.
+      - Transcode (libx264 main@4.0): codec/level/dims unsupported by iOS
+        hardware decode. Slower but produces a universally playable file.
+    Result is cached next to the original under `.thumbcache/<name>.ios.mp4`.
+    """
+    probe = await _probe_video(full_path)
+    is_compat = _ios_can_decode(probe)
+    has_faststart = _mp4_has_faststart(full_path)
+    if is_compat and has_faststart:
         return full_path
     if not shutil.which("ffmpeg"):
         return full_path
 
     cache_dir = os.path.join(os.path.dirname(full_path), ".thumbcache")
-    cached = os.path.join(cache_dir, os.path.basename(full_path) + ".faststart.mp4")
+    cached = os.path.join(cache_dir, os.path.basename(full_path) + ".ios.mp4")
     try:
         if os.path.isfile(cached) and os.path.getmtime(cached) >= os.path.getmtime(full_path):
             return cached
@@ -77,19 +132,34 @@ async def _ensure_faststart_mp4(full_path: str) -> str:
         try:
             os.makedirs(cache_dir, exist_ok=True)
             tmp = cached + ".tmp"
-            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", full_path,
-                   "-c", "copy", "-movflags", "+faststart", "-f", "mp4", tmp]
+            if is_compat:
+                cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", full_path,
+                       "-c", "copy", "-movflags", "+faststart", "-f", "mp4", tmp]
+            else:
+                # libx264 main@4.0 + yuv420p covers every iOS device since
+                # iPhone 5s. Even-pixel scale guards against odd dimensions.
+                cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", full_path,
+                       "-c:v", "libx264", "-profile:v", "main", "-level:v", "4.0",
+                       "-pix_fmt", "yuv420p", "-preset", "veryfast",
+                       "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                       "-c:a", "aac", "-b:a", "128k",
+                       "-movflags", "+faststart", "-f", "mp4", tmp]
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             _, stderr = await proc.communicate()
             if proc.returncode != 0 or not os.path.isfile(tmp):
-                logger.warning("faststart remux failed for %s: %s",
-                               full_path, stderr.decode("utf-8", "replace")[:300])
+                logger.warning("ios-compat conversion failed for %s (transcode=%s): %s",
+                               full_path, not is_compat,
+                               stderr.decode("utf-8", "replace")[:300])
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
                 return full_path
             os.replace(tmp, cached)
             return cached
         except (OSError, asyncio.CancelledError) as e:
-            logger.warning("faststart remux error for %s: %s", full_path, e)
+            logger.warning("ios-compat conversion error for %s: %s", full_path, e)
             return full_path
 
 
@@ -198,9 +268,10 @@ async def serve_project_file(project: str, path: str, request: Request,
     if download:
         return FileResponse(full_path, media_type=media_type,
                             filename=os.path.basename(full_path))
-    # iOS Safari requires moov-at-front mp4 to stream — remux on demand.
+    # iOS Safari needs moov-at-front mp4 to stream and rejects H.264 levels
+    # above ~5.2 — remux or transcode on demand, with on-disk caching.
     if media_type == "video/mp4":
-        full_path = await _ensure_faststart_mp4(full_path)
+        full_path = await _ensure_ios_compat_mp4(full_path)
     return _serve_file_with_range(full_path, media_type, request)
 
 

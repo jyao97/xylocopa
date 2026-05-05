@@ -1175,11 +1175,11 @@ body::after {
 }
 
 @keyframes flash-cyan {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(0.55); }
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50%      { filter: brightness(0.75) saturate(0.85); }
 }
 .animate-flash-cyan {
-  animation: flash-cyan 0.7s ease-in-out 2;
+  animation: flash-cyan 1.0s ease-in-out 2;
 }
 
 @keyframes pane-highlight {

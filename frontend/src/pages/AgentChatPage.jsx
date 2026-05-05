@@ -1239,10 +1239,17 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     }
   }, [editing, message.scheduled_at]);
 
-  // Auto-focus textarea when editing starts (useEffect runs after DOM commit)
+  // Auto-focus textarea when editing starts (useEffect runs after DOM commit).
+  // Also auto-size to content so the bubble keeps its original height instead
+  // of collapsing to the textarea's default rows.
   useEffect(() => {
-    if (editing) {
-      editTextareaRef.current?.focus();
+    if (editing && editTextareaRef.current) {
+      const ta = editTextareaRef.current;
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+      const len = ta.value.length;
+      try { ta.setSelectionRange(len, len); } catch (_) {}
     }
   }, [editing]);
 
@@ -1475,26 +1482,36 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
         >
           {isUser ? (
             editing ? (
-              <div className="space-y-2">
+              <div>
                 <textarea
                   ref={editTextareaRef}
                   value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  rows={2}
-                  className="w-full rounded-lg bg-black/10 border border-cyan-300/30 px-2 py-1.5 text-sm text-white placeholder-cyan-200/50 resize-none focus:border-cyan-300 focus:outline-none"
+                  onChange={(e) => {
+                    setEditContent(e.target.value);
+                    const ta = e.target;
+                    ta.style.height = "auto";
+                    ta.style.height = ta.scrollHeight + "px";
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
+                    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
+                  }}
+                  rows={1}
+                  className="w-full bg-transparent border-0 p-0 m-0 text-sm text-white placeholder-cyan-200/50 resize-none focus:outline-none chat-bubble-content"
+                  style={{ overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-1.5">
                   <button
                     type="button"
                     onClick={handleEditSave}
-                    className="flex-1 rounded-lg bg-cyan-500/40 hover:bg-cyan-500/60 text-white text-xs py-1.5 font-medium transition-colors"
+                    className="flex-1 rounded-lg bg-cyan-500/40 hover:bg-cyan-500/60 text-white text-xs py-1 font-medium transition-colors"
                   >
                     Save
                   </button>
                   <button
                     type="button"
                     onClick={handleEditCancel}
-                    className="flex-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs py-1.5 font-medium transition-colors"
+                    className="flex-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs py-1 font-medium transition-colors"
                   >
                     Cancel
                   </button>

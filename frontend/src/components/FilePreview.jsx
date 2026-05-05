@@ -5,9 +5,12 @@ import ImageLightbox from "./ImageLightbox";
 
 // Parse /api/files/<project>/<path> URL into {project, path}, or null
 // for non-project URLs (uploads, http, etc) which we treat as always-exists.
+// Strips ?query (notably the ?token=… that fileUrl() appends for <img> auth)
+// so the backend doesn't see "<path>?token=..." as the filename.
 function parseFileUrl(url) {
   if (!url) return null;
-  const m = url.match(/^\/?api\/files\/([^/]+)\/(.+)$/);
+  const noQuery = url.split("?")[0];
+  const m = noQuery.match(/^\/?api\/files\/([^/]+)\/(.+)$/);
   if (!m) return null;
   return { project: decodeURIComponent(m[1]), path: decodeURIComponent(m[2]) };
 }

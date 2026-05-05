@@ -1382,8 +1382,12 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     return message.content;
   }, [contentOverride, isUser, message.content, message.metadata]);
 
-  const scheduledTime = isScheduled
-    ? new Date(message.scheduled_at).toLocaleTimeString([], TIME_SHORT)
+  // Scheduled bubble shows a "due in …" relative countdown (matches the
+  // deferred_to display in AgentRow / InboxCard) — absolute time is in the
+  // tooltip so users can still verify.
+  const scheduledRelative = isScheduled ? relativeTime(message.scheduled_at) : null;
+  const scheduledAbsolute = isScheduled
+    ? new Date(message.scheduled_at).toLocaleString([], DATE_SHORT)
     : null;
 
   // Picker for the "change time" button in the editing popover (scheduled msgs).
@@ -1474,12 +1478,12 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
               : "text-dim"
           }`}>
             {isScheduled ? (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1" title={scheduledAbsolute}>
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" />
                   <path strokeLinecap="round" d="M12 6v6l4 2" />
                 </svg>
-                {scheduledTime}
+                {scheduledRelative}
               </span>
             ) : (
               relativeTime(message.completed_at || message.created_at)

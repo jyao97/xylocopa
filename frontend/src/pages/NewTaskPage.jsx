@@ -452,6 +452,7 @@ export default function NewTaskPage({ embedded = false }) {
           onTouchEnd={handleTouchEnd}
         >
           <h2 className="text-lg font-bold text-heading">New Task</h2>
+          <p className="text-xs text-dim mt-0.5">Swipe down to save to inbox (edit later)</p>
         </div>
 
         {/* Scrollable content */}
@@ -529,7 +530,7 @@ export default function NewTaskPage({ embedded = false }) {
                   </div>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.yaml,.yml,.xml,.log,.zip,.tar,.gz" multiple className="hidden" onChange={handleFileSelect} />
-                <div className={`grid gap-1.5 items-center px-1 ${project ? "grid-cols-[auto_1fr_auto_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto]"}`}>
+                <div className={`grid gap-1.5 items-center px-1 ${project ? "grid-cols-[auto_1fr_auto_auto]" : "grid-cols-[auto_1fr_auto]"}`}>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -555,28 +556,6 @@ export default function NewTaskPage({ embedded = false }) {
                       onToggle={voice.toggleRecording}
                     />
                   </div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => notifyAt ? setNotifyAt(null) : setShowSchedulePicker((v) => !v)}
-                      className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                        notifyAt
-                          ? "bg-amber-500 text-white"
-                          : "bg-elevated text-label hover:text-heading"
-                      }`}
-                      title={notifyAt ? `Remind: ${new Date(notifyAt).toLocaleString([], DATE_SHORT)} (tap to clear)` : "Set reminder"}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-                    {showSchedulePicker && (
-                      <SendLaterPicker
-                        onSelect={handlePickReminder}
-                        onClose={() => setShowSchedulePicker(false)}
-                      />
-                    )}
-                  </div>
                   {project && (
                     <button
                       type="button"
@@ -594,36 +573,6 @@ export default function NewTaskPage({ embedded = false }) {
                       </svg>
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => dismiss()}
-                    disabled={!hasContent || submitting}
-                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                      !hasContent || submitting
-                        ? "bg-elevated text-dim cursor-not-allowed"
-                        : "bg-indigo-500 hover:bg-indigo-400 text-white"
-                    }`}
-                    title="Save to inbox & close"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={quickSave}
-                    disabled={!hasContent || submitting}
-                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                      !hasContent || submitting
-                        ? "bg-elevated text-dim cursor-not-allowed"
-                        : "bg-amber-500 hover:bg-amber-400 text-white"
-                    }`}
-                    title="Quick save to inbox"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <path d="M4 14a1 1 0 01-.78-1.63l9.9-10.2a.5.5 0 01.86.46l-1.92 6.02A1 1 0 0013 10h7a1 1 0 01.78 1.63l-9.9 10.2a.5.5 0 01-.86-.46l1.92-6.02A1 1 0 0011 14z" />
-                    </svg>
-                  </button>
                 </div>
               </div>
               {/* Controls grid — matches project page */}

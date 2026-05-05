@@ -184,7 +184,6 @@ function DocFilePreview({ src, filename, ext, originalPath }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState(null);
   const [loadState, setLoadState] = useState("idle"); // idle | loading | loaded | error
-  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
 
   const loadContent = useCallback(async () => {
     if (loadState === "loading") return;
@@ -199,6 +198,8 @@ function DocFilePreview({ src, filename, ext, originalPath }) {
       setLoadState("error");
     }
   }, [src, loadState]);
+
+  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
 
   const handleToggle = () => {
     if (!expanded && loadState === "idle") loadContent();

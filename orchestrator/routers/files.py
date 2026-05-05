@@ -21,7 +21,7 @@ logger = logging.getLogger("orchestrator")
 router = APIRouter(tags=["files"])
 
 _THUMB_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-_MP4_FASTSTART_LOCKS: dict[str, asyncio.Lock] = {}
+_MP4_COMPAT_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _mp4_has_faststart(path: str) -> bool:
@@ -120,7 +120,7 @@ async def _ensure_ios_compat_mp4(full_path: str) -> str:
     except OSError:
         pass
 
-    lock = _MP4_FASTSTART_LOCKS.setdefault(full_path, asyncio.Lock())
+    lock = _MP4_COMPAT_LOCKS.setdefault(full_path, asyncio.Lock())
     async with lock:
         # Re-check after acquiring the lock — another request may have built it.
         try:

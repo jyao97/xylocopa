@@ -43,21 +43,8 @@ function langFromExt(ext) {
   return map[ext] || "";
 }
 
-// Module-level guard so a double-tap (or even taps on different rows)
-// can't trigger overlapping navigator.share() calls.
-let _dlInFlight = false;
-async function downloadFile(project, path, filename) {
-  if (_dlInFlight) return;
-  _dlInFlight = true;
-  try {
-    const url = fileUrl(project, path);
-    await dlFile(url, filename);
-  } catch (err) {
-    if (err?.name !== "AbortError") console.error("download failed", err);
-  } finally {
-    _dlInFlight = false;
-  }
-}
+const downloadFile = (project, path, filename) =>
+  dlFile(fileUrl(project, path), filename).catch(() => {});
 
 /* ---- folder / file icons (inline SVG) ---- */
 

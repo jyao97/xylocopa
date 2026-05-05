@@ -1216,6 +1216,8 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   const touchStartYRef = useRef(0);
   const editTextareaRef = useRef(null);
   const markdownRef = useRef(null);
+  const containerRef = useRef(null);
+  const handleEditSaveRef = useRef(null);
 
   // Handle click on inline markdown images to open lightbox
   const handleMarkdownClick = useCallback((e) => {
@@ -1251,6 +1253,24 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
       const len = ta.value.length;
       try { ta.setSelectionRange(len, len); } catch (_) {}
     }
+  }, [editing]);
+
+  // Click outside the bubble (or its action popover) commits the edit.
+  // Picker portal carries [data-card] and is whitelisted so picking a
+  // schedule time doesn't accidentally save+close.
+  useEffect(() => {
+    if (!editing) return;
+    const handler = (e) => {
+      if (containerRef.current?.contains(e.target)) return;
+      if (e.target.closest?.("[data-card]")) return;
+      handleEditSaveRef.current?.();
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [editing]);
 
   // Action menu visibility rules for the two-stage delete model:
@@ -1361,6 +1381,10 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     setEditing(false);
     setEditContent(message.content);
   };
+  // Keep a stable ref to the latest save so the document mousedown listener
+  // (bound once on `editing` change) always sees the latest editContent /
+  // editSchedule from closure without rebinding on every keystroke.
+  handleEditSaveRef.current = handleEditSave;
 
   const attachments = useMemo(() => {
     const base = extractFileAttachments(message.content, project, message.role, message.metadata);
@@ -1387,82 +1411,14 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     ? new Date(message.scheduled_at).toLocaleTimeString([], TIME_SHORT)
     : null;
 
-  // Editing UI for scheduled/pending messages
+  // Picker for the "change time" button in the editing popover (scheduled msgs).
   const [showEditPicker, setShowEditPicker] = useState(false);
-
-  if (editing && isScheduled) {
-    const scheduleLabel = editSchedule
-      ? new Date(editSchedule).toLocaleString([], DATE_SHORT)
-      : "Set time";
-
-    return (
-      <div className="flex justify-end my-2">
-        <div className="max-w-[min(85%,30rem)] min-w-0">
-          <div className="rounded-2xl px-4 py-2.5 bg-amber-600/80 text-white rounded-br-md space-y-2 overflow-hidden">
-            <textarea
-              ref={editTextareaRef}
-              value={editContent}
-              onChange={(e) => {
-                setEditContent(e.target.value);
-                const ta = e.target;
-                ta.style.height = "auto";
-                ta.style.height = ta.scrollHeight + "px";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
-                else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
-              }}
-              rows={1}
-              className="w-full bg-transparent border-0 p-0 m-0 text-sm text-white placeholder-amber-200/50 resize-none focus:outline-none chat-bubble-content"
-              style={{ overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
-            />
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowEditPicker(v => !v)}
-                className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-sm py-1.5 font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {scheduleLabel}
-              </button>
-              {showEditPicker && (
-                <SendLaterPicker
-                  title="Schedule At"
-                  onSelect={(iso) => { setEditSchedule(toLocalInputValue(iso)); setShowEditPicker(false); }}
-                  onClose={() => setShowEditPicker(false)}
-                  onClear={editSchedule ? () => { setEditSchedule(""); setShowEditPicker(false); } : undefined}
-                />
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleEditSave}
-                className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-xs py-1.5 font-medium transition-colors"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={handleEditCancel}
-                className="flex-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs py-1.5 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const userInsights = isUser ? message.metadata?.insights : null;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} my-2`}>
-      <div className={`max-w-[min(85%,30rem)] min-w-0 relative ${isUser ? "flex flex-col items-end" : ""}`}>
+      <div ref={containerRef} className={`max-w-[min(85%,30rem)] min-w-0 relative ${isUser ? "flex flex-col items-end" : ""}`}>
         <div className={isUser ? "flex items-center gap-2 max-w-full" : undefined}>
         {isUndeliveredTimedOut && (
           <div className="flex-shrink-0 text-red-400" title="Message not delivered — Claude may not have received this">
@@ -1492,41 +1448,25 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
         >
           {isUser ? (
             editing ? (
-              <div>
-                <textarea
-                  ref={editTextareaRef}
-                  value={editContent}
-                  onChange={(e) => {
-                    setEditContent(e.target.value);
-                    const ta = e.target;
-                    ta.style.height = "auto";
-                    ta.style.height = ta.scrollHeight + "px";
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
-                    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
-                  }}
-                  rows={1}
-                  className="w-full bg-transparent border-0 p-0 m-0 text-sm text-white placeholder-cyan-200/50 resize-none focus:outline-none chat-bubble-content"
-                  style={{ overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
-                />
-                <div className="flex gap-2 mt-1.5">
-                  <button
-                    type="button"
-                    onClick={handleEditSave}
-                    className="flex-1 rounded-lg bg-cyan-500/40 hover:bg-cyan-500/60 text-white text-xs py-1 font-medium transition-colors"
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleEditCancel}
-                    className="flex-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs py-1 font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <textarea
+                ref={editTextareaRef}
+                value={editContent}
+                onChange={(e) => {
+                  setEditContent(e.target.value);
+                  const ta = e.target;
+                  ta.style.height = "auto";
+                  ta.style.height = ta.scrollHeight + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
+                  else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
+                }}
+                rows={1}
+                className={`w-full bg-transparent border-0 p-0 m-0 text-sm text-white resize-none focus:outline-none chat-bubble-content ${
+                  isScheduled ? "placeholder-amber-200/50" : "placeholder-cyan-200/50"
+                }`}
+                style={{ overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
+              />
             ) : (
               displayContent && (
                 <div className="text-sm user-md break-words chat-bubble-content">
@@ -1664,10 +1604,60 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
         {!isUser && message.metadata?.interactive?.length > 0 && (
           <InteractiveBubbles metadata={message.metadata} agentId={agentId} onAnswered={onRefresh} messageContent={message.content} project={project} />
         )}
-        {/* Action popover — gated by message status (two-stage delete model) */}
-        {showActions && (
+        {/* Action popover — gated by message status (two-stage delete model).
+            While `editing`, the popover stays open and swaps to the inline
+            edit controls (✓ save, ✗ cancel, plus 📅 reschedule for
+            scheduled messages). Click outside the bubble auto-saves. */}
+        {(showActions || editing) && (
           <div className="absolute top-0 right-0 -translate-y-full mb-1 z-50">
             <div className="bg-surface border border-divider rounded-xl shadow-lg overflow-hidden flex">
+              {editing ? (
+                <>
+                  {isScheduled && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPicker(v => !v)}
+                        title={editSchedule ? new Date(editSchedule).toLocaleString([], DATE_SHORT) : "Schedule At"}
+                        className="px-3 py-2 text-amber-400 hover:bg-amber-600/10 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      {showEditPicker && (
+                        <SendLaterPicker
+                          title="Schedule At"
+                          onSelect={(iso) => { setEditSchedule(toLocalInputValue(iso)); setShowEditPicker(false); }}
+                          onClose={() => setShowEditPicker(false)}
+                          onClear={editSchedule ? () => { setEditSchedule(""); setShowEditPicker(false); } : undefined}
+                        />
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleEditSave}
+                    title="Save (Cmd+Enter)"
+                    className="px-3 py-2 text-emerald-400 hover:bg-emerald-600/10 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEditCancel}
+                    title="Cancel (Esc)"
+                    className="px-3 py-2 text-red-400 hover:bg-red-600/10 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </>
+              ) : (
+                <>
               {canSendNow && (
                 <button
                   type="button"
@@ -1736,6 +1726,8 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+                </>
+              )}
             </div>
           </div>
         )}

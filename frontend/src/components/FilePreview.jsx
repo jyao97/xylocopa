@@ -119,20 +119,19 @@ function ImagePreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 
 // --- Video Preview (thumbnail, tappable to open in lightbox) ---
 
-function VideoPreview({ src, filename, originalPath, onOpen }) {
+function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
   const [thumbError, setThumbError] = useState(false);
-  const thumbUrl = src + ".thumb.jpg";
 
   return (
     <div>
       <div className="cursor-pointer" onClick={onOpen}>
         <div className="relative inline-block">
-          {thumbError ? (
+          {thumbError || !thumbSrc ? (
             /* Fallback: gray placeholder when no thumbnail available */
             <div className="w-[160px] h-[90px] rounded-lg border border-divider bg-elevated flex items-center justify-center" />
           ) : (
             <img
-              src={thumbUrl}
+              src={thumbSrc}
               alt={filename}
               loading="lazy"
               onError={() => setThumbError(true)}
@@ -373,7 +372,7 @@ export default function FileAttachments({ attachments, compact }) {
             />
           );
         }
-        return <VideoPreview key={att.path} src={att.resolvedUrl} filename={filename} originalPath={att.originalPath} onOpen={() => openLightbox(idx)} />;
+        return <VideoPreview key={att.path} src={att.resolvedUrl} thumbSrc={att.thumbUrl} filename={filename} originalPath={att.originalPath} onOpen={() => openLightbox(idx)} />;
       })}
       {/* Doc files: single card if 1, grouped card if 2+ */}
       {docs.length === 1 && (

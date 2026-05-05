@@ -21,7 +21,9 @@ logger = logging.getLogger("orchestrator")
 router = APIRouter(tags=["files"])
 
 _THUMB_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_THUMB_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v"}
 _MP4_COMPAT_LOCKS: dict[str, asyncio.Lock] = {}
+_VIDEO_THUMB_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _mp4_has_faststart(path: str) -> bool:
@@ -163,6 +165,44 @@ async def _ensure_ios_compat_mp4(full_path: str) -> str:
             return full_path
 
 
+async def _extract_video_thumb(src: str, dest: str) -> str | None:
+    """Extract a poster frame from a video file via ffmpeg, cache as JPEG.
+    Returns the cache path on success, None on failure."""
+    if not shutil.which("ffmpeg"):
+        return None
+    lock = _VIDEO_THUMB_LOCKS.setdefault(src, asyncio.Lock())
+    async with lock:
+        try:
+            if os.path.isfile(dest) and os.path.getmtime(dest) >= os.path.getmtime(src):
+                return dest
+        except OSError:
+            pass
+        try:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            tmp = dest + ".tmp"
+            # -ss 0.5 picks an early non-black frame; scale caps at 1200px wide.
+            # -f image2 forces JPEG container since the .tmp suffix on the
+            # output path defeats ffmpeg's extension-based format detection.
+            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-ss", "0.5",
+                   "-i", src, "-frames:v", "1",
+                   "-vf", "scale='min(1200,iw)':-2",
+                   "-q:v", "4", "-f", "image2", tmp]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            _, stderr = await proc.communicate()
+            if proc.returncode != 0 or not os.path.isfile(tmp):
+                logger.debug("video thumb failed for %s: %s",
+                             src, stderr.decode("utf-8", "replace")[:200])
+                try: os.unlink(tmp)
+                except OSError: pass
+                return None
+            os.replace(tmp, dest)
+            return dest
+        except (OSError, asyncio.CancelledError) as e:
+            logger.debug("video thumb error for %s: %s", src, e)
+            return None
+
+
 def _serve_file_with_range(full_path: str, media_type: str, request: Request):
     """Return a FileResponse with built-in Range request support."""
     return FileResponse(full_path, media_type=media_type)
@@ -282,7 +322,10 @@ async def serve_thumbnail(project: str, path: str, request: Request, db: Session
     full_path = _resolve_project_file(project, path, db)
 
     _, ext = os.path.splitext(full_path)
-    if ext.lower() not in _THUMB_IMAGE_EXTS:
+    ext = ext.lower()
+    is_image = ext in _THUMB_IMAGE_EXTS
+    is_video = ext in _THUMB_VIDEO_EXTS
+    if not (is_image or is_video):
         media_type = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
         return _serve_file_with_range(full_path, media_type, request)
 
@@ -292,6 +335,13 @@ async def serve_thumbnail(project: str, path: str, request: Request, db: Session
 
     if os.path.isfile(thumb_file) and os.path.getmtime(thumb_file) >= os.path.getmtime(full_path):
         return FileResponse(thumb_file, media_type="image/jpeg")
+
+    if is_video:
+        thumb = await _extract_video_thumb(full_path, thumb_file)
+        if thumb:
+            return FileResponse(thumb, media_type="image/jpeg")
+        media_type = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
+        return _serve_file_with_range(full_path, media_type, request)
 
     try:
         from PIL import Image

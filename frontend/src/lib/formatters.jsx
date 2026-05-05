@@ -551,7 +551,7 @@ export function extractFileAttachments(text, project, role, metadata) {
     const ext = path.match(/\.(\w+)$/)?.[1]?.toLowerCase() || "";
     const type = classifyExt(path);
     // Only generate thumbUrl for /api/files/ URLs (not /api/uploads/ or http)
-    const thumbCandidate = type === "image" && resolvedUrl.startsWith(API_FILES_PREFIX)
+    const thumbCandidate = (type === "image" || type === "video") && resolvedUrl.startsWith(API_FILES_PREFIX)
       ? fileUrlToThumbUrl(resolvedUrl)
       : undefined;
     const thumbUrl = thumbCandidate !== resolvedUrl ? thumbCandidate : undefined;

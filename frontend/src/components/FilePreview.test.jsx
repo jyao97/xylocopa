@@ -66,20 +66,20 @@ describe("ImagePreview (via FileAttachments)", () => {
 });
 
 describe("VideoPreview (via FileAttachments)", () => {
-  it("renders a thumbnail image with .thumb.jpg src and filename", () => {
+  it("renders a thumbnail image with the supplied thumb URL and filename", () => {
     const attachments = [
-      { path: "output/demo.mp4", resolvedUrl: "/api/files/proj/output/demo.mp4", type: "video", ext: "mp4" },
+      { path: "output/demo.mp4", resolvedUrl: "/api/files/proj/output/demo.mp4", thumbUrl: "/api/thumbs/proj/output/demo.mp4", type: "video", ext: "mp4" },
     ];
     renderWithProviders(<FileAttachments attachments={attachments} />);
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "/api/files/proj/output/demo.mp4.thumb.jpg");
+    expect(img).toHaveAttribute("src", "/api/thumbs/proj/output/demo.mp4");
     expect(img).toHaveAttribute("loading", "lazy");
     expect(screen.getByText("demo.mp4")).toBeInTheDocument();
   });
 
   it("shows placeholder when thumbnail fails to load", async () => {
     const attachments = [
-      { path: "output/broken.mp4", resolvedUrl: "/api/files/proj/output/broken.mp4", type: "video", ext: "mp4" },
+      { path: "output/broken.mp4", resolvedUrl: "/api/files/proj/output/broken.mp4", thumbUrl: "/api/thumbs/proj/output/broken.mp4", type: "video", ext: "mp4" },
     ];
     renderWithProviders(<FileAttachments attachments={attachments} />);
     const img = screen.getByRole("img");
@@ -90,13 +90,22 @@ describe("VideoPreview (via FileAttachments)", () => {
     // Filename text should still be visible
     expect(screen.getByText("broken.mp4")).toBeInTheDocument();
   });
+
+  it("renders placeholder when no thumbUrl is supplied", () => {
+    const attachments = [
+      { path: "output/nothumb.mp4", resolvedUrl: "/api/files/proj/output/nothumb.mp4", type: "video", ext: "mp4" },
+    ];
+    renderWithProviders(<FileAttachments attachments={attachments} />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("nothumb.mp4")).toBeInTheDocument();
+  });
 });
 
 describe("Mixed attachments", () => {
   it("renders multiple attachment types together", () => {
     const attachments = [
       { path: "output/img.png", resolvedUrl: "/api/files/proj/output/img.png", type: "image", ext: "png" },
-      { path: "output/vid.mp4", resolvedUrl: "/api/files/proj/output/vid.mp4", type: "video", ext: "mp4" },
+      { path: "output/vid.mp4", resolvedUrl: "/api/files/proj/output/vid.mp4", thumbUrl: "/api/thumbs/proj/output/vid.mp4", type: "video", ext: "mp4" },
       { path: "data/readme.txt", resolvedUrl: "/api/files/proj/data/readme.txt", type: "doc", ext: "txt" },
     ];
     renderWithProviders(<FileAttachments attachments={attachments} />);

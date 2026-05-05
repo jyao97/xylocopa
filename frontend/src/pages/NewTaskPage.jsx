@@ -519,7 +519,7 @@ export default function NewTaskPage({ embedded = false }) {
                   </div>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.yaml,.yml,.xml,.log,.zip,.tar,.gz" multiple className="hidden" onChange={handleFileSelect} />
-                <div className={`grid gap-1.5 items-center px-1 ${project ? "grid-cols-[auto_1fr_auto_auto]" : "grid-cols-[auto_1fr_auto]"}`}>
+                <div className="grid gap-1.5 items-center px-1 grid-cols-[auto_1fr_auto_auto]">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -545,23 +545,21 @@ export default function NewTaskPage({ embedded = false }) {
                       onToggle={voice.toggleRecording}
                     />
                   </div>
-                  {project && (
-                    <button
-                      type="button"
-                      onClick={launchAgent}
-                      disabled={!hasContent || submitting || anyUploading}
-                      className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                        !hasContent || submitting || anyUploading
-                          ? "bg-elevated text-dim cursor-not-allowed"
-                          : "bg-cyan-500 hover:bg-cyan-400 text-white"
-                      }`}
-                      title="Launch agent"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                      </svg>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={launchAgent}
+                    disabled={!project || !hasContent || submitting || anyUploading}
+                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                      !project || !hasContent || submitting || anyUploading
+                        ? "bg-elevated text-dim cursor-not-allowed"
+                        : "bg-cyan-500 hover:bg-cyan-400 text-white"
+                    }`}
+                    title={project ? "Launch agent" : "Select a project to launch"}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                    </svg>
+                  </button>
                 </div>
               </div>
               {/* Controls grid — matches project page */}

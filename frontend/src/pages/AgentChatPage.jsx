@@ -1242,14 +1242,12 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   }, [editing, message.scheduled_at]);
 
   // Auto-focus textarea when editing starts (useEffect runs after DOM commit).
-  // Also auto-size to content so the bubble keeps its original height instead
-  // of collapsing to the textarea's default rows.
+  // Sizing is handled by the grid-mirror trick in the render — no JS height
+  // measurement needed.
   useEffect(() => {
     if (editing && editTextareaRef.current) {
       const ta = editTextareaRef.current;
       ta.focus();
-      ta.style.height = "auto";
-      ta.style.height = ta.scrollHeight + "px";
       const len = ta.value.length;
       try { ta.setSelectionRange(len, len); } catch (_) {}
     }
@@ -1448,25 +1446,35 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
         >
           {isUser ? (
             editing ? (
-              <textarea
-                ref={editTextareaRef}
-                value={editContent}
-                onChange={(e) => {
-                  setEditContent(e.target.value);
-                  const ta = e.target;
-                  ta.style.height = "auto";
-                  ta.style.height = ta.scrollHeight + "px";
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
-                  else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
-                }}
-                rows={1}
-                className={`w-full bg-transparent border-0 p-0 m-0 text-sm text-white resize-none focus:outline-none chat-bubble-content ${
-                  isScheduled ? "placeholder-amber-200/50" : "placeholder-cyan-200/50"
-                }`}
-                style={{ overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
-              />
+              // Grid mirror: invisible <div> sizes the bubble to the
+              // content's natural width (same as the markdown render),
+              // and the <textarea> overlays it. Both share grid cell
+              // 1/1, so the textarea inherits the div's auto-sized
+              // width AND height — no JS measurement, no rows fallback,
+              // and view↔edit wrap exactly the same.
+              <div className="grid">
+                <div
+                  aria-hidden
+                  className="text-sm break-words chat-bubble-content invisible whitespace-pre-wrap"
+                  style={{ gridArea: "1 / 1", lineHeight: "1.5", fontFamily: "inherit" }}
+                >
+                  {editContent + "\n"}
+                </div>
+                <textarea
+                  ref={editTextareaRef}
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
+                    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
+                  }}
+                  rows={1}
+                  className={`bg-transparent border-0 p-0 m-0 text-sm text-white resize-none focus:outline-none chat-bubble-content ${
+                    isScheduled ? "placeholder-amber-200/50" : "placeholder-cyan-200/50"
+                  }`}
+                  style={{ gridArea: "1 / 1", overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
+                />
+              </div>
             ) : (
               displayContent && (
                 <div className="text-sm user-md break-words chat-bubble-content">

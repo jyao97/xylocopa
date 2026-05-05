@@ -1,5 +1,22 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { authedFetch, downloadFile } from "../lib/api";
+
+// Probe a file URL once with HEAD. Returns null while pending, true if 2xx,
+// false otherwise. Used by doc/generic cards which don't otherwise load
+// the file until expanded — without this, a missing path renders as a
+// normal-looking card and only fails when the user clicks expand.
+function useFileExists(src) {
+  const [exists, setExists] = useState(null);
+  useEffect(() => {
+    if (!src) { setExists(null); return; }
+    let cancelled = false;
+    authedFetch(src, { method: "HEAD" })
+      .then((r) => { if (!cancelled) setExists(r.ok); })
+      .catch(() => { if (!cancelled) setExists(false); });
+    return () => { cancelled = true; };
+  }, [src]);
+  return exists;
+}
 import { useToast } from "../contexts/ToastContext";
 import ImageLightbox from "./ImageLightbox";
 
@@ -163,9 +180,11 @@ function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 // --- Doc/Code File Preview (collapsible card) ---
 
 function DocFilePreview({ src, filename, ext, originalPath }) {
+  const exists = useFileExists(src);
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState(null);
   const [loadState, setLoadState] = useState("idle"); // idle | loading | loaded | error
+  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
 
   const loadContent = useCallback(async () => {
     if (loadState === "loading") return;
@@ -236,6 +255,8 @@ function DocFilePreview({ src, filename, ext, originalPath }) {
 // --- Generic File Card (non-media, non-doc — fallback for user uploads) ---
 
 function GenericFilePreview({ src, filename, originalPath }) {
+  const exists = useFileExists(src);
+  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
   return (
     <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated max-w-[240px]">
       <svg className="w-4 h-4 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -248,6 +269,31 @@ function GenericFilePreview({ src, filename, originalPath }) {
 }
 
 // --- Grouped doc files card (collapsible list for 2+ doc files) ---
+
+function DocGroupRow({ att }) {
+  const filename = att.path.split("/").pop();
+  const exists = useFileExists(att.resolvedUrl);
+  const missing = exists === false;
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1.5 hover:bg-hover transition-colors text-left"
+      title={missing ? att.originalPath || filename : undefined}
+    >
+      <svg className="w-3.5 h-3.5 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+      <span className={`text-xs truncate flex-1 min-w-0 ${missing ? "text-dim" : "text-label"}`}>{filename}</span>
+      {missing ? (
+        <span className="text-[10px] text-dim uppercase shrink-0 opacity-60">missing</span>
+      ) : (
+        <>
+          <span className="text-[10px] text-dim uppercase shrink-0">{att.ext}</span>
+          <ActionButtons src={att.resolvedUrl} filename={filename} originalPath={att.originalPath} />
+        </>
+      )}
+    </div>
+  );
+}
 
 function DocGroupCard({ docs }) {
   const [expanded, setExpanded] = useState(false);
@@ -269,22 +315,9 @@ function DocGroupCard({ docs }) {
       </button>
       {expanded && (
         <div className="border-t border-divider max-h-60 overflow-y-auto">
-          {docs.map((att) => {
-            const filename = att.path.split("/").pop();
-            return (
-              <div
-                key={att.path}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-hover transition-colors text-left"
-              >
-                <svg className="w-3.5 h-3.5 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-                <span className="text-xs text-label truncate flex-1 min-w-0">{filename}</span>
-                <span className="text-[10px] text-dim uppercase shrink-0">{att.ext}</span>
-                <ActionButtons src={att.resolvedUrl} filename={filename} originalPath={att.originalPath} />
-              </div>
-            );
-          })}
+          {docs.map((att) => (
+            <DocGroupRow key={att.path} att={att} />
+          ))}
         </div>
       )}
     </div>

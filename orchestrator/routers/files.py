@@ -298,6 +298,41 @@ def _write_bytes(path: str, data: bytes):
         f.write(data)
 
 
+def _try_resolve(project: str, path: str, db) -> str | None:
+    """Non-raising version of _resolve_project_file. Returns abs path or None."""
+    try:
+        return _resolve_project_file(project, path, db)
+    except HTTPException:
+        return None
+
+
+@router.post("/api/files/exists-batch")
+async def files_exists_batch(payload: dict, db: Session = Depends(get_db)):
+    """Batch-probe file existence + stat for a list of (project, path) items.
+
+    Replaces per-card HEAD probes from the frontend — FastAPI's @router.get
+    doesn't auto-register HEAD, and per-attachment requests don't scale.
+    Body: {"items": [{"project": str, "path": str}, ...]}
+    Returns: {"results": [{"exists": bool, "size": int|null, "mtime": float|null}, ...]}
+    Order matches input order.
+    """
+    items = payload.get("items") or []
+    results = []
+    for it in items:
+        proj = (it or {}).get("project") or ""
+        pth = (it or {}).get("path") or ""
+        full = _try_resolve(proj, pth, db) if proj and pth else None
+        if full and os.path.isfile(full):
+            try:
+                st = os.stat(full)
+                results.append({"exists": True, "size": st.st_size, "mtime": st.st_mtime})
+            except OSError:
+                results.append({"exists": False, "size": None, "mtime": None})
+        else:
+            results.append({"exists": False, "size": None, "mtime": None})
+    return {"results": results}
+
+
 @router.get("/api/files/{project}/{path:path}")
 async def serve_project_file(project: str, path: str, request: Request,
                              download: bool = False, db: Session = Depends(get_db)):

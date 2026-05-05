@@ -1,24 +1,50 @@
-import { useState, useEffect, useCallback } from "react";
-import { authedFetch, downloadFile } from "../lib/api";
-
-// Probe a file URL once with HEAD. Returns null while pending, true if 2xx,
-// false otherwise. Used by doc/generic cards which don't otherwise load
-// the file until expanded — without this, a missing path renders as a
-// normal-looking card and only fails when the user clicks expand.
-function useFileExists(src) {
-  const [exists, setExists] = useState(null);
-  useEffect(() => {
-    if (!src) { setExists(null); return; }
-    let cancelled = false;
-    authedFetch(src, { method: "HEAD" })
-      .then((r) => { if (!cancelled) setExists(r.ok); })
-      .catch(() => { if (!cancelled) setExists(false); });
-    return () => { cancelled = true; };
-  }, [src]);
-  return exists;
-}
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { authedFetch, downloadFile, filesExistsBatch } from "../lib/api";
 import { useToast } from "../contexts/ToastContext";
 import ImageLightbox from "./ImageLightbox";
+
+// Parse /api/files/<project>/<path> URL into {project, path}, or null
+// for non-project URLs (uploads, http, etc) which we treat as always-exists.
+function parseFileUrl(url) {
+  if (!url) return null;
+  const m = url.match(/^\/?api\/files\/([^/]+)\/(.+)$/);
+  if (!m) return null;
+  return { project: decodeURIComponent(m[1]), path: decodeURIComponent(m[2]) };
+}
+
+// Batch-probe existence + size + mtime for a list of attachments via the
+// backend exists-batch endpoint. One round-trip replaces N per-row HEAD
+// probes (HEAD wasn't registered on the GET file route — every probe came
+// back 405, marking everything missing). Returns a map keyed by resolvedUrl
+// with { exists, size, mtime }; entries for non-project URLs are absent
+// (caller treats them as exists).
+function useBatchExists(attachments) {
+  const [statMap, setStatMap] = useState({});
+  const probeKeys = useMemo(() => {
+    if (!attachments) return [];
+    return attachments
+      .map((a) => a.resolvedUrl)
+      .filter((u) => parseFileUrl(u))
+      .sort();
+  }, [attachments]);
+  const cacheKey = probeKeys.join("|");
+  useEffect(() => {
+    if (!probeKeys.length) { setStatMap({}); return; }
+    let cancelled = false;
+    const items = probeKeys.map((u) => parseFileUrl(u));
+    filesExistsBatch(items)
+      .then((resp) => {
+        if (cancelled) return;
+        const next = {};
+        const results = resp?.results || [];
+        probeKeys.forEach((u, i) => { next[u] = results[i] || { exists: false }; });
+        setStatMap(next);
+      })
+      .catch(() => { if (!cancelled) setStatMap({}); });
+    return () => { cancelled = true; };
+  }, [cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  return statMap;
+}
 
 // --- Shared action buttons (download + copy path) ---
 
@@ -179,8 +205,7 @@ function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 
 // --- Doc/Code File Preview (collapsible card) ---
 
-function DocFilePreview({ src, filename, ext, originalPath }) {
-  const exists = useFileExists(src);
+function DocFilePreview({ src, filename, ext, originalPath, exists, size }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState(null);
   const [loadState, setLoadState] = useState("idle"); // idle | loading | loaded | error
@@ -255,8 +280,7 @@ function DocFilePreview({ src, filename, ext, originalPath }) {
 
 // --- Generic File Card (non-media, non-doc — fallback for user uploads) ---
 
-function GenericFilePreview({ src, filename, originalPath }) {
-  const exists = useFileExists(src);
+function GenericFilePreview({ src, filename, originalPath, exists }) {
   if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
   return (
     <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated max-w-[240px]">
@@ -271,9 +295,8 @@ function GenericFilePreview({ src, filename, originalPath }) {
 
 // --- Grouped doc files card (collapsible list for 2+ doc files) ---
 
-function DocGroupRow({ att }) {
+function DocGroupRow({ att, exists }) {
   const filename = att.path.split("/").pop();
-  const exists = useFileExists(att.resolvedUrl);
   const missing = exists === false;
   return (
     <div
@@ -296,7 +319,7 @@ function DocGroupRow({ att }) {
   );
 }
 
-function DocGroupCard({ docs }) {
+function DocGroupCard({ docs, statMap }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -316,9 +339,12 @@ function DocGroupCard({ docs }) {
       </button>
       {expanded && (
         <div className="border-t border-divider max-h-60 overflow-y-auto">
-          {docs.map((att) => (
-            <DocGroupRow key={att.path} att={att} />
-          ))}
+          {docs.map((att) => {
+            const stat = statMap[att.resolvedUrl];
+            // Non-project URLs (uploads, http) have no stat entry — treat as exists.
+            const exists = stat ? stat.exists : true;
+            return <DocGroupRow key={att.path} att={att} exists={exists} />;
+          })}
         </div>
       )}
     </div>
@@ -329,8 +355,11 @@ function DocGroupCard({ docs }) {
 
 export default function FileAttachments({ attachments, compact }) {
   const [lightbox, setLightbox] = useState(null); // { media, initialIndex } or null
+  const statMap = useBatchExists(attachments);
 
   if (!attachments || attachments.length === 0) return null;
+  // Per-att helper: resolves the batched stat (or treats non-project URLs as exists).
+  const statFor = (att) => statMap[att.resolvedUrl] || (parseFileUrl(att.resolvedUrl) ? null : { exists: true });
 
   // Split into media (inline) vs doc/file (groupable)
   const mediaAtts = [];
@@ -413,14 +442,33 @@ export default function FileAttachments({ attachments, compact }) {
         return <VideoPreview key={att.path} src={att.resolvedUrl} thumbSrc={att.thumbUrl} filename={filename} originalPath={att.originalPath} onOpen={() => openLightbox(idx)} />;
       })}
       {/* Doc files: single card if 1, grouped card if 2+ */}
-      {docs.length === 1 && (
-        <DocFilePreview src={docs[0].resolvedUrl} filename={docs[0].path.split("/").pop()} ext={docs[0].ext} originalPath={docs[0].originalPath} />
-      )}
-      {docs.length >= 2 && <DocGroupCard docs={docs} />}
+      {docs.length === 1 && (() => {
+        const stat = statFor(docs[0]);
+        return (
+          <DocFilePreview
+            src={docs[0].resolvedUrl}
+            filename={docs[0].path.split("/").pop()}
+            ext={docs[0].ext}
+            originalPath={docs[0].originalPath}
+            exists={stat ? stat.exists : null}
+            size={stat?.size}
+          />
+        );
+      })()}
+      {docs.length >= 2 && <DocGroupCard docs={docs} statMap={statMap} />}
       {/* Generic fallback for non-media, non-doc */}
-      {other.map((att) => (
-        <GenericFilePreview key={att.path} src={att.resolvedUrl} filename={att.path.split("/").pop()} originalPath={att.originalPath} />
-      ))}
+      {other.map((att) => {
+        const stat = statFor(att);
+        return (
+          <GenericFilePreview
+            key={att.path}
+            src={att.resolvedUrl}
+            filename={att.path.split("/").pop()}
+            originalPath={att.originalPath}
+            exists={stat ? stat.exists : null}
+          />
+        );
+      })}
 
       {/* Lightbox for media gallery */}
       {lightbox && (

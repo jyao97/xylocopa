@@ -245,6 +245,8 @@ export const deleteBookmark = (project, messageId) =>
   request(`/api/projects/${e(project)}/messages/${e(messageId)}/bookmark`, {
     method: "DELETE",
   });
+export const filesExistsBatch = (items) =>
+  request(`/api/files/exists-batch`, { method: "POST", body: JSON.stringify({ items }) });
 export const fetchProjectFile = (project, path) =>
   request(`/api/projects/${e(project)}/file?path=${e(path)}`);
 export const updateProjectFile = (project, path, content) =>

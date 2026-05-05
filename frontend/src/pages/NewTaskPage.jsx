@@ -463,7 +463,7 @@ export default function NewTaskPage({ embedded = false }) {
 
           <div className="space-y-3">
             {/* Project */}
-            <div className={`rounded-lg ${projectFlash ? "animate-flash-cyan" : ""}`} key={projectFlash}>
+            <div className={`rounded-lg ${projectFlash ? "bookmark-flash" : ""}`} key={projectFlash}>
               <ProjectSelector value={project} onChange={setProject} />
             </div>
 

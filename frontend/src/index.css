@@ -1174,14 +1174,6 @@ body::after {
   animation: pulse-ring 1.5s ease-out infinite;
 }
 
-@keyframes flash-cyan {
-  0%, 100% { filter: brightness(1) saturate(1); }
-  50%      { filter: brightness(0.75) saturate(0.85); }
-}
-.animate-flash-cyan {
-  animation: flash-cyan 1.0s ease-in-out 2;
-}
-
 @keyframes pane-highlight {
   0%   { border-color: rgba(6, 182, 212, 0.45); }
   100% { border-color: var(--color-divider); }

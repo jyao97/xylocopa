@@ -28,7 +28,6 @@ export default function NewTaskPage({ embedded = false }) {
   const location = useLocation();
   const hasBackground = !!location.state?.backgroundLocation;
   // useTmux removed — all tasks use tmux now
-  const [title, setTitle, clearTitle] = useDraft("new-task:title", "");
   const [description, setDescription, clearDesc] = useDraft("new-task:description", "");
   const [project, setProject, clearProject] = useDraft("new-task:project", "");
   const [model, setModel, clearModel] = useDraft("new-task:model", MODEL_OPTIONS[0].value);
@@ -131,7 +130,7 @@ export default function NewTaskPage({ embedded = false }) {
   const [dragOver, setDragOver] = useState(false);
   const dragCountRef = useRef(0);
 
-  const clearAllDrafts = () => { clearTitle(); clearDesc(); };
+  const clearAllDrafts = () => { clearDesc(); };
 
   const toast = useToast();
   const showToast = (message, type = "success") => type === "error" ? toast.error(message) : toast.success(message);
@@ -231,7 +230,7 @@ export default function NewTaskPage({ embedded = false }) {
       try {
         const uploaded = attachments.filter((a) => a.uploadedPath);
         const fullDescription = buildDescriptionText(description.trim(), uploaded);
-        let finalTitle = title.trim() || deriveTitle(description);
+        let finalTitle = deriveTitle(description);
         if (!finalTitle && uploaded.length > 0) finalTitle = "Untitled task";
         await createTaskV2({
           title: finalTitle,
@@ -274,14 +273,14 @@ export default function NewTaskPage({ embedded = false }) {
   // ---- Quick save: store to inbox, clear input, keep settings ----
   const quickSave = async () => {
     if (submittingRef.current) return;
-    const hasText = description.trim() || title.trim() || attachments.some((a) => a.uploadedPath);
+    const hasText = description.trim() || attachments.some((a) => a.uploadedPath);
     if (!hasText || attachments.some((a) => a.uploading)) return;
     submittingRef.current = true;
     setSubmitting(true);
     try {
       const uploaded = attachments.filter((a) => a.uploadedPath);
       const fullDescription = buildDescriptionText(description.trim(), uploaded);
-      let finalTitle = title.trim() || deriveTitle(description);
+      let finalTitle = deriveTitle(description);
       if (!finalTitle && uploaded.length > 0) finalTitle = "Untitled task";
       await createTaskV2({
         title: finalTitle,
@@ -297,7 +296,6 @@ export default function NewTaskPage({ embedded = false }) {
         notify_at: notifyAt || undefined,
         auto_dispatch: false,
       });
-      setTitle("");
       setDescription("");
       clearAttachments();
       setNotifyAt(null);
@@ -315,14 +313,14 @@ export default function NewTaskPage({ embedded = false }) {
   // Optimistic: dismiss sheet immediately, run create+dispatch in background.
   const launchAgent = () => {
     if (submittingRef.current || !project) return;
-    const hasText = description.trim() || title.trim() || attachments.some((a) => a.uploadedPath);
+    const hasText = description.trim() || attachments.some((a) => a.uploadedPath);
     if (!hasText || attachments.some((a) => a.uploading)) return;
     submittingRef.current = true;
     setSubmitting(true);
 
     const uploaded = attachments.filter((a) => a.uploadedPath);
-    const fullPrompt = buildDescriptionText(description.trim() || title.trim(), uploaded);
-    let finalTitle = title.trim() || deriveTitle(description);
+    const fullPrompt = buildDescriptionText(description.trim(), uploaded);
+    let finalTitle = deriveTitle(description);
     if (!finalTitle && uploaded.length > 0) finalTitle = "Untitled task";
 
     // Snapshot payload, then clear drafts/UI synchronously.
@@ -372,7 +370,7 @@ export default function NewTaskPage({ embedded = false }) {
     showToast("Reminder attached");
   };
 
-  const hasContent = description.trim() || title.trim() || attachments.some((a) => a.uploadedPath);
+  const hasContent = description.trim() || attachments.some((a) => a.uploadedPath);
   const canSubmit = hasContent && !submitting && !anyUploading;
 
   // ---- Swipe-down gesture on drag handle ----
@@ -459,15 +457,6 @@ export default function NewTaskPage({ embedded = false }) {
         <div ref={sheetBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6" style={{ overscrollBehavior: "none" }}>
 
           <div className="space-y-3">
-            {/* Title (optional) */}
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title (auto-generated if blank)"
-              className="w-full min-h-[44px] rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
-            />
-
             {/* Project */}
             <ProjectSelector value={project} onChange={setProject} />
 

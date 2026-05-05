@@ -32,6 +32,86 @@ logger = logging.getLogger("orchestrator")
 router = APIRouter(tags=["tasks"])
 
 
+# ---- Auto-title (gpt-4o-mini, background) ----
+
+_AUTO_TITLE_SYSTEM = """You convert a user's task description into a short, scannable title for a TODO list.
+
+LANGUAGE: match the description. English in -> English out. Chinese in -> Chinese out. Mixed -> dominant language.
+
+HARD LIMITS:
+- <= 50 characters (<= 15 CJK characters)
+- 3-8 words (or 6-15 CJK characters)
+- no trailing period, no quotes, no markdown
+- drop filler: "I want to", "please", "the", "a", "可以", "麻烦"
+- preserve specific anchors verbatim: file paths, function names, numbers, error names, PR/issue IDs
+
+TONE: imperative when the task is an action ("Fix X" / "修复 X" / "Add Y"); noun phrase when descriptive ("Login flow audit").
+
+GOOD:
+  "Fix login redirect loop on Safari 17"
+  "FilePreview: HEAD-probe missing thumbs"
+  "修复登录页 token 过期处理"
+  "Investigate p99 spike after PR #142"
+
+BAD:
+  "I want to fix the login bug"        (filler)
+  "Bug"                                  (too vague, no anchor)
+  "Fix the login bug that happens..."    (too long)
+  "Login bug."                           (trailing period)
+
+Return JSON: {"title": "..."}"""
+
+
+async def _generate_title_background(task_id: int, description: str) -> None:
+    """Call gpt-4o-mini to refine the auto-derived title, then patch the row."""
+    if not OPENAI_API_KEY:
+        return
+    try:
+        from openai import AsyncOpenAI
+    except ImportError:
+        logger.warning("openai package missing — skipping auto-title")
+        return
+
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    try:
+        resp = await asyncio.wait_for(
+            client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": _AUTO_TITLE_SYSTEM},
+                    {"role": "user", "content": f"DESCRIPTION:\n{description}"},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=120,
+            ),
+            timeout=15.0,
+        )
+        raw = resp.choices[0].message.content or ""
+        parsed = json.loads(raw)
+        new_title = re.sub(r"\s+", " ", str(parsed.get("title") or "")).strip().rstrip(".")
+        if not new_title:
+            return
+        if len(new_title) > 80:
+            new_title = new_title[:80].rstrip()
+    except Exception as e:
+        logger.warning(f"auto-title generation failed: {e}")
+        return
+
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        task = db.get(Task, task_id)
+        if not task:
+            return
+        task.title = new_title
+        db.commit()
+        await emit_task_update(task.id, task.status.value, task.project_name or "",
+                               title=new_title)
+    finally:
+        db.close()
+
+
 # ---- Helpers ----
 
 def _stop_task_agents(db: Session, task, ad, reason, *, emit=True, add_message=False):
@@ -210,15 +290,26 @@ async def create_task_v2(body: TaskCreate, db: Session = Depends(get_db)):
     # so content_matcher's task-prompt regex can strip the wrapper on JSONL
     # sync (newlines in title break the dedup match → duplicate user bubble).
     title = re.sub(r"\s+", " ", body.title).strip() if body.title else ""
-    if not title and body.description:
-        desc = re.sub(r"\s+", " ", body.description).strip()
+    title_was_auto = False
+    desc_raw = body.description.strip() if body.description else ""
+    if not title and desc_raw:
+        desc = re.sub(r"\s+", " ", desc_raw).strip()
         if len(desc) <= 60:
             title = desc
         else:
             cut = desc[:60].rsplit(" ", 1)[0] if " " in desc[:60] else desc[:60]
             title = cut + "..."
+        title_was_auto = True
     if not title:
         title = "Untitled task"
+
+    # If the description is non-trivial (multi-line or > 50 chars), schedule
+    # an LLM-refined title to replace the placeholder in the background.
+    needs_llm_title = (
+        title_was_auto
+        and desc_raw
+        and ("\n" in desc_raw or len(desc_raw) > 50)
+    )
 
     initial_status = TaskStatus.INBOX
     if body.auto_dispatch and body.project_name:
@@ -248,6 +339,8 @@ async def create_task_v2(body: TaskCreate, db: Session = Depends(get_db)):
         task.id, task.status.value, task.project_name or "",
         title=task.title,
     ))
+    if needs_llm_title:
+        asyncio.ensure_future(_generate_title_background(task.id, desc_raw))
     return TaskOut.model_validate(task)
 
 

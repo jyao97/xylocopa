@@ -20,12 +20,39 @@ from auth import (
 )
 from config import AUTH_TIMEOUT_MINUTES
 from database import get_db
+from models import Project
 
 logger = logging.getLogger("orchestrator")
 
 _setup_lock = threading.Lock()
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _seed_default_project(db: Session, request: Request) -> None:
+    """First-install onboarding: create a starter 'random-things' project so
+    new users can dispatch right away without needing to set up a project first.
+    Idempotent — skips if a project with that name already exists (active or archived)."""
+    from config import PROJECTS_DIR
+    name = "random-things"
+    if db.get(Project, name):
+        return
+    projects_dir = PROJECTS_DIR or "/projects"
+    proj = Project(
+        name=name,
+        display_name=name,
+        path=os.path.join(projects_dir, name),
+        description="Default workspace — rename or move tasks anytime.",
+    )
+    db.add(proj)
+    db.commit()
+    wm = getattr(request.app.state, "worker_manager", None)
+    if wm:
+        try:
+            wm.ensure_project_dir(name)
+        except Exception as e:
+            logger.warning("seed default project: ensure_project_dir failed: %s", e)
+    logger.info("Seeded default project '%s' on first-install", name)
 
 
 @router.post("/check")
@@ -62,6 +89,10 @@ async def auth_set_password(request: Request, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
 
         set_password_hash(db, password)
+        try:
+            _seed_default_project(db, request)
+        except Exception as e:
+            logger.warning("seed default project failed: %s", e)
     jwt_secret = get_jwt_secret(db)
     token = create_token(jwt_secret)
     logger.info("Initial password set")

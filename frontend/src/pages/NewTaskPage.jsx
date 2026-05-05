@@ -45,6 +45,7 @@ export default function NewTaskPage({ embedded = false }) {
   const [submitting, setSubmitting] = useState(false);
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
   const [notifyAt, setNotifyAt] = useState(null);
+  const [projectFlash, setProjectFlash] = useState(0);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const sheetBodyRef = useRef(null);
@@ -312,7 +313,11 @@ export default function NewTaskPage({ embedded = false }) {
   // ---- Launch agent (when project is selected) ----
   // Optimistic: dismiss sheet immediately, run create+dispatch in background.
   const launchAgent = () => {
-    if (submittingRef.current || !project) return;
+    if (submittingRef.current) return;
+    if (!project) {
+      setProjectFlash((n) => n + 1);
+      return;
+    }
     const hasText = description.trim() || attachments.some((a) => a.uploadedPath);
     if (!hasText || attachments.some((a) => a.uploading)) return;
     submittingRef.current = true;
@@ -458,7 +463,9 @@ export default function NewTaskPage({ embedded = false }) {
 
           <div className="space-y-3">
             {/* Project */}
-            <ProjectSelector value={project} onChange={setProject} />
+            <div className={`rounded-lg ${projectFlash ? "animate-flash-cyan" : ""}`} key={projectFlash}>
+              <ProjectSelector value={project} onChange={setProject} />
+            </div>
 
             {/* Input card — matches project detail page layout */}
             <form onSubmit={handleSubmit} className="rounded-xl bg-surface shadow-card p-4">
@@ -478,7 +485,12 @@ export default function NewTaskPage({ embedded = false }) {
                   ref={textareaRef}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); quickSave(); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      launchAgent();
+                    }
+                  }}
                   onPaste={handlePaste}
                   placeholder="Describe what needs to be done..."
                   rows={3}
@@ -563,13 +575,13 @@ export default function NewTaskPage({ embedded = false }) {
                   <button
                     type="button"
                     onClick={launchAgent}
-                    disabled={!project || !hasContent || submitting || anyUploading}
+                    disabled={!hasContent || submitting || anyUploading}
                     className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                       !project || !hasContent || submitting || anyUploading
-                        ? "bg-elevated text-dim cursor-not-allowed"
+                        ? "bg-elevated text-dim"
                         : "bg-cyan-500 hover:bg-cyan-400 text-white"
-                    }`}
-                    title={project ? "Launch agent" : "Select a project to launch"}
+                    } ${(!hasContent || submitting || anyUploading) ? "cursor-not-allowed" : "cursor-pointer"}`}
+                    title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />

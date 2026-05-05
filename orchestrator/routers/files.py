@@ -4,6 +4,8 @@ import asyncio
 import logging
 import os
 import re
+import shutil
+import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -18,6 +20,77 @@ logger = logging.getLogger("orchestrator")
 router = APIRouter(tags=["files"])
 
 _THUMB_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_MP4_FASTSTART_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _mp4_has_faststart(path: str) -> bool:
+    """True if the mp4 has its moov atom before mdat (streamable layout).
+
+    iOS Safari's <video> tag refuses to play HTTP-streamed mp4s where moov
+    sits at the end — it can't locate the index without downloading the
+    whole file first.
+    """
+    try:
+        with open(path, "rb") as f:
+            head = f.read(64 * 1024)
+        moov = head.find(b"moov")
+        mdat = head.find(b"mdat")
+        if moov == -1:
+            # moov not in the first 64 KB → definitely at the end
+            return False
+        if mdat == -1:
+            return True
+        return moov < mdat
+    except OSError:
+        return True  # don't try to remux on read errors
+
+
+async def _ensure_faststart_mp4(full_path: str) -> str:
+    """If `full_path` is a non-faststart mp4, return a cached remuxed copy.
+
+    Falls back to `full_path` if ffmpeg is unavailable or remux fails.
+    The remux uses `-c copy` so it's a stream-copy (no re-encode) — fast
+    and lossless. Result is cached next to the original under .thumbcache/.
+    """
+    if _mp4_has_faststart(full_path):
+        return full_path
+    if not shutil.which("ffmpeg"):
+        return full_path
+
+    cache_dir = os.path.join(os.path.dirname(full_path), ".thumbcache")
+    cached = os.path.join(cache_dir, os.path.basename(full_path) + ".faststart.mp4")
+    try:
+        if os.path.isfile(cached) and os.path.getmtime(cached) >= os.path.getmtime(full_path):
+            return cached
+    except OSError:
+        pass
+
+    lock = _MP4_FASTSTART_LOCKS.setdefault(full_path, asyncio.Lock())
+    async with lock:
+        # Re-check after acquiring the lock — another request may have built it.
+        try:
+            if os.path.isfile(cached) and os.path.getmtime(cached) >= os.path.getmtime(full_path):
+                return cached
+        except OSError:
+            pass
+
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            tmp = cached + ".tmp"
+            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", full_path,
+                   "-c", "copy", "-movflags", "+faststart", "-f", "mp4", tmp]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            _, stderr = await proc.communicate()
+            if proc.returncode != 0 or not os.path.isfile(tmp):
+                logger.warning("faststart remux failed for %s: %s",
+                               full_path, stderr.decode("utf-8", "replace")[:300])
+                return full_path
+            os.replace(tmp, cached)
+            return cached
+        except (OSError, asyncio.CancelledError) as e:
+            logger.warning("faststart remux error for %s: %s", full_path, e)
+            return full_path
 
 
 def _serve_file_with_range(full_path: str, media_type: str, request: Request):
@@ -125,6 +198,9 @@ async def serve_project_file(project: str, path: str, request: Request,
     if download:
         return FileResponse(full_path, media_type=media_type,
                             filename=os.path.basename(full_path))
+    # iOS Safari requires moov-at-front mp4 to stream — remux on demand.
+    if media_type == "video/mp4":
+        full_path = await _ensure_faststart_mp4(full_path)
     return _serve_file_with_range(full_path, media_type, request)
 
 

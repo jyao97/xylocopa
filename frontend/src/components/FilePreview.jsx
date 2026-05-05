@@ -61,6 +61,23 @@ function ActionButtons({ src, filename, originalPath }) {
   );
 }
 
+// --- Missing-file fallback card (path didn't resolve) ---
+
+function MissingFileCard({ filename, originalPath }) {
+  return (
+    <div
+      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated max-w-[280px]"
+      title={originalPath || filename}
+    >
+      <svg className="w-4 h-4 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+      <span className="text-xs text-dim truncate flex-1 min-w-0">{filename}</span>
+      <span className="text-[10px] text-dim uppercase shrink-0 opacity-60">missing</span>
+    </div>
+  );
+}
+
 // --- Image Preview (compact thumbnail, tappable fullscreen) ---
 
 function ImagePreview({ src, thumbSrc, filename, originalPath, onOpen }) {
@@ -78,25 +95,7 @@ function ImagePreview({ src, thumbSrc, filename, originalPath, onOpen }) {
     }
   };
 
-  if (error) {
-    return (
-      <div>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated max-w-[240px]">
-          <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-          <span className="text-xs text-dim truncate flex-1 min-w-0">{filename}</span>
-          <button
-            type="button"
-            onClick={() => { setThumbFailed(false); setError(false); }}
-            className="text-xs text-cyan-400 hover:underline shrink-0"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (error) return <MissingFileCard filename={filename} originalPath={originalPath} />;
 
   return (
     <div>
@@ -122,11 +121,16 @@ function ImagePreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
   const [thumbError, setThumbError] = useState(false);
 
+  // A thumb URL was generated but the request 404'd — the file path
+  // didn't resolve. (No thumbSrc just means the source isn't on /api/files,
+  // e.g. user-uploaded video — that's not a "missing" case.)
+  if (thumbError) return <MissingFileCard filename={filename} originalPath={originalPath} />;
+
   return (
     <div>
       <div className="cursor-pointer" onClick={onOpen}>
         <div className="relative inline-block">
-          {thumbError || !thumbSrc ? (
+          {!thumbSrc ? (
             /* Fallback: gray placeholder when no thumbnail available */
             <div className="w-[160px] h-[90px] rounded-lg border border-divider bg-elevated flex items-center justify-center" />
           ) : (

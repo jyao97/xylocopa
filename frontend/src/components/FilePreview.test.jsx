@@ -32,9 +32,9 @@ describe("ImagePreview (via FileAttachments)", () => {
     expect(screen.getByText("chart.png")).toBeInTheDocument();
   });
 
-  it("hides image on error", async () => {
+  it("renders missing-file card on error", async () => {
     const attachments = [
-      { path: "output/broken.png", resolvedUrl: "/api/files/proj/output/broken.png", type: "image", ext: "png" },
+      { path: "output/broken.png", resolvedUrl: "/api/files/proj/output/broken.png", originalPath: "/abs/output/broken.png", type: "image", ext: "png" },
     ];
     renderWithProviders(<FileAttachments attachments={attachments} />);
     const img = screen.getByRole("img");
@@ -42,6 +42,8 @@ describe("ImagePreview (via FileAttachments)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("img")).not.toBeInTheDocument();
     });
+    expect(screen.getByText("broken.png")).toBeInTheDocument();
+    expect(screen.getByText("missing")).toBeInTheDocument();
   });
 
   it("opens lightbox on click and closes on overlay click", async () => {
@@ -77,9 +79,9 @@ describe("VideoPreview (via FileAttachments)", () => {
     expect(screen.getByText("demo.mp4")).toBeInTheDocument();
   });
 
-  it("shows placeholder when thumbnail fails to load", async () => {
+  it("renders missing-file card when thumbnail fails to load", async () => {
     const attachments = [
-      { path: "output/broken.mp4", resolvedUrl: "/api/files/proj/output/broken.mp4", thumbUrl: "/api/thumbs/proj/output/broken.mp4", type: "video", ext: "mp4" },
+      { path: "output/broken.mp4", resolvedUrl: "/api/files/proj/output/broken.mp4", thumbUrl: "/api/thumbs/proj/output/broken.mp4", originalPath: "/abs/output/broken.mp4", type: "video", ext: "mp4" },
     ];
     renderWithProviders(<FileAttachments attachments={attachments} />);
     const img = screen.getByRole("img");
@@ -87,17 +89,18 @@ describe("VideoPreview (via FileAttachments)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("img")).not.toBeInTheDocument();
     });
-    // Filename text should still be visible
     expect(screen.getByText("broken.mp4")).toBeInTheDocument();
+    expect(screen.getByText("missing")).toBeInTheDocument();
   });
 
-  it("renders placeholder when no thumbUrl is supplied", () => {
+  it("renders gray placeholder (not missing card) when no thumbUrl is supplied", () => {
     const attachments = [
       { path: "output/nothumb.mp4", resolvedUrl: "/api/files/proj/output/nothumb.mp4", type: "video", ext: "mp4" },
     ];
     renderWithProviders(<FileAttachments attachments={attachments} />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("nothumb.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("missing")).not.toBeInTheDocument();
   });
 });
 

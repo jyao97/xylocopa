@@ -25,6 +25,11 @@ function extFromName(name) {
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
 
+const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "m4v", "ogv"]);
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
+const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "m4a", "flac", "aac", "opus"]);
+const PDF_EXTS = new Set(["pdf"]);
+
 function langFromExt(ext) {
   const map = {
     js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript",
@@ -117,11 +122,20 @@ function TreeNode({ node, depth, project, onFileClick, expandedDirs, toggleDir }
 /* ---- file viewer panel ---- */
 
 function FileViewer({ project, node }) {
+  const ext = extFromName(node.name);
+  const isVideo = VIDEO_EXTS.has(ext);
+  const isImage = IMAGE_EXTS.has(ext);
+  const isAudio = AUDIO_EXTS.has(ext);
+  const isPDF = PDF_EXTS.has(ext);
+  const isBinary = isVideo || isImage || isAudio || isPDF;
+  const isMarkdown = ext === "md" || ext === "mdx";
+
   const [content, setContent] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isBinary);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (isBinary) return;
     setLoading(true);
     setError(null);
     browseProjectFile(project, node.path)
@@ -131,10 +145,34 @@ function FileViewer({ project, node }) {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [project, node.path]);
+  }, [project, node.path, isBinary]);
 
-  const ext = extFromName(node.name);
-  const isMarkdown = ext === "md" || ext === "mdx";
+  if (isVideo) {
+    return (
+      <div className="p-4 flex items-center justify-center">
+        <video controls className="max-w-full max-h-[80vh] rounded-lg" src={fileUrl(project, node.path)} />
+      </div>
+    );
+  }
+  if (isImage) {
+    return (
+      <div className="p-4 flex items-center justify-center">
+        <img alt={node.name} className="max-w-full max-h-[80vh] rounded-lg" src={fileUrl(project, node.path)} />
+      </div>
+    );
+  }
+  if (isAudio) {
+    return (
+      <div className="p-4 flex items-center justify-center">
+        <audio controls className="w-full max-w-md" src={fileUrl(project, node.path)} />
+      </div>
+    );
+  }
+  if (isPDF) {
+    return (
+      <iframe title={node.name} className="w-full h-[85vh] border-0" src={fileUrl(project, node.path)} />
+    );
+  }
 
   if (loading) return <div className="flex items-center justify-center h-40 text-label text-sm">Loading...</div>;
   if (error) return <div className="p-4 text-label text-sm">{error}</div>;

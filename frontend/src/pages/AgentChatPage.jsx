@@ -38,7 +38,7 @@ import {
 import ProjectFileModal from "../components/ProjectFileModal";
 import FloatingTaskCard from "../components/FloatingTaskCard";
 import ProjectBrowserModal from "../components/ProjectBrowserModal";
-import { relativeTime, renderMarkdown, extractFileAttachments, stripAttachmentTags, toLocalInputValue } from "../lib/formatters";
+import { relativeTime, renderMarkdown, extractFileAttachments, stripAttachmentTags } from "../lib/formatters";
 import { serverNow } from "../lib/serverTime";
 import { uploadUrl } from "../lib/urls";
 import { forwardState, resolveBack } from "../lib/nav";
@@ -1207,7 +1207,6 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   };
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
-  const [editSchedule, setEditSchedule] = useState("");
   const [copied, setCopied] = useState(false);
   const [inlineLightbox, setInlineLightbox] = useState(null); // { media, initialIndex }
   const bookmarkActive = !!(bookmarkedSet && message?.id && bookmarkedSet.has(message.id));
@@ -1231,15 +1230,6 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     const media = allImgs.map((el) => ({ type: "image", src: el.src, filename: el.alt || "" }));
     setInlineLightbox({ media, initialIndex: Math.max(0, index) });
   }, []);
-
-  // Initialize editSchedule from message when entering edit mode
-  useEffect(() => {
-    if (editing && message.scheduled_at) {
-      const d = new Date(message.scheduled_at);
-      const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-      setEditSchedule(local);
-    }
-  }, [editing, message.scheduled_at]);
 
   // Auto-focus textarea when editing starts (useEffect runs after DOM commit).
   // Sizing is handled by the grid-mirror trick in the render — no JS height
@@ -1356,22 +1346,9 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     setEditing(true);
   };
   const handleEditSave = () => {
-    const data = {};
     const trimmed = editContent.trim();
     if (trimmed && trimmed !== message.content) {
-      data.content = trimmed;
-    }
-    if (editSchedule) {
-      const d = new Date(editSchedule);
-      if (!isNaN(d.getTime())) {
-        data.scheduled_at = d.toISOString();
-      }
-    } else if (isScheduled) {
-      // User cleared the schedule — remove it
-      data.scheduled_at = "";
-    }
-    if (Object.keys(data).length > 0) {
-      onUpdateMessage?.(message.id, data);
+      onUpdateMessage?.(message.id, { content: trimmed });
     }
     setEditing(false);
   };
@@ -1380,8 +1357,8 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     setEditContent(message.content);
   };
   // Keep a stable ref to the latest save so the document mousedown listener
-  // (bound once on `editing` change) always sees the latest editContent /
-  // editSchedule from closure without rebinding on every keystroke.
+  // (bound once on `editing` change) always sees the latest editContent
+  // from closure without rebinding on every keystroke.
   handleEditSaveRef.current = handleEditSave;
 
   const attachments = useMemo(() => {
@@ -1621,28 +1598,6 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
             <div className="bg-surface border border-divider rounded-xl shadow-lg overflow-hidden flex">
               {editing ? (
                 <>
-                  {isScheduled && (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowEditPicker(v => !v)}
-                        title={editSchedule ? new Date(editSchedule).toLocaleString([], DATE_SHORT) : "Schedule At"}
-                        className="px-3 py-2 text-amber-400 hover:bg-amber-600/10 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      {showEditPicker && (
-                        <SendLaterPicker
-                          title="Schedule At"
-                          onSelect={(iso) => { setEditSchedule(toLocalInputValue(iso)); setShowEditPicker(false); }}
-                          onClose={() => setShowEditPicker(false)}
-                          onClear={editSchedule ? () => { setEditSchedule(""); setShowEditPicker(false); } : undefined}
-                        />
-                      )}
-                    </div>
-                  )}
                   <button
                     type="button"
                     onClick={handleEditSave}
@@ -1677,6 +1632,31 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                   </svg>
                 </button>
+              )}
+              {isScheduled && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPicker(v => !v)}
+                    title={`Reschedule (${new Date(message.scheduled_at).toLocaleString([], DATE_SHORT)})`}
+                    className="px-3 py-2 text-amber-400 hover:bg-amber-600/10 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                  {showEditPicker && (
+                    <SendLaterPicker
+                      title="Schedule At"
+                      onSelect={(iso) => {
+                        onUpdateMessage?.(message.id, { scheduled_at: iso });
+                        setShowEditPicker(false);
+                        setShowActions(false);
+                      }}
+                      onClose={() => setShowEditPicker(false)}
+                    />
+                  )}
+                </div>
               )}
               <button
                 type="button"

@@ -33,7 +33,7 @@ from schemas import (
 from route_helpers import (
     resolve_project_path, check_project_capacity, compute_successor_id,
     enrich_agent_briefs,
-    BROWSE_MAX_FILE_SIZE, API_REQUEST_TIMEOUT, SUBPROCESS_STRIP_VARS,
+    API_REQUEST_TIMEOUT, SUBPROCESS_STRIP_VARS,
     subprocess_clean_env, graceful_kill_tmux,
     graceful_kill_tmux_agent, tmux_session_candidates,
 )
@@ -2552,9 +2552,6 @@ async def browse_project_file(name: str, path: str, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
     size = os.path.getsize(filepath)
-    if size > BROWSE_MAX_FILE_SIZE:
-        return {"path": path, "content": None, "truncated": True, "size": size,
-                "message": f"File too large ({size // 1024} KB). Max {BROWSE_MAX_FILE_SIZE // 1024} KB."}
 
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:

@@ -523,48 +523,84 @@ export async function uploadFile(file) {
  * Download a file reliably across platforms including iOS Safari PWA.
  * Returns: "shared" | "downloaded" | "cancelled" — or throws on network error.
  */
-export async function downloadFile(url, filename) {
+// Files larger than this go straight to the browser via fetch streaming or a
+// new-tab navigation — fetching them into a JS Blob risks OOM (iOS PWA caps
+// JS heap aggressively) and silently stalls the click.
+const _LARGE_DOWNLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
+
+export async function downloadFile(url, filename, opts = {}) {
+  const { onProgress, size } = opts;
   const dlUrl = url + (url.includes("?") ? "&" : "?") + "download=1";
 
-  // Only use Web Share API on mobile PWA standalone mode (iOS needs it; desktop should direct-download)
   const isStandalonePWA = window.matchMedia("(display-mode: standalone)").matches
     || window.navigator.standalone === true;
   const isTouchDevice = "ontouchend" in document;
   const useShareAPI = isStandalonePWA && isTouchDevice;
+  const isLarge = typeof size === "number" && size > _LARGE_DOWNLOAD_BYTES;
 
-  const resp = await authedFetch(dlUrl);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const blob = await resp.blob();
-
-  // Strategy 1: Web Share API — the only reliable method in iOS Safari PWA standalone mode
-  if (useShareAPI) {
-    const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file] });
-        return "shared";
-      } catch (err) {
-        if (err.name === "AbortError") return "cancelled";
-        // iOS throws InvalidStateError when share() is called while the
-        // previous share sheet is still open (e.g. double-tap). Swallow
-        // it — the first share is still in flight.
-        if (err.name === "InvalidStateError") return "cancelled";
-        throw err;
-      }
-    }
+  // Fast path 1: large file on iOS PWA — Web Share with a 700MB File
+  // reliably hangs/rejects, and <a download> doesn't fire in standalone
+  // mode. Pop the URL in a new tab so Safari handles the download.
+  if (useShareAPI && isLarge) {
+    window.open(dlUrl, "_blank");
+    return "opened";
   }
 
-  // Strategy 2: blob URL + anchor click (desktop browsers, Android)
-  const blobUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = filename;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-  return "downloaded";
+  // Fast path 2: not iOS-PWA — use a native anchor so the browser streams
+  // straight to disk. No blob in JS heap, browser shows its own progress.
+  // (The token ride-along on the URL keeps the request authenticated.)
+  if (!useShareAPI) {
+    const a = document.createElement("a");
+    a.href = dlUrl;
+    a.download = filename;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if (onProgress && typeof size === "number") onProgress(size, size);
+    return "downloaded";
+  }
+
+  // iOS PWA + smallish file: fetch into a Blob and hand off via Web Share.
+  const resp = await authedFetch(dlUrl);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  let blob;
+  const totalHeader = resp.headers.get("Content-Length");
+  const total = totalHeader ? parseInt(totalHeader, 10) : 0;
+  if (onProgress && resp.body && total > 0) {
+    const reader = resp.body.getReader();
+    const chunks = [];
+    let received = 0;
+    onProgress(0, total);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onProgress(received, total);
+    }
+    blob = new Blob(chunks, { type: resp.headers.get("Content-Type") || "application/octet-stream" });
+  } else {
+    blob = await resp.blob();
+    if (onProgress) onProgress(blob.size, blob.size);
+  }
+
+  const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return "shared";
+    } catch (err) {
+      if (err.name === "AbortError") return "cancelled";
+      if (err.name === "InvalidStateError") return "cancelled";
+      throw err;
+    }
+  }
+  // Last-ditch fallback: open in new tab.
+  window.open(dlUrl, "_blank");
+  return "opened";
 }
 
 export async function generateWorktreeName(prompt) {

@@ -217,10 +217,10 @@ export default function TasksPage({ theme, onToggleTheme, isActive = true }) {
             onClick={() => handleBatchProcess()}
             disabled={batchProcessing}
             title="AI batch process — refine prompts & assign projects"
-            className={`h-7 px-2.5 flex items-center gap-1.5 rounded-full text-[11px] font-semibold transition-all ${
+            className={`h-7 px-2.5 flex items-center gap-1.5 rounded-full text-[11px] font-semibold transition-colors ${
               batchProcessing
-                ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white animate-pulse shadow-md shadow-cyan-500/25"
-                : "bg-gradient-to-r from-cyan-500/15 to-blue-500/15 text-cyan-500 dark:text-cyan-400 hover:from-cyan-500/25 hover:to-blue-500/25 active:scale-95"
+                ? "bg-cyan-500 text-white animate-pulse"
+                : "bg-cyan-500/15 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/25 active:scale-95"
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />

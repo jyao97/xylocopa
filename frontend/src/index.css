@@ -1175,12 +1175,11 @@ body::after {
 }
 
 @keyframes flash-cyan {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
-  20% { box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.55); }
-  60% { box-shadow: 0 0 0 6px rgba(34, 211, 238, 0.25); }
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(0.55); }
 }
 .animate-flash-cyan {
-  animation: flash-cyan 0.9s ease-out 2;
+  animation: flash-cyan 0.7s ease-in-out 2;
 }
 
 @keyframes pane-highlight {

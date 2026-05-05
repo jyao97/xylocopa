@@ -1398,13 +1398,23 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     return (
       <div className="flex justify-end my-2">
         <div className="max-w-[min(85%,30rem)] min-w-0">
-          <div className="rounded-2xl px-4 py-2.5 bg-amber-600/60 text-white rounded-br-md space-y-2 overflow-hidden">
+          <div className="rounded-2xl px-4 py-2.5 bg-amber-600/80 text-white rounded-br-md space-y-2 overflow-hidden">
             <textarea
               ref={editTextareaRef}
               value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              rows={2}
-              className="w-full rounded-lg bg-black/20 border border-amber-400/40 px-2 py-1.5 text-sm text-white placeholder-amber-200/50 resize-none focus:border-amber-300 focus:outline-none"
+              onChange={(e) => {
+                setEditContent(e.target.value);
+                const ta = e.target;
+                ta.style.height = "auto";
+                ta.style.height = ta.scrollHeight + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
+                else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
+              }}
+              rows={1}
+              className="w-full bg-transparent border-0 p-0 m-0 text-sm text-white placeholder-amber-200/50 resize-none focus:outline-none chat-bubble-content"
+              style={{ overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
             />
             <div className="relative">
               <button

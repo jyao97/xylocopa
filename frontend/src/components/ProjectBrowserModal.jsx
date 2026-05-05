@@ -44,7 +44,7 @@ function langFromExt(ext) {
 }
 
 const downloadFile = (project, path, filename) =>
-  dlFile(fileUrl(project, path), filename).catch(() => {});
+  dlFile(fileUrl(project, path), filename);
 
 /* ---- folder / file icons (inline SVG) ---- */
 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { authedFetch, downloadFile, filesExistsBatch } from "../lib/api";
-import { useToast } from "../contexts/ToastContext";
+import { authedFetch, filesExistsBatch } from "../lib/api";
 import ImageLightbox from "./ImageLightbox";
 
 // Parse /api/files/<project>/<path> URL into {project, path}, or null
@@ -50,54 +49,15 @@ function useBatchExists(attachments) {
 }
 
 // --- Shared action buttons (download + copy path) ---
+//
+// Download uses a plain <a download href="…?download=1"> — the backend's
+// FileResponse already sets Content-Disposition: attachment, so the browser
+// streams to disk and shows progress in its own download manager. No JS Blob,
+// no size threshold, no platform branch.
 
-function ActionButtons({ src, filename, originalPath, size }) {
+function ActionButtons({ src, filename, originalPath }) {
   const [copied, setCopied] = useState(false);
-  // null = idle, 0..1 = downloading, "done" = brief checkmark, "error" = brief x
-  const [progress, setProgress] = useState(null);
-  const toast = useToast();
-
-  const handleDownload = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (progress !== null && progress !== "done" && progress !== "error") return; // already downloading
-    setProgress(0);
-    downloadFile(src, filename, {
-      size,
-      onProgress: (received, total) => {
-        if (total > 0) setProgress(Math.min(1, received / total));
-      },
-    })
-      .then((r) => {
-        setProgress("done");
-        setTimeout(() => setProgress(null), 1500);
-        if (r === "shared") toast.success(`Saved ${filename}`);
-        else if (r === "downloaded") toast.success(`Downloading ${filename}`);
-        else if (r === "opened") toast.success(`Opening ${filename} — save from the browser`);
-      })
-      .catch(() => {
-        setProgress("error");
-        setTimeout(() => setProgress(null), 1500);
-        toast.error(`Failed to download ${filename}`);
-      });
-  };
-
-  // Ring goes from 0% → 100% as bytes arrive.
-  const renderRing = () => {
-    const pct = typeof progress === "number" ? progress : 0;
-    const circumference = 2 * Math.PI * 6; // r=6 inside 14×14
-    const dashOffset = circumference * (1 - pct);
-    return (
-      <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 14 14">
-        <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1.5" />
-        <circle
-          cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5"
-          strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset}
-          transform="rotate(-90 7 7)"
-        />
-      </svg>
-    );
-  };
+  const dlHref = src + (src.includes("?") ? "&" : "?") + "download=1";
 
   const handleCopyPath = (e) => {
     e.stopPropagation();
@@ -109,33 +69,18 @@ function ActionButtons({ src, filename, originalPath, size }) {
 
   return (
     <span className="inline-flex gap-0.5 shrink-0">
-      <button
-        type="button"
-        onClick={handleDownload}
-        title={
-          progress === "done" ? "Done"
-          : progress === "error" ? "Failed"
-          : typeof progress === "number" ? `Downloading… ${Math.round(progress * 100)}%`
-          : "Download file"
-        }
+      <a
+        href={dlHref}
+        download={filename}
+        rel="noopener"
+        title="Download file"
+        onClick={(e) => e.stopPropagation()}
         className="p-0.5 rounded hover:bg-hover transition-colors text-dim hover:text-label"
       >
-        {progress === "done" ? (
-          <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-        ) : progress === "error" ? (
-          <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : typeof progress === "number" ? (
-          renderRing()
-        ) : (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-        )}
-      </button>
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+      </a>
       <button
         type="button"
         onClick={handleCopyPath}
@@ -258,7 +203,7 @@ function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 
 // --- Doc/Code File Preview (collapsible card) ---
 
-function DocFilePreview({ src, filename, ext, originalPath, exists, size }) {
+function DocFilePreview({ src, filename, ext, originalPath, exists }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState(null);
   const [loadState, setLoadState] = useState("idle"); // idle | loading | loaded | error
@@ -297,7 +242,7 @@ function DocFilePreview({ src, filename, ext, originalPath, exists, size }) {
         </svg>
         <span className="text-xs text-label truncate flex-1 min-w-0">{filename}</span>
         <span className="text-[10px] text-dim uppercase shrink-0">{ext}</span>
-        <ActionButtons src={src} filename={filename} originalPath={originalPath} size={size} />
+        <ActionButtons src={src} filename={filename} originalPath={originalPath} />
         <svg className={`w-3 h-3 text-dim shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" d="m19 9-7 7-7-7" />
         </svg>
@@ -348,7 +293,7 @@ function GenericFilePreview({ src, filename, originalPath, exists }) {
 
 // --- Grouped doc files card (collapsible list for 2+ doc files) ---
 
-function DocGroupRow({ att, exists, size }) {
+function DocGroupRow({ att, exists }) {
   const filename = att.path.split("/").pop();
   const missing = exists === false;
   return (
@@ -365,7 +310,7 @@ function DocGroupRow({ att, exists, size }) {
       ) : (
         <>
           <span className="text-[10px] text-dim uppercase shrink-0">{att.ext}</span>
-          <ActionButtons src={att.resolvedUrl} filename={filename} originalPath={att.originalPath} size={size} />
+          <ActionButtons src={att.resolvedUrl} filename={filename} originalPath={att.originalPath} />
         </>
       )}
     </div>
@@ -396,7 +341,7 @@ function DocGroupCard({ docs, statMap }) {
             const stat = statMap[att.resolvedUrl];
             // Non-project URLs (uploads, http) have no stat entry — treat as exists.
             const exists = stat ? stat.exists : true;
-            return <DocGroupRow key={att.path} att={att} exists={exists} size={stat?.size} />;
+            return <DocGroupRow key={att.path} att={att} exists={exists} />;
           })}
         </div>
       )}
@@ -504,7 +449,6 @@ export default function FileAttachments({ attachments, compact }) {
             ext={docs[0].ext}
             originalPath={docs[0].originalPath}
             exists={stat ? stat.exists : null}
-            size={stat?.size}
           />
         );
       })()}

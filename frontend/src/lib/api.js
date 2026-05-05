@@ -520,87 +520,26 @@ export async function uploadFile(file) {
 }
 
 /**
- * Download a file reliably across platforms including iOS Safari PWA.
- * Returns: "shared" | "downloaded" | "cancelled" — or throws on network error.
+ * Trigger a browser-native download of `url` as `filename`.
+ *
+ * Single universal path: append `?download=1` so the backend returns
+ * `Content-Disposition: attachment`, then click an <a download>. Starlette's
+ * FileResponse already streams from disk in 64 KB chunks with Range support,
+ * so the browser handles progress, pause/resume, and never touches the JS
+ * heap — no size threshold, no platform branch, no Blob, no Web Share.
+ *
+ * Synchronous: returns immediately after the click dispatches.
  */
-// Files larger than this go straight to the browser via fetch streaming or a
-// new-tab navigation — fetching them into a JS Blob risks OOM (iOS PWA caps
-// JS heap aggressively) and silently stalls the click.
-const _LARGE_DOWNLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
-
-export async function downloadFile(url, filename, opts = {}) {
-  const { onProgress, size } = opts;
+export function downloadFile(url, filename) {
   const dlUrl = url + (url.includes("?") ? "&" : "?") + "download=1";
-
-  const isStandalonePWA = window.matchMedia("(display-mode: standalone)").matches
-    || window.navigator.standalone === true;
-  const isTouchDevice = "ontouchend" in document;
-  const useShareAPI = isStandalonePWA && isTouchDevice;
-  const isLarge = typeof size === "number" && size > _LARGE_DOWNLOAD_BYTES;
-
-  // Fast path 1: large file on iOS PWA — Web Share with a 700MB File
-  // reliably hangs/rejects, and <a download> doesn't fire in standalone
-  // mode. Pop the URL in a new tab so Safari handles the download.
-  if (useShareAPI && isLarge) {
-    window.open(dlUrl, "_blank");
-    return "opened";
-  }
-
-  // Fast path 2: not iOS-PWA — use a native anchor so the browser streams
-  // straight to disk. No blob in JS heap, browser shows its own progress.
-  // (The token ride-along on the URL keeps the request authenticated.)
-  if (!useShareAPI) {
-    const a = document.createElement("a");
-    a.href = dlUrl;
-    a.download = filename;
-    a.rel = "noopener";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    if (onProgress && typeof size === "number") onProgress(size, size);
-    return "downloaded";
-  }
-
-  // iOS PWA + smallish file: fetch into a Blob and hand off via Web Share.
-  const resp = await authedFetch(dlUrl);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-  let blob;
-  const totalHeader = resp.headers.get("Content-Length");
-  const total = totalHeader ? parseInt(totalHeader, 10) : 0;
-  if (onProgress && resp.body && total > 0) {
-    const reader = resp.body.getReader();
-    const chunks = [];
-    let received = 0;
-    onProgress(0, total);
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      onProgress(received, total);
-    }
-    blob = new Blob(chunks, { type: resp.headers.get("Content-Type") || "application/octet-stream" });
-  } else {
-    blob = await resp.blob();
-    if (onProgress) onProgress(blob.size, blob.size);
-  }
-
-  const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file] });
-      return "shared";
-    } catch (err) {
-      if (err.name === "AbortError") return "cancelled";
-      if (err.name === "InvalidStateError") return "cancelled";
-      throw err;
-    }
-  }
-  // Last-ditch fallback: open in new tab.
-  window.open(dlUrl, "_blank");
-  return "opened";
+  const a = document.createElement("a");
+  a.href = dlUrl;
+  a.download = filename || "";
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 export async function generateWorktreeName(prompt) {

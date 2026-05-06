@@ -367,6 +367,7 @@ async def hook_agent_post_compact(request: Request):
     # IDLE than leave a stuck EXECUTING). Auto: leave EXECUTING — the user
     # task that filled context is still ongoing.
     _trigger = (body.get("trigger") if isinstance(body, dict) else None) or "manual"
+    _flipped_to_idle_pc = False
     if _trigger == "manual":
         _db_pc = SessionLocal()
         try:
@@ -375,6 +376,7 @@ async def hook_agent_post_compact(request: Request):
                 _ag_pc.status = AgentStatus.IDLE
                 _ag_pc.generating_msg_id = None
                 _db_pc.commit()
+                _flipped_to_idle_pc = True
                 from websocket import emit_agent_update as _eau_pc
                 asyncio.ensure_future(_eau_pc(
                     agent_id, "IDLE", _ag_pc.project,
@@ -390,6 +392,15 @@ async def hook_agent_post_compact(request: Request):
             )
         finally:
             _db_pc.close()
+        # Drain any messages that were typed during the compact window
+        # (status=EXECUTING). /compact does not fire a Stop hook, so without
+        # an explicit kick these queued messages would sit until the *next*
+        # user message dispatches and incidentally drags them along.
+        # Mirrors the SessionStart(clear) pattern above.
+        if _flipped_to_idle_pc:
+            asyncio.ensure_future(
+                ad.dispatch_pending_message(agent_id, delay=0)
+            )
     else:
         logger.info(
             "PostCompact: trigger=%s, keep agent %s EXECUTING",

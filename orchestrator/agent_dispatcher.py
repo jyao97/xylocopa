@@ -3978,11 +3978,33 @@ Here are the day's conversations (with timestamps):
         from websocket import emit_context_usage as _emit_ctx
         self._emit(_emit_ctx(agent_id))
 
+        # Preserve compact_trigger across the ctx rotation. PreCompact
+        # stashes it on the OLD ctx (manual|auto); PostCompact reads it
+        # from `_sync_contexts[agent_id]` to decide IDLE vs keep EXECUTING.
+        # `start_session_sync` below replaces the ctx with a fresh one
+        # whose `compact_trigger` defaults to None — without this rescue,
+        # auto-compact gets misread as manual and the agent flips IDLE
+        # mid-task.
+        _old_ctx = self._sync_contexts.get(agent_id)
+        _preserved_compact_trigger = (
+            _old_ctx.compact_trigger if _old_ctx else None
+        )
+
         # Cancel old sync task and start a fresh one.  The new sync
         # loop does initial reconciliation which deduplicates turns
         # already present in the DB.
         self._cancel_sync_task(agent_id)
         self.start_session_sync(agent_id, new_sid, project_path)
+
+        if _preserved_compact_trigger is not None:
+            _new_ctx = self._sync_contexts.get(agent_id)
+            if _new_ctx:
+                _new_ctx.compact_trigger = _preserved_compact_trigger
+                logger.info(
+                    "_rotate_agent_session: preserved compact_trigger=%s "
+                    "across ctx rotation for agent %s",
+                    _preserved_compact_trigger, agent_id[:8],
+                )
 
         # Record the freshly-started session in cc_sessions. Best-effort
         # — if the row insert fails, sync_engine's first-turn path will

@@ -295,24 +295,21 @@ async def hook_agent_stop(request: Request):
 async def hook_agent_post_compact(request: Request):
     """Receive PostCompact hook — ring the bell, let sync reconcile.
 
-    Under the "hook wakes, sync writes" principle this handler does not
-    touch Message rows or the display file. It does three hook-owned things:
+    Hook-owned responsibilities:
 
       1. Flip `ctx.compact_notified`/`compact_end_emitted` (in-memory sync
          coordination flags — not DB state).
       2. Emit the "Compact end" tool_activity WS event for snappy UI.
-      3. Wake sync after JSONL_FLUSH_DELAY so sync's compact-reconciliation
-         path (sync_full_scan reason="compact") can: mark the /compact
-         message completed, end the compact tool_activity Message, purge
-         orphan CLI rows, rebuild the display file, and emit the
-         completed-message WS event.
-
-      4. Transition agent status EXECUTING→IDLE (`_stop_generating`).
-         This is agent runtime state, hook-owned. Note: for auto-compact
-         the agent is still working — distinguishing manual vs auto via
-         PreCompact's `trigger` field is a separate in-flight fix (agent
-         3944f4ba); keep the status transition here for now so manual
-         `/compact` lands at IDLE correctly.
+      3. Drain + run compact full_scan so /compact mark-completed, boundary
+         bubbles, and tool_activity finalization land before the hook
+         returns.
+      4. Decide the EXECUTING→IDLE transition from `body["trigger"]`:
+           manual → user-invoked /compact, turn is over → flip IDLE
+           auto   → context-fill auto-compact, original task continues → no-op
+         Reading `trigger` straight from this hook's payload (instead of
+         stashing it on SyncContext during PreCompact and reading it back
+         here) keeps the decision self-contained and immune to the ctx
+         rotation that happens between PreCompact and PostCompact.
     """
     agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
@@ -365,11 +362,39 @@ async def hook_agent_post_compact(request: Request):
     # post-compact JSONL, not stale pre-compact bytes.
     await emit_context_usage(agent_id)
 
-    # Hook only wakes sync — sync_full_scan(reason="compact") reads
-    # ctx.compact_trigger (stashed by PreCompact) and decides:
-    #   manual → status → IDLE (user /compact done)
-    #   auto   → keep EXECUTING (original user task continues)
-    # No direct status write here under the state-machine refactor.
+    # Decide the compact-window EXECUTING→IDLE transition from the hook's
+    # own `trigger` field. Default unknown → "manual" (safer to land at
+    # IDLE than leave a stuck EXECUTING). Auto: leave EXECUTING — the user
+    # task that filled context is still ongoing.
+    _trigger = (body.get("trigger") if isinstance(body, dict) else None) or "manual"
+    if _trigger == "manual":
+        _db_pc = SessionLocal()
+        try:
+            _ag_pc = _db_pc.get(Agent, agent_id)
+            if (_ag_pc and _ag_pc.status == AgentStatus.EXECUTING):
+                _ag_pc.status = AgentStatus.IDLE
+                _ag_pc.generating_msg_id = None
+                _db_pc.commit()
+                from websocket import emit_agent_update as _eau_pc
+                asyncio.ensure_future(_eau_pc(
+                    agent_id, "IDLE", _ag_pc.project,
+                ))
+                logger.info(
+                    "PostCompact: trigger=manual, agent %s → IDLE",
+                    agent_id[:8],
+                )
+        except Exception:
+            _db_pc.rollback()
+            logger.exception(
+                "PostCompact: failed to flip status for %s", agent_id[:8],
+            )
+        finally:
+            _db_pc.close()
+    else:
+        logger.info(
+            "PostCompact: trigger=%s, keep agent %s EXECUTING",
+            _trigger, agent_id[:8],
+        )
 
     logger.info("hook_agent_post_compact: agent=%s", agent_id[:8])
     return {}
@@ -644,21 +669,17 @@ async def hook_agent_tool_activity(request: Request):
         kind = "compact"
         summary = "context compaction"
         await emit_tool_activity(agent_id, tool_name, phase)
-        # /compact skips UserPromptSubmit. Stash the trigger ("manual" or
-        # "auto") on the SyncContext so sync_full_scan can decide whether
-        # PostCompact ends the turn (manual) or continues it (auto).
-        # mark_delivered is deferred until AFTER the drain below so the
-        # single-check appears once the old session's final turns land in
-        # the DB. PostCompact then flips to double-check when the compact
-        # rewrite is fully done.
-        if ad:
-            _trigger = body.get("trigger") or "manual"
-            ctx_for_trigger = ad._sync_contexts.get(agent_id)
-            if ctx_for_trigger:
-                ctx_for_trigger.compact_trigger = _trigger
-            logger.info(
-                "PreCompact: trigger=%s for %s", _trigger, agent_id[:8],
-            )
+        # /compact skips UserPromptSubmit. mark_delivered is deferred until
+        # AFTER the drain below so the single-check appears once the old
+        # session's final turns land in the DB. PostCompact then flips to
+        # double-check when the compact rewrite is fully done.
+        # Note: `body["trigger"]` ("manual"|"auto") is also present in the
+        # PostCompact payload, so the IDLE-vs-EXECUTING decision is made
+        # there directly — no need to stash the trigger here.
+        logger.info(
+            "PreCompact: trigger=%s for %s",
+            body.get("trigger") or "manual", agent_id[:8],
+        )
 
         # Mark agent EXECUTING for the entire compact window. Compact runs
         # for 30s-2min; during that span dispatch_pending_message must NOT

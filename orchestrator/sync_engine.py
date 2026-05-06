@@ -73,11 +73,6 @@ class SyncContext:
     idle_polls: int = 0
     getsize_error_count: int = 0
     awaiting_rotation: bool = False     # set by SessionEnd, consumed by SessionStart
-    # PreCompact hook stashes the trigger here ("manual" | "auto"); sync_full_scan
-    # reads it on PostCompact processing to decide whether to flip status to IDLE
-    # (manual = user /compact done) or keep EXECUTING (auto = user task that
-    # filled context still ongoing). Reset to None after consumption.
-    compact_trigger: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1178,31 +1173,11 @@ async def sync_full_scan(ad, ctx: SyncContext, reason: str = "startup"):
                 ctx.compact_detected_at = _time.monotonic()
             ctx.compact_notified = False
 
-            # Compact trigger discrimination — owns the EXECUTING/IDLE
-            # transition for compact. PreCompact stashes ctx.compact_trigger:
-            #   "manual" → user invoked /compact, turn is over → IDLE
-            #   "auto"   → context-fill auto-compact, original user task
-            #              still ongoing → keep EXECUTING (don't write)
-            # Default unknown trigger to "manual" (safer to land at IDLE
-            # than to leave a stuck EXECUTING).
-            _trigger = ctx.compact_trigger or "manual"
-            _agent_for_compact = db.get(Agent, ctx.agent_id)
-            if (_agent_for_compact and _agent_for_compact.status not in
-                    (AgentStatus.STOPPED, AgentStatus.ERROR)):
-                if _trigger == "manual" and _agent_for_compact.status == AgentStatus.EXECUTING:
-                    _agent_for_compact.status = AgentStatus.IDLE
-                    _agent_for_compact.generating_msg_id = None
-                    _changes_made = True
-                    logger.info(
-                        "sync compact: trigger=manual, agent %s → IDLE",
-                        ctx.agent_id[:8],
-                    )
-                elif _trigger == "auto":
-                    logger.info(
-                        "sync compact: trigger=auto, keep agent %s status=%s",
-                        ctx.agent_id[:8], _agent_for_compact.status.value,
-                    )
-            ctx.compact_trigger = None  # consume
+            # Status transitions for the compact window are owned by the
+            # PreCompact (→EXECUTING) and PostCompact (manual→IDLE,
+            # auto→no-op) hook handlers in routers/hooks.py, which read
+            # `body["trigger"]` directly from each hook's payload. Sync
+            # only reconciles JSONL turns here.
 
         # Log drift — no UI bubbles, no silent skipping.
         if missing_in_db:

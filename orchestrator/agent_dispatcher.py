@@ -3961,7 +3961,14 @@ Here are the day's conversations (with timestamps):
         from display_writer import flush_agent as _flush_display
         _flush_display(agent_id)
 
-        self._emit(emit_agent_update(agent_id, "IDLE", agent_project))
+        # Don't emit a status update here. Session rotation alone does NOT
+        # imply IDLE — for /compact the DB status is EXECUTING (set by
+        # PreCompact) and PostCompact's sync_full_scan owns the trigger-aware
+        # transition (manual→IDLE, auto→keep EXECUTING). For /clear, the
+        # SessionStart(source=clear) hook is the authoritative path that
+        # flips status + emits. A blanket IDLE emit here would (a) lie to
+        # the frontend during the auto-compact window, and (b) race
+        # PostCompact's manual→IDLE emit with a redundant earlier one.
 
         # Push fresh context-usage snapshot so the chat-header pill
         # reflects the post-rotation state immediately (new JSONL has

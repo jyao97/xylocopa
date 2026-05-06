@@ -1320,6 +1320,49 @@ async def hook_agent_session_start(request: Request):
                 logger.exception("SessionStart(clear): failed to write sys bubble for %s", agent_id[:8])
             finally:
                 _db_clear.close()
+            # Flip agent.status to IDLE. /clear has no Stop hook and the
+            # post-clear JSONL is empty (no signals for sync_engine to
+            # infer from), so this hook is the authoritative path. Without
+            # it, agent stays EXECUTING from the USP hook that fired when
+            # the user sent /clear, until the next user message or the
+            # 10-min stale-EXECUTING fallback.
+            _flipped_to_idle = False
+            _db_status_clear = SessionLocal()
+            try:
+                _ag_clear = _db_status_clear.get(Agent, agent_id)
+                if (_ag_clear and _ag_clear.status not in
+                        (AgentStatus.STOPPED, AgentStatus.ERROR)):
+                    if _ag_clear.status != AgentStatus.IDLE:
+                        _ag_clear.status = AgentStatus.IDLE
+                        _ag_clear.generating_msg_id = None
+                        _db_status_clear.commit()
+                        _flipped_to_idle = True
+                        from websocket import emit_agent_update as _eau_clear
+                        asyncio.ensure_future(_eau_clear(
+                            agent_id, "IDLE", _ag_clear.project,
+                        ))
+                        logger.info(
+                            "SessionStart(clear): agent %s → IDLE",
+                            agent_id[:8],
+                        )
+            except Exception:
+                _db_status_clear.rollback()
+                logger.exception(
+                    "SessionStart(clear): failed to flip status for %s",
+                    agent_id[:8],
+                )
+            finally:
+                _db_status_clear.close()
+            # Drain any pre-sent queued messages typed in the brief window
+            # between /clear's USP (status=EXECUTING) and now (status=IDLE).
+            # /clear has no Stop hook, so without an explicit kick these
+            # messages would sit in the queue with no natural trigger.
+            if _flipped_to_idle:
+                ad_dispatch = getattr(request.app.state, "agent_dispatcher", None)
+                if ad_dispatch:
+                    asyncio.ensure_future(
+                        ad_dispatch.dispatch_pending_message(agent_id, delay=0)
+                    )
             # Sleep + drain (mirrors PostCompact pattern). The new session
             # is brand-new and typically empty, so drain is mostly defensive
             # — but it gives the rotation-signal pipeline time to install

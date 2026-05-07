@@ -28,8 +28,6 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   const [playing, setPlaying] = useState(false);
   const [videoError, setVideoError] = useState(null);
   const [hiresReady, setHiresReady] = useState({}); // { [index]: true } when full-res loaded
-  const [imgError, setImgError] = useState({}); // { [index]: true } only after BOTH cache-busted and original URL fail
-  const [retryOriginal, setRetryOriginal] = useState({}); // { [index]: true } after first failure → use non-cache-busted URL
   const [entered, setEntered] = useState(false);
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
@@ -43,14 +41,6 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
     const sep = url.includes("?") ? "&" : "?";
     return `${url}${sep}_t=${cacheBust}`;
   }, [cacheBust]);
-  // Two-stage error: cache-busted fail → retry original URL (proves the
-  // failure isn't from the `_t=` param itself); only on second failure do we
-  // mark missing. Avoids false "File no longer available" if cache-bust
-  // somehow round-trips through a path that mangles the response.
-  const handleImgError = useCallback((idx) => {
-    if (!retryOriginal[idx]) setRetryOriginal((p) => ({ ...p, [idx]: true }));
-    else setImgError((p) => ({ ...p, [idx]: true }));
-  }, [retryOriginal]);
 
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -135,18 +125,16 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   }, [currentIndex]);
 
   // Preload full-res image in background when thumbnail is shown.
-  // Cache-busted on first attempt so a stale browser cache (file was deleted
-  // since chat-list cached the URL) is revealed; falls back to original URL
-  // before declaring the file missing.
+  // Cache-busted so the lightbox always sees the current server state — a
+  // file deleted since the chat-list cached the URL won't resolve here.
   useEffect(() => {
     const cur = media[currentIndex];
-    if (!cur || cur.type === "video" || !cur.thumbSrc || hiresReady[currentIndex] || imgError[currentIndex]) return;
+    if (!cur || cur.type === "video" || !cur.thumbSrc || hiresReady[currentIndex]) return;
     const img = new Image();
     img.onload = () => setHiresReady((prev) => ({ ...prev, [currentIndex]: true }));
-    img.onerror = () => handleImgError(currentIndex);
-    img.src = retryOriginal[currentIndex] ? cur.src : withCacheBust(cur.src);
-    return () => { img.onload = null; img.onerror = null; };
-  }, [currentIndex, media, hiresReady, imgError, retryOriginal, withCacheBust, handleImgError]);
+    img.src = withCacheBust(cur.src);
+    return () => { img.onload = null; };
+  }, [currentIndex, media, hiresReady, withCacheBust]);
 
   // Clamp translate so image doesn't go off-screen too far
   const clampTranslate = useCallback(
@@ -558,9 +546,8 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
         }
       }}
     >
-      {/* Download button (always full-res) — hidden when file is missing
-          (otherwise <a download> would save the 27-byte JSON 404 body). */}
-      {!isCurrentVideo && !imgError[currentIndex] && (
+      {/* Download button (always full-res). */}
+      {!isCurrentVideo && (
         <button
           type="button"
           onClick={(e) => {
@@ -639,24 +626,12 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
           style={transformStyle}
           onTransitionEnd={handleTransitionEnd}
         />
-      ) : imgError[currentIndex] ? (
-        <div className="flex flex-col items-center justify-center max-h-[90vh] max-w-[90vw] px-8 py-12 text-white/80">
-          <svg className="w-16 h-16 mb-4 text-white/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-          </svg>
-          <div className="text-base font-medium mb-1">File no longer available</div>
-          <div className="text-xs text-white/50 truncate max-w-[80vw]">{current.filename || ""}</div>
-        </div>
       ) : (
         <img
           ref={imgRef}
-          src={(() => {
-            const baseSrc = current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src;
-            return retryOriginal[currentIndex] ? baseSrc : withCacheBust(baseSrc);
-          })()}
+          src={withCacheBust(current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src)}
           alt={current.filename || ""}
           draggable={false}
-          onError={() => handleImgError(currentIndex)}
           className="chat-attachment-media max-h-[90vh] max-w-[90vw] object-contain pointer-events-none select-none"
           style={transformStyle}
           onTransitionEnd={handleTransitionEnd}

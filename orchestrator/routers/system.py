@@ -103,6 +103,14 @@ async def download_webclip(request: Request):
     iOS Add-to-Home-Screen fetches icons via a system process that rejects
     self-signed / private-CA certs.  A Web Clip profile embeds the icon
     directly, bypassing the fetch entirely.
+
+    NOTE (2026-05-07): likely no longer needed — apple-touch-icon and the
+    PWA manifest icons are now served from the public jsdelivr CDN
+    (see frontend/vite.config.js ICON_BASE), so iOS's system fetcher no
+    longer hits the private CA.  Frontend cert-guide page now points users
+    to Safari's native Share → Add to Home Screen instead of this endpoint.
+    Keeping the route alive for now in case any old bookmarks still use it;
+    safe to remove after a release or two with no reports.
     """
     icon_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "public", "apple-touch-icon.png",

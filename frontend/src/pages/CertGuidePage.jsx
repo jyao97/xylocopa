@@ -27,16 +27,16 @@ const iosCertSteps = [
   },
 ];
 
-const iosWebClipSteps = [
+const iosPwaSteps = [
   {
     num: 1,
-    title: "Enter server IP",
-    desc: "Type the IP address you use to access Xylocopa (shown in your browser's address bar).",
+    title: "Open Share menu",
+    desc: "Tap the Share button (square with up-arrow) at the bottom of Safari.",
   },
   {
     num: 2,
-    title: "Install profile",
-    desc: "Tap the button below → Allow → Settings → General → VPN & Device Management → tap \"Xylocopa\" → Install.",
+    title: "Add to Home Screen",
+    desc: "Scroll down in the Share sheet, tap \"Add to Home Screen\", then tap \"Add\".",
   },
   {
     num: 3,
@@ -118,11 +118,6 @@ function StepList({ steps }) {
 
 export default function CertGuidePage() {
   const [platform, setPlatform] = useState(detectPlatform);
-  const [host, setHost] = useState(() => {
-    if (typeof window === "undefined") return "";
-    const h = window.location.hostname;
-    return h === "localhost" || h === "127.0.0.1" ? "" : h;
-  });
 
   // Capture Chrome's beforeinstallprompt so the Android PWA install button
   // can fire the native install dialog directly. May or may not fire
@@ -188,7 +183,7 @@ export default function CertGuidePage() {
         <div className="text-center mt-8 mb-5">
           <h2 className="text-base font-semibold text-heading">Step 2: Add to Home Screen</h2>
           <p className="text-sm text-dim mt-1">
-            {isAndroid ? "Install as a PWA from Chrome" : "Install as an app with the correct icon"}
+            {isAndroid ? "Install as a PWA from Chrome" : "Install as a PWA from Safari"}
           </p>
         </div>
 
@@ -211,25 +206,7 @@ export default function CertGuidePage() {
               )}
             </>
           ) : (
-            <>
-              <StepList steps={iosWebClipSteps} />
-
-              <input
-                type="text"
-                value={host}
-                onChange={(e) => setHost(e.target.value.trim())}
-                placeholder="e.g. 192.168.1.100 or 100.x.x.x"
-                className="mt-4 w-full px-4 py-3 rounded-xl bg-page/50 border border-divider text-heading placeholder-dim focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-colors text-sm"
-              />
-
-              <a
-                href={host ? `/api/webclip?host=${encodeURIComponent(host)}` : "#"}
-                onClick={(e) => { if (!host) e.preventDefault(); }}
-                className={`mt-3 w-full py-3 rounded-xl font-medium transition-all text-white text-center block ${host ? "bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98]" : "bg-cyan-600/40 cursor-not-allowed"}`}
-              >
-                Install Xylocopa App
-              </a>
-            </>
+            <StepList steps={iosPwaSteps} />
           )}
         </div>
 

@@ -327,7 +327,7 @@ Xylocopa was previously named **AgentHive**. The upgrade is backward compatible,
 - **Process names**: `pm2` processes are now `xylocopa-backend` / `xylocopa-frontend` (upgrade script removes the legacy `agenthive-*` entries).
 - **MCP / tmux**: `.mcp.json` entry renamed to `xylocopa` on first agent start; new agents use `xy-{id}` prefix, legacy `ah-{id}` sessions are still recognized so in-flight agents survive.
 - **Data dirs**: `~/.agenthive/uploads` auto-renames to `~/.xylocopa/uploads` on first backend start (if the new path doesn't exist).
-- **Browser / certs / Web Clip**: `localStorage` keys auto-migrate on first page load; existing certs keep working; re-download `Xylocopa.mobileconfig` from the login page if you want the renamed Home Screen entry.
+- **Browser / certs / Home Screen icon**: `localStorage` keys auto-migrate on first page load; existing certs keep working; remove the old AgentHive icon from your Home Screen and re-add Xylocopa via Safari Share → Add to Home Screen (iOS) or Chrome menu → Install app (Android) if you want the renamed entry.
 
 To rename your install dir: `mv ~/agenthive-main ~/xylocopa-main && cd ~/xylocopa-main && ./run.sh restart`.
 

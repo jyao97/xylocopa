@@ -35,12 +35,21 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   // Per-open cache-bust: stable for the lifetime of this lightbox instance
   // so swiping between images doesn't refetch, but each new lightbox open
   // forces a fresh request. Reveals files deleted since chat-list cached.
-  const [cacheBust] = useState(() => Date.now());
+  // The refresh button bumps it manually to retry a failed/stale image.
+  const [cacheBust, setCacheBust] = useState(() => Date.now());
   const withCacheBust = useCallback((url) => {
     if (!url) return url;
     const sep = url.includes("?") ? "&" : "?";
     return `${url}${sep}_t=${cacheBust}`;
   }, [cacheBust]);
+  const handleRefresh = useCallback(() => {
+    // New cacheBust → withCacheBust returns new URLs → React re-renders
+    // <img> with fresh src, browser issues new request. Resetting
+    // hiresReady restores the thumb→full-res progression for project
+    // files that have a separate thumb URL.
+    setCacheBust(Date.now());
+    setHiresReady({});
+  }, []);
 
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -546,6 +555,26 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
         }
       }}
     >
+      {/* Refresh button — forces a fresh server request for the current
+          image. Useful when the image is broken (file briefly missing,
+          server hiccup) without having to close and reopen the lightbox. */}
+      {!isCurrentVideo && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRefresh();
+          }}
+          title="Refresh"
+          className="absolute top-4 right-32 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-colors"
+          style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
+      )}
+
       {/* Download button (always full-res). */}
       {!isCurrentVideo && (
         <button

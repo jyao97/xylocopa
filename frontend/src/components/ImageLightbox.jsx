@@ -28,7 +28,8 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   const [playing, setPlaying] = useState(false);
   const [videoError, setVideoError] = useState(null);
   const [hiresReady, setHiresReady] = useState({}); // { [index]: true } when full-res loaded
-  const [imgError, setImgError] = useState({}); // { [index]: true } when image fails to load (file deleted/404)
+  const [imgError, setImgError] = useState({}); // { [index]: true } only after BOTH cache-busted and original URL fail
+  const [retryOriginal, setRetryOriginal] = useState({}); // { [index]: true } after first failure → use non-cache-busted URL
   const [entered, setEntered] = useState(false);
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
@@ -42,6 +43,14 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
     const sep = url.includes("?") ? "&" : "?";
     return `${url}${sep}_t=${cacheBust}`;
   }, [cacheBust]);
+  // Two-stage error: cache-busted fail → retry original URL (proves the
+  // failure isn't from the `_t=` param itself); only on second failure do we
+  // mark missing. Avoids false "File no longer available" if cache-bust
+  // somehow round-trips through a path that mangles the response.
+  const handleImgError = useCallback((idx) => {
+    if (!retryOriginal[idx]) setRetryOriginal((p) => ({ ...p, [idx]: true }));
+    else setImgError((p) => ({ ...p, [idx]: true }));
+  }, [retryOriginal]);
 
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -126,17 +135,18 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   }, [currentIndex]);
 
   // Preload full-res image in background when thumbnail is shown.
-  // Cache-busted so a stale browser cache (file was deleted since chat-list
-  // first cached the URL) is revealed via onerror → imgError state.
+  // Cache-busted on first attempt so a stale browser cache (file was deleted
+  // since chat-list cached the URL) is revealed; falls back to original URL
+  // before declaring the file missing.
   useEffect(() => {
     const cur = media[currentIndex];
     if (!cur || cur.type === "video" || !cur.thumbSrc || hiresReady[currentIndex] || imgError[currentIndex]) return;
     const img = new Image();
     img.onload = () => setHiresReady((prev) => ({ ...prev, [currentIndex]: true }));
-    img.onerror = () => setImgError((prev) => ({ ...prev, [currentIndex]: true }));
-    img.src = withCacheBust(cur.src);
+    img.onerror = () => handleImgError(currentIndex);
+    img.src = retryOriginal[currentIndex] ? cur.src : withCacheBust(cur.src);
     return () => { img.onload = null; img.onerror = null; };
-  }, [currentIndex, media, hiresReady, imgError, withCacheBust]);
+  }, [currentIndex, media, hiresReady, imgError, retryOriginal, withCacheBust, handleImgError]);
 
   // Clamp translate so image doesn't go off-screen too far
   const clampTranslate = useCallback(
@@ -640,10 +650,13 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
       ) : (
         <img
           ref={imgRef}
-          src={withCacheBust(current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src)}
+          src={(() => {
+            const baseSrc = current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src;
+            return retryOriginal[currentIndex] ? baseSrc : withCacheBust(baseSrc);
+          })()}
           alt={current.filename || ""}
           draggable={false}
-          onError={() => setImgError((prev) => ({ ...prev, [currentIndex]: true }))}
+          onError={() => handleImgError(currentIndex)}
           className="chat-attachment-media max-h-[90vh] max-w-[90vw] object-contain pointer-events-none select-none"
           style={transformStyle}
           onTransitionEnd={handleTransitionEnd}

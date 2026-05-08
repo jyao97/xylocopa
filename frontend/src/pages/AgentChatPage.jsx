@@ -399,10 +399,10 @@ function QuestionBubble({ item, agentId, onAnswered }) {
         }
 
         return (
-          <div key={qi} className={`rounded-xl bg-surface/60 border border-divider/40 p-3 ${isLocked ? "opacity-50" : ""}`}>
+          <div key={qi} className={`rounded-xl bg-elevated p-3 ${isLocked ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2 mb-1.5">
               {q.header && (
-                <span className="inline-block px-2 py-0.5 rounded-full bg-elevated text-dim text-[10px] font-semibold uppercase tracking-wider">
+                <span className="inline-block px-2 py-0.5 rounded-full bg-surface text-dim text-[10px] font-semibold uppercase tracking-wider">
                   {q.header}
                 </span>
               )}
@@ -434,10 +434,10 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                       isChosen
                         ? "bg-cyan-500/20 border-cyan-500/40 text-heading"
                         : dimmed
-                          ? "bg-surface/30 border-divider/30 text-dim/50"
+                          ? "bg-surface/50 border-divider/30 text-dim/50"
                           : isLocked
-                            ? "bg-surface/30 border-divider/30 text-dim/50 cursor-not-allowed"
-                            : "bg-surface/50 border-divider hover:bg-hover hover:border-heading/20 text-body"
+                            ? "bg-surface/50 border-divider/30 text-dim/50 cursor-not-allowed"
+                            : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
                     } ${isAnswered || isLocked ? "cursor-default" : "cursor-pointer"}`}
                   >
                     <div className="flex items-start gap-2">
@@ -564,9 +564,9 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-surface/60 border border-divider/40 p-3">
+    <div className="mt-3 rounded-xl bg-elevated p-3">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="inline-block px-2 py-0.5 rounded-full bg-elevated text-dim text-[10px] font-semibold uppercase tracking-wider">
+        <span className="inline-block px-2 py-0.5 rounded-full bg-surface text-dim text-[10px] font-semibold uppercase tracking-wider">
           Permission
         </span>
         {item.tool_name && (
@@ -597,8 +597,8 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
                 isChosen
                   ? "bg-cyan-500/20 border-cyan-500/40 text-heading"
                   : dimmed
-                    ? "bg-surface/30 border-divider/30 text-dim/50"
-                    : "bg-surface/50 border-divider hover:bg-hover hover:border-heading/20 text-body"
+                    ? "bg-surface/50 border-divider/30 text-dim/50"
+                    : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
               } ${disabled ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">
@@ -983,7 +983,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-surface/60 border border-divider/40 p-3">
+    <div className="mt-3 rounded-xl bg-elevated p-3">
       <div className="flex items-center gap-2 mb-2">
         <svg className="w-4 h-4 text-dim" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1006,7 +1006,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
       </div>
       {/* Inline plan content */}
       {planContent && planExpanded && (
-        <div className="mb-3 rounded-lg bg-surface/60 border border-divider/40 overflow-hidden">
+        <div className="mb-3 rounded-lg bg-surface overflow-hidden">
           <div className="px-3 py-2 max-h-[300px] overflow-y-auto text-sm">
             <SafeMarkdown fallback={planContent}>
               <div className="prose-sm text-body [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-heading [&_h1]:mt-3 [&_h1]:mb-1.5 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-heading [&_h2]:mt-2.5 [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-heading [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:text-xs [&_p]:mb-1.5 [&_ul]:text-xs [&_ul]:ml-4 [&_ul]:mb-1.5 [&_ol]:text-xs [&_ol]:ml-4 [&_ol]:mb-1.5 [&_li]:mb-0.5 [&_code]:text-[11px] [&_code]:bg-elevated [&_code]:px-1 [&_code]:rounded [&_pre]:text-[11px] [&_pre]:bg-elevated [&_pre]:p-2 [&_pre]:rounded [&_pre]:overflow-x-auto [&_pre]:mb-2">
@@ -1031,8 +1031,8 @@ function PlanBubble({ item, agentId, onAnswered }) {
                 isChosen
                   ? "bg-cyan-500/20 border-cyan-500/40 text-heading"
                   : dimmed
-                    ? "bg-surface/30 border-divider/30 text-dim/50"
-                    : "bg-surface/50 border-divider hover:bg-hover hover:border-heading/20 text-body"
+                    ? "bg-surface/50 border-divider/30 text-dim/50"
+                    : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
               } ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">

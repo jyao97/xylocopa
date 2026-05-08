@@ -673,14 +673,13 @@ function _isPlanDismissed(item) {
   return item.answer.startsWith("The user doesn't want to proceed") || item.answer.startsWith("User declined") || item.answer.startsWith("Tool use rejected");
 }
 
-function ProgressSuggestionsCard({ agentId, onDone }) {
+function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(new Set());
   const [edits, setEdits] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null); // "applied" | "discarded"
 
   useEffect(() => {
     fetchAgentSuggestions(agentId)
@@ -702,12 +701,13 @@ function ProgressSuggestionsCard({ agentId, onDone }) {
       const rejected_ids = suggestions
         .filter((s) => !selected.has(s.id))
         .map((s) => s.id);
-      await applyAgentSuggestions(agentId, { accepted, rejected_ids });
-      setResult("applied");
-      onDone?.();
+      const res = await applyAgentSuggestions(agentId, { accepted, rejected_ids });
+      // After backend commits, has_pending_suggestions=false flows through WS
+      // and the parent unmounts this card → InsightsHistoryCard takes over.
+      // We just report the count so the parent can toast.
+      onApplied?.(res?.accepted ?? accepted.length);
     } catch (err) {
       console.error("Failed to apply suggestions:", err);
-    } finally {
       setSubmitting(false);
     }
   };
@@ -716,27 +716,15 @@ function ProgressSuggestionsCard({ agentId, onDone }) {
     setSubmitting(true);
     try {
       await discardAgentSuggestions(agentId);
-      setResult("discarded");
-      onDone?.();
+      onDiscarded?.();
     } catch (err) {
       console.error("Failed to discard suggestions:", err);
-    } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) return null;
-  if (!suggestions.length && !result) return null;
-
-  if (result) {
-    return (
-      <div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
-        <p className="text-sm text-amber-300 font-medium">
-          {result === "applied" ? "Insights applied to PROGRESS.md" : "Suggestions dismissed"}
-        </p>
-      </div>
-    );
-  }
+  if (!suggestions.length) return null;
 
   return (
     <div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
@@ -878,7 +866,24 @@ function InsightsHistoryCard({ agentId }) {
       .catch(() => setLoaded(true));
   }, [agentId]);
 
-  if (!loaded || items.length === 0) return null;
+  // Loaded with zero items → genuinely no history to show. Hide entirely.
+  if (loaded && items.length === 0) return null;
+
+  // Render the chrome immediately so the bubble doesn't blink during the
+  // ~100-300ms fetch (e.g. right after Apply, when ProgressSuggestionsCard
+  // unmounts and we mount). Inner content fills in once fetch resolves.
+  if (!loaded) {
+    return (
+      <div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-amber-400/60 animate-pulse" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+          <span className="text-sm text-amber-300/50">Loading insights…</span>
+        </div>
+      </div>
+    );
+  }
 
   const accepted = items.filter((s) => s.status === "accepted");
   const rejected = items.filter((s) => s.status === "rejected");
@@ -2720,11 +2725,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // initial display load completes — keeps them off the critical path so
   // they don't compete with /display/sent for backend workers.
   const [criticalLoadDone, setCriticalLoadDone] = useState(false);
-  // Session-scoped flag: once user applies/discards on this page, keep
-  // ProgressSuggestionsCard mounted (showing the "applied/discarded" message)
-  // until they navigate away or refresh, even after has_pending_suggestions
-  // flips false. Resets naturally on unmount.
-  const [insightsResolvedThisSession, setInsightsResolvedThisSession] = useState(false);
   // Reads from agent.context_* (persisted on the row); no separate fetch.
   // Header pill renders immediately from briefCache; WS pushes live updates.
   const contextUsage = useContextUsage(agent);
@@ -2845,7 +2845,14 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       // Use briefCache as the agent stand-in if available, so the conditional
       // UI gates (status pill, ProgressSuggestionsCard, InsightsHistoryCard)
       // can render correctly without waiting on fetchAgent.
-      if (cachedBrief) {
+      // First mount only: seed agent state from cachedBrief (if available)
+      // so conditional UI gates can paint without waiting on fetchAgent.
+      // Subsequent loadData() calls (stop/resume/retry/etc) MUST NOT touch
+      // `agent`; the cache is up to ~5s stale relative to WS-pushed state,
+      // and clobbering would briefly revert insight_status / has_pending /
+      // status to old values (root cause of the apply-bubble disappearing
+      // and the Generating/Ready bubble jumping).
+      if (cachedBrief && !initialLoadDone.current) {
         setAgent(cachedBrief);
         // briefCache already has task_id — fetch the task in parallel with
         // the background fetchAgent so the Task chip lands at the same time
@@ -2884,11 +2891,12 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       if (!agentData || !agentData.id) {
         // Only error out if we had nothing to render with in the first place.
         if (!cachedBrief) return;
-      } else {
+      } else if (!initialLoadDone.current) {
+        // Authoritative agent fetch only on first mount. After that, agent
+        // state is maintained exclusively by WS (agent_update / *_ready
+        // events); a wholesale setAgent here would race with WS patches and
+        // re-introduce the bubble flicker even with the cachedBrief gate.
         setAgent(agentData);
-        // Skip if we already kicked this off from cachedBrief above. Only
-        // refetch when the agent is reporting a different task_id (rare —
-        // e.g. agent reassigned).
         if (
           agentData.task_id &&
           !taskData &&
@@ -2896,7 +2904,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         ) {
           fetchTaskV2(agentData.task_id).then(t => setTaskData(t)).catch(() => {});
         }
-        if (!initialLoadDone.current && agentData.muted != null) {
+        if (agentData.muted != null) {
           setMuted(agentData.muted);
           setAgentMuted(id, agentData.muted);
         }
@@ -3867,7 +3875,9 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       if (event.data.agent_id === id) {
         setAgent((prev) => prev ? { ...prev, has_pending_suggestions: true, insight_status: null } : prev);
       }
-      loadData();
+      // No loadData() — agent state is already patched and the suggestion
+      // rows are fetched by ProgressSuggestionsCard on mount. A full refetch
+      // here used to clobber the just-patched state with a stale brief.
       showToast("Insights ready for review");
     }
 
@@ -4757,17 +4767,29 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
 
 
         {/* Progress suggestions card */}
+        {/* Insights bubble — single source of truth is the agent row in DB:
+              insight_status=generating  → blue "Generating..." pill
+              insight_status=failed      → red "Failed, retry" pill
+              has_pending_suggestions    → amber pending-review card
+              else                       → amber collapsed history ("X applied")
+            Apply/Discard does NOT mutate frontend-only flags; the WS
+            agent_update flips has_pending_suggestions=false and the parent
+            naturally swaps ProgressSuggestionsCard for InsightsHistoryCard,
+            which renders the same shape on refresh / re-entry. */}
         {agent?.status === "STOPPED" && agent?.insight_status === "generating" && (
           <InsightStatusCard status="generating" agentId={id} onRetry={loadData} />
         )}
         {agent?.status === "STOPPED" && agent?.insight_status === "failed" && (
           <InsightStatusCard status="failed" agentId={id} onRetry={loadData} />
         )}
-        {criticalLoadDone && (agent?.has_pending_suggestions || insightsResolvedThisSession) && agent?.status === "STOPPED" && !agent?.insight_status && (
-          <ProgressSuggestionsCard agentId={id} onDone={() => { setInsightsResolvedThisSession(true); loadData(); }} />
-        )}
-        {criticalLoadDone && !agent?.has_pending_suggestions && !insightsResolvedThisSession && agent?.status === "STOPPED" && !agent?.insight_status && (
-          <InsightsHistoryCard agentId={id} />
+        {criticalLoadDone && agent?.status === "STOPPED" && !agent?.insight_status && (
+          agent?.has_pending_suggestions
+            ? <ProgressSuggestionsCard
+                agentId={id}
+                onApplied={(n) => showToast(`${n} insight${n !== 1 ? "s" : ""} applied to PROGRESS.md`)}
+                onDiscarded={() => showToast("Suggestions discarded")}
+              />
+            : <InsightsHistoryCard agentId={id} />
         )}
 
         <div ref={messagesEndRef} />

@@ -102,7 +102,12 @@ function StepList({ steps }) {
               {s.link && (
                 <>
                   {" "}
-                  <a href={s.link.href} className="text-cyan-400 underline">
+                  <a
+                    href={s.link.href}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-cyan-400 underline"
+                  >
                     {s.link.label}
                   </a>
                   .

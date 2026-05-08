@@ -1,51 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { authedFetch, filesExistsBatch } from "../lib/api";
+import { useState, useCallback, useMemo } from "react";
+import { authedFetch } from "../lib/api";
+import { parseFileUrl, useBatchExists } from "../lib/mediaState";
+import MissingFileCard from "./MissingFileCard";
 import ImageLightbox from "./ImageLightbox";
 
-// Parse /api/files/<project>/<path> URL into {project, path}, or null
-// for non-project URLs (uploads, http, etc) which we treat as always-exists.
-// Strips ?query (notably the ?token=… that fileUrl() appends for <img> auth)
-// so the backend doesn't see "<path>?token=..." as the filename.
-function parseFileUrl(url) {
-  if (!url) return null;
-  const noQuery = url.split("?")[0];
-  const m = noQuery.match(/^\/?api\/files\/([^/]+)\/(.+)$/);
-  if (!m) return null;
-  return { project: decodeURIComponent(m[1]), path: decodeURIComponent(m[2]) };
-}
-
-// Batch-probe existence + size + mtime for a list of attachments via the
-// backend exists-batch endpoint. One round-trip replaces N per-row HEAD
-// probes (HEAD wasn't registered on the GET file route — every probe came
-// back 405, marking everything missing). Returns a map keyed by resolvedUrl
-// with { exists, size, mtime }; entries for non-project URLs are absent
-// (caller treats them as exists).
-function useBatchExists(attachments) {
-  const [statMap, setStatMap] = useState({});
-  const probeKeys = useMemo(() => {
-    if (!attachments) return [];
-    return attachments
-      .map((a) => a.resolvedUrl)
-      .filter((u) => parseFileUrl(u))
-      .sort();
-  }, [attachments]);
-  const cacheKey = probeKeys.join("|");
-  useEffect(() => {
-    if (!probeKeys.length) { setStatMap({}); return; }
-    let cancelled = false;
-    const items = probeKeys.map((u) => parseFileUrl(u));
-    filesExistsBatch(items)
-      .then((resp) => {
-        if (cancelled) return;
-        const next = {};
-        const results = resp?.results || [];
-        probeKeys.forEach((u, i) => { next[u] = results[i] || { exists: false }; });
-        setStatMap(next);
-      })
-      .catch(() => { if (!cancelled) setStatMap({}); });
-    return () => { cancelled = true; };
-  }, [cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  return statMap;
+// useBatchExists now takes URL strings; project this from attachment objects.
+function urlsFromAttachments(attachments) {
+  return attachments ? attachments.map((a) => a.resolvedUrl) : [];
 }
 
 // --- Shared action buttons (download + copy path) ---
@@ -99,23 +60,6 @@ function ActionButtons({ src, filename, originalPath }) {
         )}
       </button>
     </span>
-  );
-}
-
-// --- Missing-file fallback card (path didn't resolve) ---
-
-function MissingFileCard({ filename, originalPath }) {
-  return (
-    <div
-      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated max-w-[280px]"
-      title={originalPath || filename}
-    >
-      <svg className="w-4 h-4 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-      <span className="text-xs text-dim truncate flex-1 min-w-0">{filename}</span>
-      <span className="text-[10px] text-dim uppercase shrink-0 opacity-60">missing</span>
-    </div>
   );
 }
 
@@ -353,7 +297,8 @@ function DocGroupCard({ docs, statMap }) {
 
 export default function FileAttachments({ attachments, compact }) {
   const [lightbox, setLightbox] = useState(null); // { media, initialIndex } or null
-  const statMap = useBatchExists(attachments);
+  const urls = useMemo(() => urlsFromAttachments(attachments), [attachments]);
+  const statMap = useBatchExists(urls);
 
   if (!attachments || attachments.length === 0) return null;
   // Per-att helper: resolves the batched stat (or treats non-project URLs as exists).

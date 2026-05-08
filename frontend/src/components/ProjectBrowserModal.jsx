@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { fetchProjectTree, browseProjectFile, downloadFile as dlFile } from "../lib/api";
+import { useFileExists, withCacheBust } from "../lib/mediaState";
 import { renderMarkdown } from "../lib/formatters";
 import { fileUrl } from "../lib/urls";
 import { SCROLL_SAVE_DEBOUNCE } from "../lib/constants";
+import MissingFileCard from "./MissingFileCard";
 
 /* ---- one-time cleanup of old project-scoped filebrowser cache ---- */
 const FB_MIGRATED_KEY = "filebrowser:v2-migrated";
@@ -132,6 +134,13 @@ function FileViewer({ project, node }) {
   const [loading, setLoading] = useState(!isBinary);
   const [error, setError] = useState(null);
 
+  // Stat the binary file so we can show a "missing" card if it's been
+  // deleted server-side, and use mtime as a stable cache-bust key.
+  const url = fileUrl(project, node.path);
+  const fileStat = useFileExists(isBinary ? url : null);
+  const isMissing = isBinary && fileStat?.exists === false;
+  const mediaSrc = withCacheBust(url, fileStat?.mtime ?? null);
+
   useEffect(() => {
     if (isBinary) return;
     setLoading(true);
@@ -145,30 +154,37 @@ function FileViewer({ project, node }) {
       .finally(() => setLoading(false));
   }, [project, node.path, isBinary]);
 
+  if (isMissing) {
+    return (
+      <div className="p-4 flex items-center justify-center">
+        <MissingFileCard filename={node.name} originalPath={node.path} />
+      </div>
+    );
+  }
   if (isVideo) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <video controls className="max-w-full max-h-[80vh] rounded-lg" src={fileUrl(project, node.path)} />
+        <video controls className="max-w-full max-h-[80vh] rounded-lg" src={mediaSrc} />
       </div>
     );
   }
   if (isImage) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <img alt={node.name} className="max-w-full max-h-[80vh] rounded-lg" src={fileUrl(project, node.path)} />
+        <img alt={node.name} className="max-w-full max-h-[80vh] rounded-lg" src={mediaSrc} />
       </div>
     );
   }
   if (isAudio) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <audio controls className="w-full max-w-md" src={fileUrl(project, node.path)} />
+        <audio controls className="w-full max-w-md" src={mediaSrc} />
       </div>
     );
   }
   if (isPDF) {
     return (
-      <iframe title={node.name} className="w-full h-[85vh] border-0" src={fileUrl(project, node.path)} />
+      <iframe title={node.name} className="w-full h-[85vh] border-0" src={mediaSrc} />
     );
   }
 

@@ -1527,6 +1527,61 @@ def _detect_plan_prompt(pane_text: str) -> str:
     return "unknown"
 
 
+# ---------------------------------------------------------------------------
+# JSONL flush watcher — event-driven wake replacement
+# ---------------------------------------------------------------------------
+
+_jsonl_observer = None
+
+
+def _get_jsonl_observer():
+    """Lazy module-level watchdog Observer singleton (one daemon thread)."""
+    global _jsonl_observer
+    if _jsonl_observer is None:
+        from watchdog.observers import Observer
+        _jsonl_observer = Observer()
+        _jsonl_observer.daemon = True
+        _jsonl_observer.start()
+    return _jsonl_observer
+
+
+async def wait_for_jsonl_flush(jsonl_path: str, timeout: float = 5.0) -> bool:
+    """Block until JSONL file is modified, or until timeout elapses.
+
+    Replaces fixed JSONL_FLUSH_DELAY sleep — wakes as soon as CC actually
+    flushes the new turn to disk, instead of betting on a static delay.
+    Returns True on observed modify event, False on timeout.
+    """
+    from watchdog.events import FileSystemEventHandler
+
+    if not jsonl_path or not os.path.exists(os.path.dirname(jsonl_path)):
+        return False
+
+    event = asyncio.Event()
+    loop = asyncio.get_event_loop()
+    target = os.path.realpath(jsonl_path)
+
+    class _Handler(FileSystemEventHandler):
+        def on_modified(self, ev):
+            if not ev.is_directory and os.path.realpath(ev.src_path) == target:
+                loop.call_soon_threadsafe(event.set)
+
+    observer = _get_jsonl_observer()
+    watch = observer.schedule(
+        _Handler(), os.path.dirname(jsonl_path), recursive=False,
+    )
+    try:
+        await asyncio.wait_for(event.wait(), timeout=timeout)
+        return True
+    except asyncio.TimeoutError:
+        return False
+    finally:
+        try:
+            observer.unschedule(watch)
+        except (KeyError, ValueError):
+            pass
+
+
 class AgentDispatcher:
     """Dispatch loop for persistent agent processes."""
 

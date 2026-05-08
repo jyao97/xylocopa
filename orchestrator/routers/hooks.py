@@ -470,12 +470,16 @@ async def hook_agent_tool_activity(request: Request):
         # immediately so it imports the assistant turn from JSONL. By the
         # time PreToolUse fires, the tool_use block is already in JSONL.
         if tool_name in ("AskUserQuestion", "ExitPlanMode") and ad:
-            # Wait for JSONL flush then wake sync
-            async def _delayed_interactive_wake(_aid):
-                from config import JSONL_FLUSH_DELAY
-                await asyncio.sleep(JSONL_FLUSH_DELAY)
+            # Event-driven wake: watch the JSONL file for the CC tool_use
+            # flush. Replaces a fixed JSONL_FLUSH_DELAY sleep that missed
+            # cases where CC's internal buffer flushed slower than expected.
+            async def _wait_jsonl_then_wake(_aid):
+                from agent_dispatcher import wait_for_jsonl_flush
+                ctx = ad._sync_contexts.get(_aid)
+                if ctx and ctx.jsonl_path:
+                    await wait_for_jsonl_flush(ctx.jsonl_path, timeout=5.0)
                 ad.wake_sync(_aid)
-            asyncio.ensure_future(_delayed_interactive_wake(agent_id))
+            asyncio.ensure_future(_wait_jsonl_then_wake(agent_id))
     elif hook_event in ("PostToolUse", "PostToolUseFailure"):
         tool_name = body.get("tool_name", "")
         phase = "end"

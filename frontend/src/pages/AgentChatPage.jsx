@@ -430,14 +430,14 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                     onClick={() => {
                       if (!isAnswered && !isLocked) handleSubmit(qi, oi);
                     }}
-                    className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all ${
+                    className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                       isChosen
-                        ? "bg-hover text-heading"
+                        ? "bg-hover border-transparent text-heading"
                         : dimmed
-                          ? "bg-elevated/40 text-dim/50"
+                          ? "bg-transparent border-divider/60 text-dim/50"
                           : isLocked
-                            ? "bg-elevated/40 text-dim/50 cursor-not-allowed"
-                            : "bg-elevated hover:bg-hover text-body"
+                            ? "bg-transparent border-divider/60 text-dim/50 cursor-not-allowed"
+                            : "bg-transparent border-edge hover:bg-elevated text-body"
                     } ${isAnswered || isLocked ? "cursor-default" : "cursor-pointer"}`}
                   >
                     <div className="flex items-start gap-2">
@@ -593,12 +593,12 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
               type="button"
               disabled={disabled}
               onClick={() => { if (!isAnswered) handleSelect(oi); }}
-              className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all ${
+              className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? "bg-hover text-heading"
+                  ? "bg-hover border-transparent text-heading"
                   : dimmed
-                    ? "bg-elevated/40 text-dim/50"
-                    : "bg-elevated hover:bg-hover text-body"
+                    ? "bg-transparent border-divider/60 text-dim/50"
+                    : "bg-transparent border-edge hover:bg-elevated text-body"
               } ${disabled ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">
@@ -1026,12 +1026,12 @@ function PlanBubble({ item, agentId, onAnswered }) {
               type="button"
               disabled={isAnswered || submitting}
               onClick={() => !isAnswered && handleSelect(oi)}
-              className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all ${
+              className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? "bg-hover text-heading"
+                  ? "bg-hover border-transparent text-heading"
                   : dimmed
-                    ? "bg-elevated/40 text-dim/50"
-                    : "bg-elevated hover:bg-hover text-body"
+                    ? "bg-transparent border-divider/60 text-dim/50"
+                    : "bg-transparent border-edge hover:bg-elevated text-body"
               } ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">

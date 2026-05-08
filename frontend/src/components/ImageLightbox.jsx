@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { downloadFile } from "../lib/api";
+import { useFileExists, withCacheBust } from "../lib/mediaState";
+import MissingFileCard from "./MissingFileCard";
 import {
   SWIPE_THRESHOLD, DISMISS_THRESHOLD,
   LIGHTBOX_DOUBLE_TAP_WINDOW, LIGHTBOX_DOUBLE_TAP_DIST,
@@ -32,24 +34,14 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
 
-  // Per-open cache-bust: stable for the lifetime of this lightbox instance
-  // so swiping between images doesn't refetch, but each new lightbox open
-  // forces a fresh request. Reveals files deleted since chat-list cached.
-  // The refresh button bumps it manually to retry a failed/stale image.
-  const [cacheBust, setCacheBust] = useState(() => Date.now());
-  const withCacheBust = useCallback((url) => {
-    if (!url) return url;
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}_t=${cacheBust}`;
-  }, [cacheBust]);
-  const handleRefresh = useCallback(() => {
-    // New cacheBust → withCacheBust returns new URLs → React re-renders
-    // <img> with fresh src, browser issues new request. Resetting
-    // hiresReady restores the thumb→full-res progression for project
-    // files that have a separate thumb URL.
-    setCacheBust(Date.now());
-    setHiresReady({});
-  }, []);
+  // Stat the current file: drives the missing-file overlay and gives us
+  // mtime to use as a cache-bust key (URL only changes when content does,
+  // so the browser cache stays useful). Replaces the old Date.now()-based
+  // cacheBust + manual refresh button — the stat call is the source of truth.
+  const currentSrc = media[currentIndex]?.src;
+  const fileStat = useFileExists(currentSrc);
+  const isMissing = fileStat?.exists === false;
+  const cacheVersion = fileStat?.mtime ?? null;
 
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -134,16 +126,16 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
   }, [currentIndex]);
 
   // Preload full-res image in background when thumbnail is shown.
-  // Cache-busted so the lightbox always sees the current server state — a
-  // file deleted since the chat-list cached the URL won't resolve here.
+  // Cache-busted by mtime so we refetch only when the file actually changed.
   useEffect(() => {
     const cur = media[currentIndex];
     if (!cur || cur.type === "video" || !cur.thumbSrc || hiresReady[currentIndex]) return;
+    if (isMissing) return; // don't preload if server says it's gone
     const img = new Image();
     img.onload = () => setHiresReady((prev) => ({ ...prev, [currentIndex]: true }));
-    img.src = withCacheBust(cur.src);
+    img.src = withCacheBust(cur.src, cacheVersion);
     return () => { img.onload = null; };
-  }, [currentIndex, media, hiresReady, withCacheBust]);
+  }, [currentIndex, media, hiresReady, cacheVersion, isMissing]);
 
   // Clamp translate so image doesn't go off-screen too far
   const clampTranslate = useCallback(
@@ -555,28 +547,9 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
         }
       }}
     >
-      {/* Refresh button — forces a fresh server request for the current
-          image. Useful when the image is broken (file briefly missing,
-          server hiccup) without having to close and reopen the lightbox. */}
-      {!isCurrentVideo && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRefresh();
-          }}
-          title="Refresh"
-          className="absolute top-4 right-32 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-colors"
-          style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-          </svg>
-        </button>
-      )}
-
-      {/* Download button (always full-res). */}
-      {!isCurrentVideo && (
+      {/* Download button (full-res). Hidden when the file is gone — no
+          point downloading a 404 JSON body. */}
+      {!isCurrentVideo && !isMissing && (
         <button
           type="button"
           onClick={(e) => {
@@ -634,11 +607,13 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
         transition: "opacity 280ms cubic-bezier(0.22, 1.15, 0.36, 1), transform 280ms cubic-bezier(0.22, 1.15, 0.36, 1)",
         willChange: "opacity, transform",
       }}>
-      {isCurrentVideo ? (
+      {isMissing ? (
+        <MissingFileCard filename={current.filename || ""} dark />
+      ) : isCurrentVideo ? (
         <video
           ref={videoRef}
-          key={current.src}
-          src={current.src}
+          key={withCacheBust(current.src, cacheVersion)}
+          src={withCacheBust(current.src, cacheVersion)}
           poster={current.src + ".thumb.jpg"}
           preload="auto"
           playsInline
@@ -658,7 +633,7 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
       ) : (
         <img
           ref={imgRef}
-          src={withCacheBust(current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src)}
+          src={withCacheBust(current.thumbSrc && !hiresReady[currentIndex] ? current.thumbSrc : current.src, cacheVersion)}
           alt={current.filename || ""}
           draggable={false}
           className="chat-attachment-media max-h-[90vh] max-w-[90vw] object-contain pointer-events-none select-none"
@@ -668,8 +643,9 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
       )}
       </div>
 
-      {/* Error overlay for videos */}
-      {isCurrentVideo && videoError && (
+      {/* Error overlay for videos (codec/playback errors — distinct from
+          isMissing which catches a deleted/never-existed file). */}
+      {isCurrentVideo && videoError && !isMissing && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-lg bg-red-500/80 text-white text-sm max-w-[80vw] text-center">
           {videoError}
         </div>

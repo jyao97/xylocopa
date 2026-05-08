@@ -432,17 +432,17 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                     }}
                     className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                       isChosen
-                        ? "bg-hover border-transparent text-heading"
+                        ? "bg-hover border-ring-hover text-heading"
                         : dimmed
                           ? "bg-transparent border-divider/60 text-dim/50"
                           : isLocked
                             ? "bg-transparent border-divider/60 text-dim/50 cursor-not-allowed"
-                            : "bg-transparent border-edge/40 hover:bg-elevated hover:border-edge/60 text-body"
+                            : "bg-transparent border-ring-hover hover:bg-elevated text-body"
                     } ${isAnswered || isLocked ? "cursor-default" : "cursor-pointer"}`}
                   >
                     <div className="flex items-start gap-2">
                       <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                        isChosen ? "border-cyan-400 bg-cyan-400" : "border-dim/40"
+                        isChosen ? "border-cyan-400 bg-cyan-400" : "border-ring-hover"
                       }`}>
                         {isChosen && (
                           <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -595,15 +595,15 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
               onClick={() => { if (!isAnswered) handleSelect(oi); }}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? "bg-hover border-transparent text-heading"
+                  ? "bg-hover border-ring-hover text-heading"
                   : dimmed
                     ? "bg-transparent border-divider/60 text-dim/50"
-                    : "bg-transparent border-edge/40 hover:bg-elevated hover:border-edge/60 text-body"
+                    : "bg-transparent border-ring-hover hover:bg-elevated text-body"
               } ${disabled ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-dim/40"
+                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-ring-hover"
                 }`}>
                   {isChosen && (
                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1028,15 +1028,15 @@ function PlanBubble({ item, agentId, onAnswered }) {
               onClick={() => !isAnswered && handleSelect(oi)}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? "bg-hover border-transparent text-heading"
+                  ? "bg-hover border-ring-hover text-heading"
                   : dimmed
                     ? "bg-transparent border-divider/60 text-dim/50"
-                    : "bg-transparent border-edge/40 hover:bg-elevated hover:border-edge/60 text-body"
+                    : "bg-transparent border-ring-hover hover:bg-elevated text-body"
               } ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-dim/40"
+                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-ring-hover"
                 }`}>
                   {isChosen && (
                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">

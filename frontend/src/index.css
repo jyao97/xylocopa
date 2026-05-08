@@ -944,6 +944,7 @@ svg text { font-family: inherit; }
   .bg-surface   { background-color: var(--color-surface); }
   .bg-input     { background-color: var(--color-input); }
   .bg-elevated  { background-color: var(--color-elevated); }
+  .bg-hover     { background-color: var(--color-hover); }
   .bg-inset     { background-color: var(--color-inset); }
 
   .hover\:bg-hover:hover { background-color: var(--color-hover); }
@@ -958,9 +959,10 @@ svg text { font-family: inherit; }
   .text-ghost   { color: var(--color-ghost); }
 
   /* Borders */
-  .border-divider { border-color: var(--color-divider); }
-  .border-edge    { border-color: var(--color-edge); }
-  .border-input   { border-color: var(--color-input); }
+  .border-divider     { border-color: var(--color-divider); }
+  .border-edge        { border-color: var(--color-edge); }
+  .border-ring-hover  { border-color: var(--color-ring-hover); }
+  .border-input       { border-color: var(--color-input); }
 
   .hover\:ring-ring-hover:hover { --tw-ring-color: var(--color-ring-hover); }
 

@@ -135,12 +135,13 @@ function FileViewer({ project, node }) {
   const [error, setError] = useState(null);
 
   // Stat the binary file so we can show a "missing" card if it's been
-  // deleted server-side, and use mtime as a stable cache-bust key.
-  // `refreshStat` lets the missing card re-probe (retry-after-deploy).
+  // deleted server-side. `refreshStat` lets the missing card re-probe
+  // (retry-after-deploy). Cache-bust applies only to image/pdf — changing
+  // <video>/<audio> src on stat-resolve restarts playback.
   const url = fileUrl(project, node.path);
   const { stat: fileStat, refresh: refreshStat } = useFileExists(isBinary ? url : null);
   const isMissing = isBinary && fileStat?.exists === false;
-  const mediaSrc = withCacheBust(url, fileStat?.mtime ?? null);
+  const stableSrc = withCacheBust(url, fileStat?.mtime ?? null);
 
   useEffect(() => {
     if (isBinary) return;
@@ -165,27 +166,27 @@ function FileViewer({ project, node }) {
   if (isVideo) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <video controls className="max-w-full max-h-[80vh] rounded-lg" src={mediaSrc} />
+        <video controls className="max-w-full max-h-[80vh] rounded-lg" src={url} />
       </div>
     );
   }
   if (isImage) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <img alt={node.name} className="max-w-full max-h-[80vh] rounded-lg" src={mediaSrc} />
+        <img alt={node.name} className="max-w-full max-h-[80vh] rounded-lg" src={stableSrc} />
       </div>
     );
   }
   if (isAudio) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <audio controls className="w-full max-w-md" src={mediaSrc} />
+        <audio controls className="w-full max-w-md" src={url} />
       </div>
     );
   }
   if (isPDF) {
     return (
-      <iframe title={node.name} className="w-full h-[85vh] border-0" src={mediaSrc} />
+      <iframe title={node.name} className="w-full h-[85vh] border-0" src={stableSrc} />
     );
   }
 

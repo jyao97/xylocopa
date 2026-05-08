@@ -437,7 +437,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                           ? "bg-transparent border-divider/60 text-dim/50"
                           : isLocked
                             ? "bg-transparent border-divider/60 text-dim/50 cursor-not-allowed"
-                            : "bg-transparent border-edge hover:bg-elevated text-body"
+                            : "bg-transparent border-edge/40 hover:bg-elevated hover:border-edge/60 text-body"
                     } ${isAnswered || isLocked ? "cursor-default" : "cursor-pointer"}`}
                   >
                     <div className="flex items-start gap-2">
@@ -598,7 +598,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
                   ? "bg-hover border-transparent text-heading"
                   : dimmed
                     ? "bg-transparent border-divider/60 text-dim/50"
-                    : "bg-transparent border-edge hover:bg-elevated text-body"
+                    : "bg-transparent border-edge/40 hover:bg-elevated hover:border-edge/60 text-body"
               } ${disabled ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">
@@ -1031,7 +1031,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
                   ? "bg-hover border-transparent text-heading"
                   : dimmed
                     ? "bg-transparent border-divider/60 text-dim/50"
-                    : "bg-transparent border-edge hover:bg-elevated text-body"
+                    : "bg-transparent border-edge/40 hover:bg-elevated hover:border-edge/60 text-body"
               } ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">

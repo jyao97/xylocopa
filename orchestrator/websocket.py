@@ -14,6 +14,18 @@ logger = logging.getLogger("orchestrator.ws")
 # Timeout for individual WS send operations (seconds)
 _SEND_TIMEOUT = 5
 
+# Event types to log at INFO in broadcast(). Others (high-frequency
+# tool_activity / message_* / display signals) stay silent to avoid log spam.
+# Keep this list focused on agent-lifecycle / insights / project-shape
+# transitions where post-hoc verification matters.
+_LOGGED_BROADCAST_TYPES = {
+    "agent_update",
+    "agent_created",
+    "progress_suggestions_ready",
+    "session_star_changed",
+    "project_update",
+}
+
 
 class ConnectionManager:
     """Manages active WebSocket connections and broadcasts events."""
@@ -109,7 +121,13 @@ class ConnectionManager:
         disconnected = [ws for ws, ok in results if not ok]
         for ws in disconnected:
             self.disconnect(ws)
-        return sum(1 for _, ok in results if ok)
+        sent_count = sum(1 for _, ok in results if ok)
+        if event_type in _LOGGED_BROADCAST_TYPES:
+            _key = (data.get("agent_id") or data.get("project")
+                    or data.get("name") or data.get("session_id") or "?")
+            logger.info("WS broadcast: type=%s key=%s sent=%d/%d",
+                        event_type, str(_key)[:8], sent_count, len(results))
+        return sent_count
 
     async def prune_stale(self):
         """Ping all clients and remove any that fail to respond."""

@@ -2720,6 +2720,11 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // initial display load completes — keeps them off the critical path so
   // they don't compete with /display/sent for backend workers.
   const [criticalLoadDone, setCriticalLoadDone] = useState(false);
+  // Session-scoped flag: once user applies/discards on this page, keep
+  // ProgressSuggestionsCard mounted (showing the "applied/discarded" message)
+  // until they navigate away or refresh, even after has_pending_suggestions
+  // flips false. Resets naturally on unmount.
+  const [insightsResolvedThisSession, setInsightsResolvedThisSession] = useState(false);
   // Reads from agent.context_* (persisted on the row); no separate fetch.
   // Header pill renders immediately from briefCache; WS pushes live updates.
   const contextUsage = useContextUsage(agent);
@@ -3834,6 +3839,9 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         if ("insight_status" in event.data) {
           patch.insight_status = event.data.insight_status || null;
         }
+        if ("has_pending_suggestions" in event.data) {
+          patch.has_pending_suggestions = !!event.data.has_pending_suggestions;
+        }
         if ("deferred_to" in event.data) {
           patch.deferred_to = event.data.deferred_to || null;
           setDeferredTo(event.data.deferred_to || null);
@@ -4755,10 +4763,10 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         {agent?.status === "STOPPED" && agent?.insight_status === "failed" && (
           <InsightStatusCard status="failed" agentId={id} onRetry={loadData} />
         )}
-        {criticalLoadDone && agent?.has_pending_suggestions && agent?.status === "STOPPED" && !agent?.insight_status && (
-          <ProgressSuggestionsCard agentId={id} onDone={loadData} />
+        {criticalLoadDone && (agent?.has_pending_suggestions || insightsResolvedThisSession) && agent?.status === "STOPPED" && !agent?.insight_status && (
+          <ProgressSuggestionsCard agentId={id} onDone={() => { setInsightsResolvedThisSession(true); loadData(); }} />
         )}
-        {criticalLoadDone && !agent?.has_pending_suggestions && agent?.status === "STOPPED" && !agent?.insight_status && (
+        {criticalLoadDone && !agent?.has_pending_suggestions && !insightsResolvedThisSession && agent?.status === "STOPPED" && !agent?.insight_status && (
           <InsightsHistoryCard agentId={id} />
         )}
 

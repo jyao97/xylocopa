@@ -87,7 +87,14 @@ const androidPwaSteps = [
   },
 ];
 
-function StepList({ steps }) {
+// Sticky flag so AuthGuard knows we're mid-cert-install and should bounce
+// the user back to /cert-guide instead of /login if the cert download
+// causes a same-tab navigation away (PWA WebViews especially).
+// Consumed once and TTL'd to 60s so it can't pollute normal navigation.
+export const CERT_FLOW_KEY = "xy:cert-flow-pending";
+export const CERT_FLOW_TTL_MS = 60_000;
+
+function StepList({ steps, onLinkClick }) {
   return (
     <div className="space-y-4">
       {steps.map((s) => (
@@ -104,8 +111,7 @@ function StepList({ steps }) {
                   {" "}
                   <a
                     href={s.link.href}
-                    target="_blank"
-                    rel="noopener"
+                    onClick={onLinkClick}
                     className="text-cyan-400 underline"
                   >
                     {s.link.label}
@@ -123,6 +129,15 @@ function StepList({ steps }) {
 
 export default function CertGuidePage() {
   const [platform, setPlatform] = useState(detectPlatform);
+
+  // We're back on cert-guide — clear any pending flag from a prior cert click.
+  useEffect(() => {
+    sessionStorage.removeItem(CERT_FLOW_KEY);
+  }, []);
+
+  const handleCertLinkClick = () => {
+    sessionStorage.setItem(CERT_FLOW_KEY, String(Date.now()));
+  };
 
   // Capture Chrome's beforeinstallprompt so the Android PWA install button
   // can fire the native install dialog directly. May or may not fire
@@ -181,7 +196,10 @@ export default function CertGuidePage() {
         </div>
 
         <div className="rounded-2xl bg-surface/60 backdrop-blur-md border border-divider/50 p-5 shadow-lg">
-          <StepList steps={isAndroid ? androidCertSteps : iosCertSteps} />
+          <StepList
+            steps={isAndroid ? androidCertSteps : iosCertSteps}
+            onLinkClick={handleCertLinkClick}
+          />
         </div>
 
         {/* Section 2: Add to Home Screen */}

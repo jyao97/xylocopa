@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
-import CertGuidePage from "./pages/CertGuidePage";
+import CertGuidePage, { CERT_FLOW_KEY, CERT_FLOW_TTL_MS } from "./pages/CertGuidePage";
 import ErrorBoundary from "./components/ErrorBoundary";
 import useTheme from "./hooks/useTheme";
 import { authCheck, clearAuthToken, fetchClaudeMdPending, getAuthToken } from "./lib/api";
@@ -140,6 +140,18 @@ function AuthGuard({ children }) {
     return () => window.removeEventListener("auth-expired", handler);
   }, [navigate]);
 
+  // If the user just clicked the CA-cert download on /cert-guide, the same-tab
+  // navigation can land them at "/" with no auth. Bounce them back to
+  // /cert-guide instead of /login (consume once, TTL-bounded).
+  const consumeCertFlowRedirect = () => {
+    const ts = sessionStorage.getItem(CERT_FLOW_KEY);
+    if (!ts) return false;
+    sessionStorage.removeItem(CERT_FLOW_KEY);
+    if (Date.now() - Number(ts) > CERT_FLOW_TTL_MS) return false;
+    navigate("/cert-guide", { replace: true });
+    return true;
+  };
+
   // Attempt auth check with auto-retry for transient server-down (e.g. restart)
   const attemptAuth = (token) => {
     const doCheck = () =>
@@ -158,9 +170,9 @@ function AuthGuard({ children }) {
             }
           } else if (token) {
             clearAuthToken("authcheck-not-authenticated");
-            navigate("/login", { replace: true });
+            if (!consumeCertFlowRedirect()) navigate("/login", { replace: true });
           } else {
-            navigate("/login", { replace: true });
+            if (!consumeCertFlowRedirect()) navigate("/login", { replace: true });
           }
           setChecked(true);
         })

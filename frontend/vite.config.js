@@ -47,6 +47,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Import existing push notification handler into generated SW
         importScripts: ['/push-handler.js'],
+        // Workbox's NavigationRoute serves cached index.html for any
+        // navigation request — that's correct for SPA routes like /tasks,
+        // but it was also intercepting /api/cert link clicks and returning
+        // index.html instead of the actual cert file (no extension =
+        // not in the default denylist). Same problem for any other backend
+        // resource users might link to.
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           // Fluent UI emoji SVGs from jsdelivr — immutable assets, cache forever
           {

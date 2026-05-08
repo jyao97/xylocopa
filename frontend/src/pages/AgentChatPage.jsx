@@ -389,13 +389,13 @@ function QuestionBubble({ item, agentId, onAnswered }) {
         let badgeClass = "";
         if (isDismissed) {
           badgeText = "Dismissed";
-          badgeClass = "bg-red-500/20 text-red-300";
+          badgeClass = "bg-red-500/15 text-red-500";
         } else if (item.auto_approved) {
           badgeText = "Auto-approved";
           badgeClass = "bg-elevated text-dim";
         } else if (answeredIdx != null) {
           badgeText = "Choice Sent";
-          badgeClass = "bg-cyan-500/20 text-cyan-300";
+          badgeClass = "bg-cyan-500/15 text-cyan-500";
         }
 
         return (
@@ -412,7 +412,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                 </span>
               )}
             </div>
-            <p className="text-sm text-cyan-500 font-medium mb-2">{q.question}</p>
+            <p className="text-sm text-heading font-medium mb-2">{q.question}</p>
             {isLocked && (
               <p className="text-xs text-dim mb-2 italic">Answer above first</p>
             )}
@@ -546,20 +546,20 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
   let badgeClass = "";
   if (isDismissed) {
     badgeText = "Dismissed";
-    badgeClass = "bg-red-500/20 text-red-300";
+    badgeClass = "bg-red-500/15 text-red-500";
   } else if (item.auto_approved) {
     badgeText = "Auto-approved";
     badgeClass = "bg-elevated text-dim";
   } else if (item.answer === "Timed out") {
     badgeText = "Timed out";
-    badgeClass = "bg-red-500/20 text-red-300";
+    badgeClass = "bg-red-500/15 text-red-500";
   } else if (answeredIdx != null) {
     const opt = options[answeredIdx];
     const optLabel = (opt?.label || opt || "").toLowerCase();
     if (optLabel.startsWith("no") || optLabel === "deny") {
-      badgeText = "Denied"; badgeClass = "bg-red-500/20 text-red-300";
+      badgeText = "Denied"; badgeClass = "bg-red-500/15 text-red-500";
     } else {
-      badgeText = "Allowed"; badgeClass = "bg-cyan-500/20 text-cyan-300";
+      badgeText = "Allowed"; badgeClass = "bg-cyan-500/15 text-cyan-500";
     }
   }
 
@@ -578,7 +578,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
           </span>
         )}
       </div>
-      <p className="text-sm text-cyan-500 font-medium mb-2">{q.question || "Permission required"}</p>
+      <p className="text-sm text-heading font-medium mb-2">{q.question || "Permission required"}</p>
       <div className="space-y-1.5">
         {options.map((opt, oi) => {
           const label = opt.label || opt;
@@ -973,22 +973,21 @@ function PlanBubble({ item, agentId, onAnswered }) {
   let badgeClass = "";
   if (isDismissed) {
     badgeText = "Dismissed";
-    badgeClass = "bg-red-500/20 text-red-300";
+    badgeClass = "bg-red-500/15 text-red-500";
   } else if (item.auto_approved) {
     badgeText = "Auto-approved";
     badgeClass = "bg-elevated text-dim";
   } else if (effectiveIdx != null) {
     badgeText = "Choice Sent";
-    badgeClass = "bg-cyan-500/20 text-cyan-300";
+    badgeClass = "bg-cyan-500/15 text-cyan-500";
   }
 
   return (
     <div className="mt-3 rounded-xl bg-elevated p-3">
       <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <span className="text-sm font-medium text-cyan-500">Plan Approval</span>
+        <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
+          Plan Approval
+        </span>
         {planContent && (
           <button
             type="button"

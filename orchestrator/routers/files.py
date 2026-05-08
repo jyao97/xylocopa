@@ -308,28 +308,32 @@ def _try_resolve(project: str, path: str, db) -> str | None:
 
 @router.post("/api/files/exists-batch")
 async def files_exists_batch(payload: dict, db: Session = Depends(get_db)):
-    """Batch-probe file existence + stat for a list of (project, path) items.
+    """Batch-probe file existence + stat for media URLs.
 
-    Replaces per-card HEAD probes from the frontend — FastAPI's @router.get
-    doesn't auto-register HEAD, and per-attachment requests don't scale.
-    Body: {"items": [{"project": str, "path": str}, ...]}
+    Body: {"items": [{"project": str, "path": str} | {"upload": str}, ...]}
     Returns: {"results": [{"exists": bool, "size": int|null, "mtime": float|null}, ...]}
     Order matches input order.
     """
     items = payload.get("items") or []
     results = []
     for it in items:
-        proj = (it or {}).get("project") or ""
-        pth = (it or {}).get("path") or ""
-        full = _try_resolve(proj, pth, db) if proj and pth else None
+        it = it or {}
+        full = None
+        if it.get("upload"):
+            safe_name = os.path.basename(it["upload"])
+            cand = os.path.join(UPLOADS_DIR, safe_name)
+            if os.path.isfile(cand):
+                full = cand
+        elif it.get("project") and it.get("path"):
+            full = _try_resolve(it["project"], it["path"], db)
         if full and os.path.isfile(full):
             try:
                 st = os.stat(full)
                 results.append({"exists": True, "size": st.st_size, "mtime": st.st_mtime})
+                continue
             except OSError:
-                results.append({"exists": False, "size": None, "mtime": None})
-        else:
-            results.append({"exists": False, "size": None, "mtime": None})
+                pass
+        results.append({"exists": False, "size": None, "mtime": None})
     return {"results": results}
 
 

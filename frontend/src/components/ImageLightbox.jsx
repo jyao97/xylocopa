@@ -612,8 +612,8 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
       ) : isCurrentVideo ? (
         <video
           ref={videoRef}
-          key={withCacheBust(current.src, cacheVersion)}
-          src={withCacheBust(current.src, cacheVersion)}
+          key={current.src}
+          src={current.src}
           poster={current.src + ".thumb.jpg"}
           preload="auto"
           playsInline

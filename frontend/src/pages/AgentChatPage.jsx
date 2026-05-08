@@ -399,7 +399,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
         }
 
         return (
-          <div key={qi} className={`rounded-xl bg-elevated p-3 ${isLocked ? "opacity-50" : ""}`}>
+          <div key={qi} className={`rounded-xl bg-surface p-3 ${isLocked ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2 mb-1.5">
               {q.header && (
                 <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
@@ -434,10 +434,10 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                       isChosen
                         ? "bg-hover border-edge text-heading"
                         : dimmed
-                          ? "bg-surface/50 border-divider/30 text-dim/50"
+                          ? "bg-elevated/40 border-divider/30 text-dim/50"
                           : isLocked
                             ? "bg-surface/50 border-divider/30 text-dim/50 cursor-not-allowed"
-                            : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
+                            : "bg-elevated border-divider hover:bg-hover hover:border-heading/20 text-body"
                     } ${isAnswered || isLocked ? "cursor-default" : "cursor-pointer"}`}
                   >
                     <div className="flex items-start gap-2">
@@ -564,7 +564,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-elevated p-3">
+    <div className="mt-3 rounded-xl bg-surface p-3">
       <div className="flex items-center gap-2 mb-1.5">
         <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
           Permission
@@ -597,8 +597,8 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
                 isChosen
                   ? "bg-hover border-edge text-heading"
                   : dimmed
-                    ? "bg-surface/50 border-divider/30 text-dim/50"
-                    : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
+                    ? "bg-elevated/40 border-divider/30 text-dim/50"
+                    : "bg-elevated border-divider hover:bg-hover hover:border-heading/20 text-body"
               } ${disabled ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">
@@ -983,7 +983,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-elevated p-3">
+    <div className="mt-3 rounded-xl bg-surface p-3">
       <div className="flex items-center gap-2 mb-2">
         <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
           Plan Approval
@@ -1005,7 +1005,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
       </div>
       {/* Inline plan content */}
       {planContent && planExpanded && (
-        <div className="mb-3 rounded-lg bg-surface overflow-hidden">
+        <div className="mb-3 rounded-lg bg-input overflow-hidden">
           <div className="px-3 py-2 max-h-[300px] overflow-y-auto text-sm">
             <SafeMarkdown fallback={planContent}>
               <div className="prose-sm text-body [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-heading [&_h1]:mt-3 [&_h1]:mb-1.5 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-heading [&_h2]:mt-2.5 [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-heading [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:text-xs [&_p]:mb-1.5 [&_ul]:text-xs [&_ul]:ml-4 [&_ul]:mb-1.5 [&_ol]:text-xs [&_ol]:ml-4 [&_ol]:mb-1.5 [&_li]:mb-0.5 [&_code]:text-[11px] [&_code]:bg-elevated [&_code]:px-1 [&_code]:rounded [&_pre]:text-[11px] [&_pre]:bg-elevated [&_pre]:p-2 [&_pre]:rounded [&_pre]:overflow-x-auto [&_pre]:mb-2">
@@ -1030,8 +1030,8 @@ function PlanBubble({ item, agentId, onAnswered }) {
                 isChosen
                   ? "bg-hover border-edge text-heading"
                   : dimmed
-                    ? "bg-surface/50 border-divider/30 text-dim/50"
-                    : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
+                    ? "bg-elevated/40 border-divider/30 text-dim/50"
+                    : "bg-elevated border-divider hover:bg-hover hover:border-heading/20 text-body"
               } ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
             >
               <div className="flex items-start gap-2">

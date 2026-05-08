@@ -392,17 +392,17 @@ function QuestionBubble({ item, agentId, onAnswered }) {
           badgeClass = "bg-red-500/20 text-red-300";
         } else if (item.auto_approved) {
           badgeText = "Auto-approved";
-          badgeClass = "bg-amber-500/20 text-amber-300";
+          badgeClass = "bg-elevated text-dim";
         } else if (answeredIdx != null) {
           badgeText = "Choice Sent";
           badgeClass = "bg-cyan-500/20 text-cyan-300";
         }
 
         return (
-          <div key={qi} className={`rounded-xl bg-indigo-500/10 border border-indigo-500/20 p-3 ${isLocked ? "opacity-50" : ""}`}>
+          <div key={qi} className={`rounded-xl bg-surface/60 border border-divider/40 p-3 ${isLocked ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2 mb-1.5">
               {q.header && (
-                <span className="inline-block px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-semibold uppercase tracking-wider">
+                <span className="inline-block px-2 py-0.5 rounded-full bg-elevated text-dim text-[10px] font-semibold uppercase tracking-wider">
                   {q.header}
                 </span>
               )}
@@ -549,7 +549,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
     badgeClass = "bg-red-500/20 text-red-300";
   } else if (item.auto_approved) {
     badgeText = "Auto-approved";
-    badgeClass = "bg-amber-500/20 text-amber-300";
+    badgeClass = "bg-elevated text-dim";
   } else if (item.answer === "Timed out") {
     badgeText = "Timed out";
     badgeClass = "bg-red-500/20 text-red-300";
@@ -559,20 +559,14 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
     if (optLabel.startsWith("no") || optLabel === "deny") {
       badgeText = "Denied"; badgeClass = "bg-red-500/20 text-red-300";
     } else {
-      badgeText = "Allowed"; badgeClass = "bg-emerald-500/20 text-emerald-300";
+      badgeText = "Allowed"; badgeClass = "bg-cyan-500/20 text-cyan-300";
     }
   }
 
-  const colorMap = {
-    emerald: { active: "bg-emerald-500/20 border-emerald-500/40 text-heading", dot: "border-emerald-400 bg-emerald-400" },
-    amber:   { active: "bg-amber-500/20 border-amber-500/40 text-heading", dot: "border-amber-400 bg-amber-400" },
-    red:     { active: "bg-red-500/20 border-red-500/40 text-heading", dot: "border-red-400 bg-red-400" },
-  };
-
   return (
-    <div className="mt-3 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+    <div className="mt-3 rounded-xl bg-surface/60 border border-divider/40 p-3">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="inline-block px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-semibold uppercase tracking-wider">
+        <span className="inline-block px-2 py-0.5 rounded-full bg-elevated text-dim text-[10px] font-semibold uppercase tracking-wider">
           Permission
         </span>
         {item.tool_name && (
@@ -589,11 +583,9 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
         {options.map((opt, oi) => {
           const label = opt.label || opt;
           const desc = opt.description || "";
-          const clr = opt.color || (oi === 0 ? "emerald" : oi === options.length - 1 ? "red" : "amber");
           const isChosen = answeredIdx === oi;
           const dimmed = isAnswered && !isChosen;
           const disabled = isAnswered || submitting;
-          const cs = colorMap[clr] || colorMap.amber;
 
           return (
             <button
@@ -603,7 +595,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
               onClick={() => { if (!isAnswered) handleSelect(oi); }}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? cs.active
+                  ? "bg-cyan-500/20 border-cyan-500/40 text-heading"
                   : dimmed
                     ? "bg-surface/30 border-divider/30 text-dim/50"
                     : "bg-surface/50 border-divider hover:bg-hover hover:border-heading/20 text-body"
@@ -611,7 +603,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                  isChosen ? cs.dot : "border-dim/40"
+                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-dim/40"
                 }`}>
                   {isChosen && (
                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -630,7 +622,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
       </div>
       {submitting && (
         <p className="text-xs text-dim mt-2 flex items-center gap-1.5">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           Sending response...
         </p>
       )}
@@ -976,12 +968,6 @@ function PlanBubble({ item, agentId, onAnswered }) {
     }
   };
 
-  const colorMap = {
-    emerald: { active: "bg-emerald-500/20 border-emerald-500/40 text-heading", dot: "border-emerald-400 bg-emerald-400" },
-    amber: { active: "bg-amber-500/20 border-amber-500/40 text-heading", dot: "border-amber-400 bg-amber-400" },
-    indigo: { active: "bg-indigo-500/20 border-indigo-500/40 text-heading", dot: "border-indigo-400 bg-indigo-400" },
-  };
-
   // Badge
   let badgeText = null;
   let badgeClass = "";
@@ -990,23 +976,19 @@ function PlanBubble({ item, agentId, onAnswered }) {
     badgeClass = "bg-red-500/20 text-red-300";
   } else if (item.auto_approved) {
     badgeText = "Auto-approved";
-    badgeClass = "bg-amber-500/20 text-amber-300";
+    badgeClass = "bg-elevated text-dim";
   } else if (effectiveIdx != null) {
     badgeText = "Choice Sent";
-    badgeClass = effectiveIdx <= 1
-      ? "bg-emerald-500/20 text-emerald-300"
-      : effectiveIdx === 3
-        ? "bg-indigo-500/20 text-indigo-300"
-        : "bg-amber-500/20 text-amber-300";
+    badgeClass = "bg-cyan-500/20 text-cyan-300";
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+    <div className="mt-3 rounded-xl bg-surface/60 border border-divider/40 p-3">
       <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-dim" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <span className="text-sm font-medium text-amber-300">Plan Approval</span>
+        <span className="text-sm font-medium text-body">Plan Approval</span>
         {planContent && (
           <button
             type="button"
@@ -1038,7 +1020,6 @@ function PlanBubble({ item, agentId, onAnswered }) {
         {PLAN_OPTIONS.map((opt, oi) => {
           const isChosen = effectiveIdx === oi;
           const dimmed = isAnswered && !isChosen;
-          const colors = colorMap[opt.color] || colorMap.indigo;
 
           return (
             <button
@@ -1048,7 +1029,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
               onClick={() => !isAnswered && handleSelect(oi)}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? colors.active
+                  ? "bg-cyan-500/20 border-cyan-500/40 text-heading"
                   : dimmed
                     ? "bg-surface/30 border-divider/30 text-dim/50"
                     : "bg-surface/50 border-divider hover:bg-hover hover:border-heading/20 text-body"
@@ -1056,7 +1037,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                  isChosen ? colors.dot : "border-dim/40"
+                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-dim/40"
                 }`}>
                   {isChosen && (
                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1075,7 +1056,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
       </div>
       {submitting && (
         <p className="text-xs text-dim mt-2 flex items-center gap-1.5">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           Sending response...
         </p>
       )}

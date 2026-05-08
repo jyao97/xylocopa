@@ -399,10 +399,10 @@ function QuestionBubble({ item, agentId, onAnswered }) {
         }
 
         return (
-          <div key={qi} className={`rounded-xl bg-cyan-500/10 p-3 ${isLocked ? "opacity-50" : ""}`}>
+          <div key={qi} className={`rounded-xl bg-elevated p-3 ${isLocked ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2 mb-1.5">
               {q.header && (
-                <span className="inline-block px-2 py-0.5 rounded-full bg-surface text-dim text-[10px] font-semibold uppercase tracking-wider">
+                <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
                   {q.header}
                 </span>
               )}
@@ -412,7 +412,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                 </span>
               )}
             </div>
-            <p className="text-sm text-heading font-medium mb-2">{q.question}</p>
+            <p className="text-sm text-cyan-500 font-medium mb-2">{q.question}</p>
             {isLocked && (
               <p className="text-xs text-dim mb-2 italic">Answer above first</p>
             )}
@@ -432,7 +432,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                     }}
                     className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                       isChosen
-                        ? "bg-cyan-500/30 border-cyan-500/60 text-heading"
+                        ? "bg-hover border-edge text-heading"
                         : dimmed
                           ? "bg-surface/50 border-divider/30 text-dim/50"
                           : isLocked
@@ -564,9 +564,9 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-cyan-500/10 p-3">
+    <div className="mt-3 rounded-xl bg-elevated p-3">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="inline-block px-2 py-0.5 rounded-full bg-surface text-dim text-[10px] font-semibold uppercase tracking-wider">
+        <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
           Permission
         </span>
         {item.tool_name && (
@@ -578,7 +578,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
           </span>
         )}
       </div>
-      <p className="text-sm text-heading font-medium mb-2">{q.question || "Permission required"}</p>
+      <p className="text-sm text-cyan-500 font-medium mb-2">{q.question || "Permission required"}</p>
       <div className="space-y-1.5">
         {options.map((opt, oi) => {
           const label = opt.label || opt;
@@ -595,7 +595,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
               onClick={() => { if (!isAnswered) handleSelect(oi); }}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? "bg-cyan-500/30 border-cyan-500/60 text-heading"
+                  ? "bg-hover border-edge text-heading"
                   : dimmed
                     ? "bg-surface/50 border-divider/30 text-dim/50"
                     : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"
@@ -983,12 +983,12 @@ function PlanBubble({ item, agentId, onAnswered }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-cyan-500/10 p-3">
+    <div className="mt-3 rounded-xl bg-elevated p-3">
       <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-dim" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <span className="text-sm font-medium text-body">Plan Approval</span>
+        <span className="text-sm font-medium text-cyan-500">Plan Approval</span>
         {planContent && (
           <button
             type="button"
@@ -1029,7 +1029,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
               onClick={() => !isAnswered && handleSelect(oi)}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-all border ${
                 isChosen
-                  ? "bg-cyan-500/30 border-cyan-500/60 text-heading"
+                  ? "bg-hover border-edge text-heading"
                   : dimmed
                     ? "bg-surface/50 border-divider/30 text-dim/50"
                     : "bg-surface border-divider hover:bg-hover hover:border-heading/20 text-body"

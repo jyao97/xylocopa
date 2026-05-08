@@ -136,8 +136,9 @@ function FileViewer({ project, node }) {
 
   // Stat the binary file so we can show a "missing" card if it's been
   // deleted server-side, and use mtime as a stable cache-bust key.
+  // `refreshStat` lets the missing card re-probe (retry-after-deploy).
   const url = fileUrl(project, node.path);
-  const fileStat = useFileExists(isBinary ? url : null);
+  const { stat: fileStat, refresh: refreshStat } = useFileExists(isBinary ? url : null);
   const isMissing = isBinary && fileStat?.exists === false;
   const mediaSrc = withCacheBust(url, fileStat?.mtime ?? null);
 
@@ -157,7 +158,7 @@ function FileViewer({ project, node }) {
   if (isMissing) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <MissingFileCard filename={node.name} originalPath={node.path} />
+        <MissingFileCard filename={node.name} originalPath={node.path} onRetry={refreshStat} />
       </div>
     );
   }

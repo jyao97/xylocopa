@@ -8,7 +8,7 @@
 // existence probe + cache-bust here means all three surfaces share one
 // signal and one fallback UX.
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { filesExistsBatch } from "./api";
 
 // Parse a media URL into the shape expected by /api/files/exists-batch.
@@ -28,11 +28,13 @@ export function parseFileUrl(url) {
 
 // Batch-probe existence + size + mtime for a list of URLs. One round-trip
 // replaces N HEAD probes (and HEAD isn't auto-registered on @router.get
-// anyway, so per-row probes used to come back 405). Returns a map keyed by
-// URL with { exists, size, mtime }; URLs that don't parse are absent
-// (caller treats them as exists).
+// anyway, so per-row probes used to come back 405). Returns:
+//   statMap — keyed by URL with { exists, size, mtime } (URLs that don't
+//             parse are absent; caller treats them as exists)
+//   refresh — re-runs the probe (for retry-after-missing UX)
 export function useBatchExists(urls) {
   const [statMap, setStatMap] = useState({});
+  const [refreshTick, setRefreshTick] = useState(0);
   const probeKeys = useMemo(() => {
     if (!urls) return [];
     return urls.filter((u) => parseFileUrl(u)).sort();
@@ -52,20 +54,23 @@ export function useBatchExists(urls) {
       })
       .catch(() => { if (!cancelled) setStatMap({}); });
     return () => { cancelled = true; };
-  }, [cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  return statMap;
+  }, [cacheKey, refreshTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
+  return { statMap, refresh };
 }
 
-// Single-URL convenience. Returns:
+// Single-URL convenience. Returns { stat, refresh } where stat is:
 //   null while probing,
 //   { exists: true, size, mtime } / { exists: false, ... } once known,
 //   { exists: true } for non-parseable URLs (optimistic — can't probe).
 export function useFileExists(url) {
   const urls = useMemo(() => (url ? [url] : []), [url]);
-  const map = useBatchExists(urls);
-  if (!url) return null;
-  if (!parseFileUrl(url)) return { exists: true };
-  return map[url] || null;
+  const { statMap, refresh } = useBatchExists(urls);
+  let stat;
+  if (!url) stat = null;
+  else if (!parseFileUrl(url)) stat = { exists: true };
+  else stat = statMap[url] || null;
+  return { stat, refresh };
 }
 
 // Append a cache-bust query param. Pass the file's mtime (from a stat

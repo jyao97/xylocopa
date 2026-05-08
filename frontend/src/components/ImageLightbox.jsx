@@ -36,10 +36,10 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
 
   // Stat the current file: drives the missing-file overlay and gives us
   // mtime to use as a cache-bust key (URL only changes when content does,
-  // so the browser cache stays useful). Replaces the old Date.now()-based
-  // cacheBust + manual refresh button — the stat call is the source of truth.
+  // so the browser cache stays useful). `refresh` lets the missing card
+  // re-probe — for the "file briefly gone, might be back" retry case.
   const currentSrc = media[currentIndex]?.src;
-  const fileStat = useFileExists(currentSrc);
+  const { stat: fileStat, refresh: refreshStat } = useFileExists(currentSrc);
   const isMissing = fileStat?.exists === false;
   const cacheVersion = fileStat?.mtime ?? null;
 
@@ -608,7 +608,7 @@ export default function ImageLightbox({ media, initialIndex = 0, onClose }) {
         willChange: "opacity, transform",
       }}>
       {isMissing ? (
-        <MissingFileCard filename={current.filename || ""} dark />
+        <MissingFileCard filename={current.filename || ""} dark onRetry={refreshStat} />
       ) : isCurrentVideo ? (
         <video
           ref={videoRef}

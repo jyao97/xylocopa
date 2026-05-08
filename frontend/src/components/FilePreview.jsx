@@ -65,22 +65,26 @@ function ActionButtons({ src, filename, originalPath }) {
 
 // --- Image Preview (compact thumbnail, tappable fullscreen) ---
 
-function ImagePreview({ src, thumbSrc, filename, originalPath, onOpen }) {
-  // Two-stage error: thumb fails → try full-res → then show error UI
+function ImagePreview({ src, thumbSrc, filename, originalPath, exists, onOpen, onRetry }) {
+  // Two-stage error: thumb fails → try full-res → then show error UI.
+  // Stat says missing → skip the load entirely. Either path shows the
+  // shared MissingFileCard (with retry when onRetry provided).
   const [thumbFailed, setThumbFailed] = useState(false);
-  const [error, setError] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   const activeSrc = thumbSrc && !thumbFailed ? thumbSrc : src;
 
   const handleError = () => {
     if (thumbSrc && !thumbFailed) {
-      setThumbFailed(true); // fall back to full-res src
+      setThumbFailed(true);
     } else {
-      setError(true); // both failed
+      setImgError(true);
     }
   };
 
-  if (error) return <MissingFileCard filename={filename} originalPath={originalPath} />;
+  if (exists === false || imgError) {
+    return <MissingFileCard filename={filename} originalPath={originalPath} onRetry={onRetry} />;
+  }
 
   return (
     <div>
@@ -103,13 +107,16 @@ function ImagePreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 
 // --- Video Preview (thumbnail, tappable to open in lightbox) ---
 
-function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
+function VideoPreview({ src, thumbSrc, filename, originalPath, exists, onOpen, onRetry }) {
   const [thumbError, setThumbError] = useState(false);
 
-  // A thumb URL was generated but the request 404'd — the file path
-  // didn't resolve. (No thumbSrc just means the source isn't on /api/files,
-  // e.g. user-uploaded video — that's not a "missing" case.)
-  if (thumbError) return <MissingFileCard filename={filename} originalPath={originalPath} />;
+  // Stat says missing → skip preview. Otherwise fall back to thumb-404
+  // detection (a thumb URL was generated but 404'd → file path didn't
+  // resolve; no thumbSrc just means the source isn't on /api/files,
+  // e.g. user-uploaded video — that's not a "missing" case).
+  if (exists === false || thumbError) {
+    return <MissingFileCard filename={filename} originalPath={originalPath} onRetry={onRetry} />;
+  }
 
   return (
     <div>
@@ -147,7 +154,7 @@ function VideoPreview({ src, thumbSrc, filename, originalPath, onOpen }) {
 
 // --- Doc/Code File Preview (collapsible card) ---
 
-function DocFilePreview({ src, filename, ext, originalPath, exists }) {
+function DocFilePreview({ src, filename, ext, originalPath, exists, onRetry }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState(null);
   const [loadState, setLoadState] = useState("idle"); // idle | loading | loaded | error
@@ -166,7 +173,7 @@ function DocFilePreview({ src, filename, ext, originalPath, exists }) {
     }
   }, [src, loadState]);
 
-  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
+  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} onRetry={onRetry} />;
 
   const handleToggle = () => {
     if (!expanded && loadState === "idle") loadContent();
@@ -222,8 +229,8 @@ function DocFilePreview({ src, filename, ext, originalPath, exists }) {
 
 // --- Generic File Card (non-media, non-doc — fallback for user uploads) ---
 
-function GenericFilePreview({ src, filename, originalPath, exists }) {
-  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} />;
+function GenericFilePreview({ src, filename, originalPath, exists, onRetry }) {
+  if (exists === false) return <MissingFileCard filename={filename} originalPath={originalPath} onRetry={onRetry} />;
   return (
     <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated max-w-[240px]">
       <svg className="w-4 h-4 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -237,20 +244,40 @@ function GenericFilePreview({ src, filename, originalPath, exists }) {
 
 // --- Grouped doc files card (collapsible list for 2+ doc files) ---
 
-function DocGroupRow({ att, exists }) {
+function DocGroupRow({ att, exists, onRetry }) {
   const filename = att.path.split("/").pop();
   const missing = exists === false;
+  const handleRetry = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onRetry?.();
+  };
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 hover:bg-hover transition-colors text-left"
+      className={`flex items-center gap-2 px-3 py-1.5 hover:bg-hover transition-colors text-left ${missing && onRetry ? "cursor-pointer" : ""}`}
       title={missing ? att.originalPath || filename : undefined}
+      onClick={missing && onRetry ? handleRetry : undefined}
     >
       <svg className="w-3.5 h-3.5 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
       </svg>
       <span className={`text-xs truncate flex-1 min-w-0 ${missing ? "text-dim" : "text-label"}`}>{filename}</span>
       {missing ? (
-        <span className="text-[10px] text-dim uppercase shrink-0 opacity-60">missing</span>
+        <>
+          <span className="text-[10px] text-dim uppercase shrink-0 opacity-60">missing</span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={handleRetry}
+              title="Check again"
+              className="p-0.5 rounded hover:bg-hover transition-colors text-dim hover:text-label shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </button>
+          )}
+        </>
       ) : (
         <>
           <span className="text-[10px] text-dim uppercase shrink-0">{att.ext}</span>
@@ -261,7 +288,7 @@ function DocGroupRow({ att, exists }) {
   );
 }
 
-function DocGroupCard({ docs, statMap }) {
+function DocGroupCard({ docs, statMap, onRetry }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -285,7 +312,7 @@ function DocGroupCard({ docs, statMap }) {
             const stat = statMap[att.resolvedUrl];
             // Non-project URLs (uploads, http) have no stat entry — treat as exists.
             const exists = stat ? stat.exists : true;
-            return <DocGroupRow key={att.path} att={att} exists={exists} />;
+            return <DocGroupRow key={att.path} att={att} exists={exists} onRetry={onRetry} />;
           })}
         </div>
       )}
@@ -298,7 +325,7 @@ function DocGroupCard({ docs, statMap }) {
 export default function FileAttachments({ attachments, compact }) {
   const [lightbox, setLightbox] = useState(null); // { media, initialIndex } or null
   const urls = useMemo(() => urlsFromAttachments(attachments), [attachments]);
-  const statMap = useBatchExists(urls);
+  const { statMap, refresh: refreshStat } = useBatchExists(urls);
 
   if (!attachments || attachments.length === 0) return null;
   // Per-att helper: resolves the batched stat (or treats non-project URLs as exists).
@@ -370,6 +397,8 @@ export default function FileAttachments({ attachments, compact }) {
       {/* Images and videos always render inline */}
       {mediaAtts.map((att, idx) => {
         const filename = att.path.split("/").pop();
+        const stat = statFor(att);
+        const exists = stat ? stat.exists : null;
         if (att.type === "image") {
           return (
             <ImagePreview
@@ -378,11 +407,24 @@ export default function FileAttachments({ attachments, compact }) {
               thumbSrc={att.thumbUrl}
               filename={filename}
               originalPath={att.originalPath}
+              exists={exists}
               onOpen={() => openLightbox(idx)}
+              onRetry={refreshStat}
             />
           );
         }
-        return <VideoPreview key={att.path} src={att.resolvedUrl} thumbSrc={att.thumbUrl} filename={filename} originalPath={att.originalPath} onOpen={() => openLightbox(idx)} />;
+        return (
+          <VideoPreview
+            key={att.path}
+            src={att.resolvedUrl}
+            thumbSrc={att.thumbUrl}
+            filename={filename}
+            originalPath={att.originalPath}
+            exists={exists}
+            onOpen={() => openLightbox(idx)}
+            onRetry={refreshStat}
+          />
+        );
       })}
       {/* Doc files: single card if 1, grouped card if 2+ */}
       {docs.length === 1 && (() => {
@@ -394,10 +436,11 @@ export default function FileAttachments({ attachments, compact }) {
             ext={docs[0].ext}
             originalPath={docs[0].originalPath}
             exists={stat ? stat.exists : null}
+            onRetry={refreshStat}
           />
         );
       })()}
-      {docs.length >= 2 && <DocGroupCard docs={docs} statMap={statMap} />}
+      {docs.length >= 2 && <DocGroupCard docs={docs} statMap={statMap} onRetry={refreshStat} />}
       {/* Generic fallback for non-media, non-doc */}
       {other.map((att) => {
         const stat = statFor(att);
@@ -408,6 +451,7 @@ export default function FileAttachments({ attachments, compact }) {
             filename={att.path.split("/").pop()}
             originalPath={att.originalPath}
             exists={stat ? stat.exists : null}
+            onRetry={refreshStat}
           />
         );
       })}

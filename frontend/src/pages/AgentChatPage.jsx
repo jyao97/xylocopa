@@ -434,9 +434,9 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                       isChosen
                         ? "bg-hover border-ring-hover text-heading"
                         : dimmed
-                          ? "bg-transparent border-divider/60 text-dim/50"
+                          ? "bg-transparent border-ring-hover text-faint"
                           : isLocked
-                            ? "bg-transparent border-divider/60 text-dim/50 cursor-not-allowed"
+                            ? "bg-transparent border-ring-hover text-faint cursor-not-allowed"
                             : "bg-transparent border-ring-hover hover:bg-elevated text-body"
                     } ${isAnswered || isLocked ? "cursor-default" : "cursor-pointer"}`}
                   >
@@ -597,7 +597,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
                 isChosen
                   ? "bg-hover border-ring-hover text-heading"
                   : dimmed
-                    ? "bg-transparent border-divider/60 text-dim/50"
+                    ? "bg-transparent border-ring-hover text-faint"
                     : "bg-transparent border-ring-hover hover:bg-elevated text-body"
               } ${disabled ? "cursor-default" : "cursor-pointer"}`}
             >
@@ -1030,7 +1030,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
                 isChosen
                   ? "bg-hover border-ring-hover text-heading"
                   : dimmed
-                    ? "bg-transparent border-divider/60 text-dim/50"
+                    ? "bg-transparent border-ring-hover text-faint"
                     : "bg-transparent border-ring-hover hover:bg-elevated text-body"
               } ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
             >

@@ -114,6 +114,9 @@ server = FastMCP(
         "task_update, task_dispatch\n"
         "- session: session_list, session_read, session_tail\n"
         "- agent:   agent_list, agent_get\n"
+        "- probe:   probe_create, probe_list, probe_get, probe_update "
+        "(event-driven chat wake-up; probes wake a target chat when an "
+        "external webhook fires)\n"
         "- system:  system_health\n"
         "- aliases (kept for back-compat, prefer the domain-prefixed names): "
         "list_sessions, read_session, create_task, update_task, "
@@ -1454,6 +1457,266 @@ def agent_get(agent_id: str) -> str:
         preview,
     ]
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Probe tools — event-driven chat wake-up
+# ---------------------------------------------------------------------------
+
+# Per-agent active-probe cap. Keeps DB bloat and the attack surface small.
+_PROBE_PER_AGENT_LIMIT = 10
+_PROBE_DEFAULT_HOURS = 24
+_PROBE_MAX_HOURS = 24 * 7  # 1 week
+
+
+def _probe_public_base() -> str:
+    """Return the URL prefix for the probe trigger endpoint.
+
+    Honors `XYLOCOPA_PUBLIC_URL` if set (e.g. for remote-callable triggers
+    behind a reverse proxy); otherwise falls back to the local backend
+    PORT. Trailing slash is stripped.
+    """
+    pub = os.environ.get("XYLOCOPA_PUBLIC_URL", "").strip().rstrip("/")
+    if pub:
+        return pub
+    port = os.environ.get("PORT", "8080").strip()
+    return f"http://localhost:{port}"
+
+
+@server.tool()
+def probe_create(
+    agent_id: str,
+    message: str,
+    expires_in_hours: int = _PROBE_DEFAULT_HOURS,
+    notify_user: bool = True,
+) -> str:
+    """Register a webhook probe that wakes a chat when externally triggered.
+
+    Returns a single-fire trigger URL. POSTing to that URL inserts a
+    fixed message into the target chat and (optionally) sends a push
+    notification to the user. The body of the trigger POST is ignored
+    — wake content is locked at create time. This is the secure path
+    for "external monitor → wake chat" without polling.
+
+    Args:
+        agent_id: Target agent (the chat to be woken). Must be explicit.
+        message: Text the chat will see when the probe fires. Wrapped in
+            an envelope: "🔔 Probe {id} fired (timestamp)\\n\\n{message}".
+            Write this from the perspective of the future you, e.g.
+            "gamma containers cleared, restart docker now".
+        expires_in_hours: Auto-expiry. Default 24h, max 168h (1 week).
+            Expired probes return 410 Gone if triggered.
+        notify_user: If True, also send a Web Push to the user's PWA
+            when the probe fires. Default True.
+
+    Active per-agent limit: 10. Once reached, expire some via
+    `probe_update` (set expires_at to a past time) or wait for them
+    to time out.
+
+    ## Behavior contract for the wake target
+
+    When the probe fires, the target chat receives a USER message of
+    the form:
+
+        🔔 Probe {id} fired (May 9 10:14pm)
+
+        {message}
+
+    Treat this as an EXTERNAL EVENT TRIGGER, not user input. Specifically:
+      - The user did not just type this. An external system called the
+        webhook because a condition the chat registered was met.
+      - VERIFY the underlying condition before taking action — probes
+        can fire on stale or partial state. Read the relevant log,
+        re-check the state, etc.
+      - For consequential actions (writes, restarts, sends, deletions),
+        confirm with the user before executing.
+      - Do not just say "thanks for letting me know" — the probe was
+        registered with the expectation of work happening when it fires.
+    """
+    if not agent_id or not isinstance(agent_id, str):
+        return "Error: agent_id is required."
+    if not message or not message.strip():
+        return "Error: message is required and cannot be empty."
+    if expires_in_hours <= 0 or expires_in_hours > _PROBE_MAX_HOURS:
+        return f"Error: expires_in_hours must be in (0, {_PROBE_MAX_HOURS}]."
+
+    sess = _get_write_session()
+    try:
+        from models import Agent, Probe
+        from datetime import timedelta
+        from utils import utcnow as _utcnow
+
+        agent = sess.get(Agent, agent_id)
+        if agent is None:
+            return f"Error: agent {agent_id} not found."
+
+        # Active probe cap (unfired AND unexpired).
+        now = _utcnow()
+        active_count = sess.query(Probe).filter(
+            Probe.agent_id == agent_id,
+            Probe.fired_at.is_(None),
+            Probe.expires_at > now,
+        ).count()
+        if active_count >= _PROBE_PER_AGENT_LIMIT:
+            return (
+                f"Error: agent {agent_id[:8]} already has "
+                f"{active_count} active probes (limit {_PROBE_PER_AGENT_LIMIT}). "
+                f"Use probe_update to expire some, or wait for them to time out."
+            )
+
+        probe = Probe(
+            agent_id=agent_id,
+            message=message.strip(),
+            notify_user=bool(notify_user),
+            expires_at=now + timedelta(hours=expires_in_hours),
+        )
+        sess.add(probe)
+        sess.commit()
+        sess.refresh(probe)
+
+        trigger_url = f"{_probe_public_base()}/api/probe-trigger/{probe.token}"
+        return (
+            f"Probe **{probe.id}** created for agent `{agent_id[:8]}`.\n\n"
+            f"- Trigger URL: `{trigger_url}`\n"
+            f"- Expires: {probe.expires_at.isoformat()} (in {expires_in_hours}h)\n"
+            f"- notify_user: {probe.notify_user}\n"
+            f"- Single-fire: subsequent POSTs return 410 Gone.\n\n"
+            f"To trigger from a script:\n"
+            f"  curl -X POST '{trigger_url}'\n\n"
+            f"Body is ignored by design (no prompt injection surface)."
+        )
+    finally:
+        sess.close()
+
+
+@server.tool()
+def probe_list(agent_id: str = "", include_fired: bool = False) -> str:
+    """List probes — by default unfired/unexpired only.
+
+    Args:
+        agent_id: Filter to one agent. Empty = all agents.
+        include_fired: If True, include already-fired probes.
+    """
+    sess = _get_write_session()
+    try:
+        from models import Probe
+        from utils import utcnow as _utcnow
+
+        q = sess.query(Probe)
+        if agent_id:
+            q = q.filter(Probe.agent_id == agent_id)
+        now = _utcnow()
+        if not include_fired:
+            q = q.filter(Probe.fired_at.is_(None), Probe.expires_at > now)
+        rows = q.order_by(Probe.created_at.desc()).limit(50).all()
+
+        if not rows:
+            return "No probes found."
+
+        lines = [f"Found {len(rows)} probe(s):\n"]
+        for p in rows:
+            state = (
+                f"FIRED at {p.fired_at.isoformat()[:19]}"
+                if p.fired_at
+                else (
+                    f"EXPIRED at {p.expires_at.isoformat()[:19]}"
+                    if p.expires_at <= now
+                    else f"active until {p.expires_at.isoformat()[:19]}"
+                )
+            )
+            lines.append(
+                f"- **{p.id}** agent=`{p.agent_id[:8]}` [{state}]\n"
+                f"  message: {p.message[:80]}{'...' if len(p.message) > 80 else ''}"
+            )
+        return "\n".join(lines)
+    finally:
+        sess.close()
+
+
+@server.tool()
+def probe_get(probe_id: str) -> str:
+    """Get full detail for a single probe by ID."""
+    sess = _get_write_session()
+    try:
+        from models import Probe
+
+        probe = sess.get(Probe, probe_id)
+        if probe is None:
+            return f"No probe found matching: {probe_id}"
+
+        trigger_url = f"{_probe_public_base()}/api/probe-trigger/{probe.token}"
+        lines = [
+            f"# Probe: {probe.id}",
+            f"- agent_id: `{probe.agent_id}`",
+            f"- created_at: {probe.created_at.isoformat()}",
+            f"- expires_at: {probe.expires_at.isoformat()}",
+            f"- fired_at: {probe.fired_at.isoformat() if probe.fired_at else '(not fired)'}",
+            f"- notify_user: {probe.notify_user}",
+            f"- trigger URL: `{trigger_url}`",
+            "",
+            "## Message",
+            probe.message,
+        ]
+        return "\n".join(lines)
+    finally:
+        sess.close()
+
+
+@server.tool()
+def probe_update(
+    probe_id: str,
+    expires_at: str = "",
+    notify_user: str = "",
+) -> str:
+    """Update a probe — extend / shrink expiry, or toggle push notify.
+
+    To CANCEL a not-yet-fired probe, set `expires_at` to a past time
+    (e.g. "1970-01-01T00:00:00Z"). The MCP whitelist forbids `delete`,
+    so update-to-past is the supported cancel path.
+
+    Args:
+        probe_id: ID of the probe to update.
+        expires_at: New ISO timestamp (e.g. "2026-05-10T22:14:33Z").
+            Empty = no change.
+        notify_user: "true" or "false" — toggle push notification.
+            Empty = no change.
+    """
+    sess = _get_write_session()
+    try:
+        from models import Probe
+        from datetime import datetime as _dt
+
+        probe = sess.get(Probe, probe_id)
+        if probe is None:
+            return f"No probe found matching: {probe_id}"
+        if probe.fired_at is not None:
+            return f"Probe {probe_id} already fired — cannot update."
+
+        changed: list[str] = []
+        if expires_at:
+            try:
+                probe.expires_at = _dt.fromisoformat(expires_at.replace("Z", "+00:00"))
+                changed.append(f"expires_at={probe.expires_at.isoformat()}")
+            except ValueError:
+                return f"Error: invalid expires_at ISO timestamp: {expires_at!r}"
+
+        if notify_user:
+            v = notify_user.strip().lower()
+            if v in ("true", "1", "yes"):
+                probe.notify_user = True
+            elif v in ("false", "0", "no"):
+                probe.notify_user = False
+            else:
+                return f"Error: notify_user must be 'true' or 'false', got {notify_user!r}"
+            changed.append(f"notify_user={probe.notify_user}")
+
+        if not changed:
+            return f"No fields to update for probe {probe_id}."
+
+        sess.commit()
+        return f"Probe {probe_id} updated: {', '.join(changed)}"
+    finally:
+        sess.close()
 
 
 # ---------------------------------------------------------------------------

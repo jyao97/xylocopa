@@ -3,6 +3,7 @@
 Channels:
   notify_at      — user-initiated reminder, always sends
   permission     — permission requests, always sends
+  probe          — external-event-triggered wake-up, always sends
   message        — conversational content, respects global toggle + per-agent mute + in-use
 """
 
@@ -35,6 +36,14 @@ def notify(
 
     if channel == "notify_at":
         logger.info("notify: %s → SEND (always)", channel)
+        _send(title, body, url)
+        return "SEND"
+
+    if channel == "probe":
+        # User explicitly registered the probe; firing means "this is what I
+        # asked to be told about." Bypass mute / in-use / global toggle, same
+        # as notify_at.
+        logger.info("notify: %s agent=%s → SEND (always)", channel, agent_id[:8])
         _send(title, body, url)
         return "SEND"
 

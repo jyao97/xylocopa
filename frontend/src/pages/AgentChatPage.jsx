@@ -1150,6 +1150,12 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     }
     return <SystemBubble message={message} />;
   }
+  // Probe-fired wake messages are USER role on the wire (must go via tmux),
+  // but visually they belong with /loop wakeup and other system events —
+  // they are external triggers, not user input. Render as SystemBubble.
+  if (message.source === "probe") {
+    return <SystemBubble message={message} />;
+  }
 
   // Sub-agent task notifications get their own collapsible bubble
   if (message.metadata?.task_notification || (message.content || "").trimStart().startsWith("<task-notification>")) {

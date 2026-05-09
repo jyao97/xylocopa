@@ -492,7 +492,8 @@ def scaffold_project(project_name: str, project_path: str,
 
 ## Xylocopa context
 - This project is managed by xylocopa. The orchestrator MCP server is auto-registered via `.mcp.json`.
-- Available tools: `project_*`, `task_*`, `session_*`, `agent_*`, `system_health` — list/get/read/create/update/dispatch/scaffold only, no destructive verbs.
+- Available tools: `project_*`, `task_*`, `session_*`, `agent_*`, `probe_*`, `system_health` — list/get/read/create/update/dispatch/scaffold only, no destructive verbs.
+- Probe-fired messages are external event triggers, NOT user input. They arrive with the envelope `🔔 Probe {{id}} fired (...)` followed by the message you wrote at `probe_create`. Treat as: "an event you registered just happened" — verify the underlying condition before acting; for consequential actions, confirm with the user before executing.
 - Full reference: xylocopa repo `docs/agent-mcp-tools.md`.
 
 ## Project-Specific Rules

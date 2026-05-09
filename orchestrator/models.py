@@ -330,6 +330,32 @@ class SystemConfig(Base):
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+def _new_probe_token() -> str:
+    import secrets
+    return secrets.token_hex(16)  # 32 hex chars
+
+
+class Probe(Base):
+    __tablename__ = "probes"
+    __table_args__ = (
+        Index("ix_probes_agent_active", "agent_id", "fired_at", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=_new_uuid)
+    token: Mapped[str] = mapped_column(
+        String(32), nullable=False, unique=True, index=True, default=_new_probe_token,
+    )
+    agent_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    notify_user: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class SessionViewEvent(Base):
     """A single continuous interval during which a user was actively
     viewing one agent session. Written by the view-tracking tick loop.

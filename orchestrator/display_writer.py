@@ -67,7 +67,7 @@ _pre_sent_index_ready: set[str] = set()
 _pre_sent_lock = threading.Lock()
 
 
-_VALID_PRE_SOURCES = {"web", "task", "plan_continue"}
+_VALID_PRE_SOURCES = {"web", "task", "plan_continue", "probe"}
 _VALID_PRE_STATUSES = {"queued", "scheduled", "cancelled"}
 
 

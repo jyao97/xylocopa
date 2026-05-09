@@ -548,7 +548,7 @@ async def hook_request_logger(request: Request, call_next):
     return response
 
 
-_AUTH_EXEMPT_PREFIXES = ("/api/auth/", "/api/health", "/api/cert", "/api/webclip", "/api/hooks/", "/api/debug/auth-diag", "/api/debug/clear-cache", "/api/push/ack")
+_AUTH_EXEMPT_PREFIXES = ("/api/auth/", "/api/health", "/api/cert", "/api/webclip", "/api/hooks/", "/api/debug/auth-diag", "/api/debug/clear-cache", "/api/push/ack", "/api/probe-trigger/")
 
 
 @app.middleware("http")
@@ -622,6 +622,7 @@ from routers.logs import router as logs_router
 from routers.skills import router as skills_router
 from routers.stats import router as stats_router
 from routers.bookmarks import router as bookmarks_router
+from routers.probes import router as probes_router
 
 app.include_router(auth_router)
 app.include_router(system_router)
@@ -637,3 +638,4 @@ app.include_router(logs_router)
 app.include_router(skills_router)
 app.include_router(stats_router)
 app.include_router(bookmarks_router)
+app.include_router(probes_router)

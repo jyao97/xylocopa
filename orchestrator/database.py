@@ -820,6 +820,33 @@ def init_db():
                 conn.commit()
                 logger.info("migration: dropped probes.notify_user column")
 
+        # --- Auto-expire probes when their target agent transitions to
+        # STOPPED or ERROR.
+        #
+        # A probe to a stopped agent has no useful path (Claude isn't running,
+        # tmux send-keys is a no-op, no stop hook to fire notify). Tying probe
+        # lifecycle to agent liveness via SQL trigger covers ALL paths that
+        # set agent.status — application code (5+ sites) doesn't need to know
+        # about probes at all.
+        #
+        # Drop-and-recreate is idempotent and lets us evolve the trigger body
+        # without a separate migration.
+        conn.execute(text("DROP TRIGGER IF EXISTS expire_probes_on_agent_stop"))
+        conn.execute(text("""
+            CREATE TRIGGER expire_probes_on_agent_stop
+            AFTER UPDATE OF status ON agents
+            WHEN NEW.status IN ('STOPPED', 'ERROR')
+             AND OLD.status NOT IN ('STOPPED', 'ERROR')
+            BEGIN
+                UPDATE probes
+                SET expires_at = datetime('now')
+                WHERE agent_id = NEW.id
+                  AND fired_at IS NULL
+                  AND expires_at > datetime('now');
+            END
+        """))
+        conn.commit()
+
     # Ensure jwt_secret exists in SystemConfig
     from auth import get_jwt_secret
     db = SessionLocal()

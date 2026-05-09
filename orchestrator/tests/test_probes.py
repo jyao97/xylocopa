@@ -182,3 +182,191 @@ def test_envelope_includes_prefix_id_and_footer(probe_env):
         assert env.rstrip().endswith(Probe.ENVELOPE_FOOTER)
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# SQL trigger: agent → STOPPED auto-expires unfired probes
+# ---------------------------------------------------------------------------
+
+
+_EXPIRE_TRIGGER_SQL = """
+CREATE TRIGGER expire_probes_on_agent_stop
+AFTER UPDATE OF status ON agents
+WHEN NEW.status IN ('STOPPED', 'ERROR')
+ AND OLD.status NOT IN ('STOPPED', 'ERROR')
+BEGIN
+    UPDATE probes
+    SET expires_at = datetime('now')
+    WHERE agent_id = NEW.id
+      AND fired_at IS NULL
+      AND expires_at > datetime('now');
+END
+"""
+
+
+@pytest.fixture()
+def trigger_env(db_engine):
+    """Install the production SQL trigger on the in-memory DB."""
+    from sqlalchemy import text
+    with db_engine.connect() as conn:
+        conn.execute(text("DROP TRIGGER IF EXISTS expire_probes_on_agent_stop"))
+        conn.execute(text(_EXPIRE_TRIGGER_SQL))
+        conn.commit()
+
+    Session = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    db = Session()
+    try:
+        db.add(Project(name="trig-proj", display_name="TP", path="/tmp/tp"))
+        db.flush()
+        agent_id = _fresh()
+        db.add(Agent(
+            id=agent_id,
+            project="trig-proj",
+            name="Trig Agent",
+            mode=AgentMode.AUTO,
+            status=AgentStatus.IDLE,
+            model="claude-opus-4-7",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    yield {"Session": Session, "agent_id": agent_id}
+
+
+def test_stop_auto_expires_unfired_probes(trigger_env):
+    """STOPPED transition expires all unfired probes for that agent."""
+    Session = trigger_env["Session"]
+    agent_id = trigger_env["agent_id"]
+    future = datetime.now(timezone.utc) + timedelta(hours=24)
+
+    db = Session()
+    try:
+        p1 = Probe(agent_id=agent_id, message="m1", expires_at=future)
+        p2 = Probe(agent_id=agent_id, message="m2", expires_at=future)
+        db.add_all([p1, p2]); db.commit()
+        p1_id, p2_id = p1.id, p2.id
+    finally:
+        db.close()
+
+    # Trigger transition to STOPPED.
+    db = Session()
+    try:
+        agent = db.get(Agent, agent_id)
+        agent.status = AgentStatus.STOPPED
+        db.commit()
+    finally:
+        db.close()
+
+    # Both probes must now be expired (expires_at <= now).
+    db = Session()
+    try:
+        from utils import utcnow as _utcnow
+        now = _utcnow().replace(tzinfo=None)
+        for pid in (p1_id, p2_id):
+            p = db.get(Probe, pid)
+            assert p.expires_at <= now, f"{pid} should be expired"
+            assert p.fired_at is None, f"{pid} should not be marked fired"
+    finally:
+        db.close()
+
+
+def test_error_status_also_expires(trigger_env):
+    """ERROR transition also expires probes (mirrors STOPPED)."""
+    Session = trigger_env["Session"]
+    agent_id = trigger_env["agent_id"]
+    future = datetime.now(timezone.utc) + timedelta(hours=24)
+
+    db = Session()
+    try:
+        p = Probe(agent_id=agent_id, message="m", expires_at=future)
+        db.add(p); db.commit()
+        pid = p.id
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        agent = db.get(Agent, agent_id)
+        agent.status = AgentStatus.ERROR
+        db.commit()
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        from utils import utcnow as _utcnow
+        now = _utcnow().replace(tzinfo=None)
+        p = db.get(Probe, pid)
+        assert p.expires_at <= now
+    finally:
+        db.close()
+
+
+def test_already_fired_probe_unaffected(trigger_env):
+    """A probe already fired before stop is not re-expired."""
+    Session = trigger_env["Session"]
+    agent_id = trigger_env["agent_id"]
+    # Use naive datetimes throughout to avoid aware/naive equality false-negatives
+    # after the SQLite round-trip strips tzinfo.
+    future = (datetime.now(timezone.utc) + timedelta(hours=24)).replace(tzinfo=None)
+
+    db = Session()
+    try:
+        p = Probe(
+            agent_id=agent_id,
+            message="m",
+            expires_at=future,
+            fired_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        db.add(p); db.commit(); db.refresh(p)
+        pid = p.id
+        original_expiry = p.expires_at
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        agent = db.get(Agent, agent_id)
+        agent.status = AgentStatus.STOPPED
+        db.commit()
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        p = db.get(Probe, pid)
+        # Already-fired probe's expiry must not be touched.
+        assert p.expires_at == original_expiry
+    finally:
+        db.close()
+
+
+def test_idle_to_executing_does_not_expire(trigger_env):
+    """Non-stop transitions leave probes alone."""
+    Session = trigger_env["Session"]
+    agent_id = trigger_env["agent_id"]
+    future = (datetime.now(timezone.utc) + timedelta(hours=24)).replace(tzinfo=None)
+
+    db = Session()
+    try:
+        p = Probe(agent_id=agent_id, message="m", expires_at=future)
+        db.add(p); db.commit(); db.refresh(p)
+        pid = p.id
+        original_expiry = p.expires_at
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        agent = db.get(Agent, agent_id)
+        agent.status = AgentStatus.EXECUTING
+        db.commit()
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        p = db.get(Probe, pid)
+        assert p.expires_at == original_expiry
+    finally:
+        db.close()

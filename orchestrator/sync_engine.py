@@ -125,7 +125,7 @@ def _end_compact_activity(db, agent_id: str, session_id: str):
 
 
 def _notify_interactive(ad, agent, new_turns):
-    """Send push notifications for unanswered interactive items."""
+    """Bump unread + send push for unanswered interactive items."""
     _interactive_types = []
     for _r, _c, *_rest in new_turns:
         if _r == "assistant" and _rest:
@@ -139,9 +139,11 @@ def _notify_interactive(ad, agent, new_turns):
         return
 
     if "exit_plan_mode" in _interactive_types:
-        ad._send_agent_notification(agent, "Plan approval needed")
+        ad._bump_unread_and_notify_interactive(agent.id, "Plan approval needed")
     elif "ask_user_question" in _interactive_types:
-        ad._send_agent_notification(agent, "Question — waiting for your answer")
+        ad._bump_unread_and_notify_interactive(
+            agent.id, "Question — waiting for your answer",
+        )
 
 
 def _infer_status_from_signals(

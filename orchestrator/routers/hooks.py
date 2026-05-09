@@ -827,13 +827,11 @@ async def hook_agent_tool_activity(request: Request):
                 _db2.commit()
                 from display_writer import flush_agent as _flush_ta
                 _flush_ta(agent_id)
-                # Push notification for permission card
-                if ad:
-                    _ag = _db2.get(Agent, agent_id)
-                    if _ag:
-                        ad._send_agent_notification(_ag, _perm_question)
             finally:
                 _db2.close()
+            # Bump unread + push notification for permission card
+            if ad:
+                ad._bump_unread_and_notify_interactive(agent_id, _perm_question)
 
     # Wake the JSONL sync loop so new message content is picked up
     # immediately instead of waiting for the next poll cycle.
@@ -1027,18 +1025,16 @@ async def hook_agent_permission(request: Request):
         _db_perm.commit()
         from display_writer import flush_agent as _flush_perm
         _flush_perm(agent_id)
-        # Push notification for permission card
-        _ad = getattr(request.app.state, "agent_dispatcher", None)
-        if _ad:
-            _ag_perm = _db_perm.get(Agent, agent_id)
-            if _ag_perm:
-                _ad._send_agent_notification(
-                    _ag_perm, summary or f"Permission needed — {tool_name}",
-                )
     except Exception:
         logger.exception("hook_agent_permission: failed to persist permission card for agent %s", agent_id[:8])
     finally:
         _db_perm.close()
+    # Bump unread + push notification for permission card
+    _ad = getattr(request.app.state, "agent_dispatcher", None)
+    if _ad:
+        _ad._bump_unread_and_notify_interactive(
+            agent_id, summary or f"Permission needed — {tool_name}",
+        )
 
     from websocket import ws_manager
     await ws_manager.broadcast("permission_request", {

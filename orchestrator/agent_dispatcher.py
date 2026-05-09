@@ -1875,6 +1875,42 @@ class AgentDispatcher:
         body = (agent.last_message_preview or "Response ready")[:120]
         return self._send_agent_notification(agent, body)
 
+    def _bump_unread_and_notify_interactive(self, agent_id: str, body: str) -> bool:
+        """Bump unread_count + push for an interactive card (perm/question/plan).
+
+        Mirrors the stop-hook unread+notify pattern (subagent + in_use gating),
+        then sends a push with the explicit `body`.  Each interactive card is a
+        discrete blocking event, so we use _send_agent_notification directly
+        rather than _maybe_notify_message — every card fires its own push,
+        independent of whether unread was already > 0.
+
+        Returns True if unread was bumped, False if skipped (subagent / in_use /
+        agent missing).  Emits emit_agent_update internally on bump.
+        """
+        db = SessionLocal()
+        bumped = False
+        project: str | None = None
+        status: str | None = None
+        try:
+            agent = db.get(Agent, agent_id)
+            if not agent:
+                return False
+            is_sub = bool(agent.is_subagent or agent.parent_id)
+            if not is_sub and not self._is_agent_in_use(agent.id, agent.tmux_pane):
+                agent.unread_count += 1
+                bumped = True
+            db.commit()
+            project = agent.project
+            status = agent.status.value
+            if not is_sub:
+                self._send_agent_notification(agent, body)
+        finally:
+            db.close()
+        if bumped and project is not None:
+            from websocket import emit_agent_update
+            self._emit(emit_agent_update(agent_id, status or "IDLE", project))
+        return bumped
+
     def get_active_sessions(self) -> list[tuple[str, str]]:
         """Return (session_id, project_path) for all agents with sessions.
 

@@ -89,7 +89,7 @@ import useContextUsage from "../hooks/useContextUsage";
 import usePageVisible from "../hooks/usePageVisible";
 import { useToast } from "../contexts/ToastContext";
 import ChatSkeleton from "../components/skeletons/ChatSkeleton";
-import { agentBriefCache, processedSuggestionsCache } from "../lib/detailCache";
+import { agentBriefCache, processedSuggestionsCache, pendingSuggestionsCache } from "../lib/detailCache";
 import { consumePrefetch } from "../lib/chatPrefetch";
 
 const ACTIVE_AGENT_STATUSES = new Set(["EXECUTING", "IDLE"]);
@@ -666,9 +666,16 @@ function _isPlanDismissed(item) {
 }
 
 function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
-  const [suggestions, setSuggestions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(new Set());
+  // Seed from cache so re-entry / refresh paints the card immediately
+  // instead of returning null for the 100-300ms fetch window. Selected
+  // state is re-derived from cached ids (all selected by default), same
+  // as the no-cache path — no UI difference for the user.
+  const cached = pendingSuggestionsCache.get(agentId);
+  const [suggestions, setSuggestions] = useState(() => cached?.items || []);
+  const [loading, setLoading] = useState(() => !cached);
+  const [selected, setSelected] = useState(
+    () => new Set((cached?.items || []).map((s) => s.id))
+  );
   const [edits, setEdits] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -677,10 +684,23 @@ function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
     fetchAgentSuggestions(agentId)
       .then((data) => {
         setSuggestions(data);
-        setSelected(new Set(data.map((s) => s.id)));
+        // Reset selected to "all" only when the underlying id set changed —
+        // otherwise the user's checkbox toggles between cache-seed and the
+        // background fetch resolution would get clobbered.
+        const newIds = new Set(data.map((s) => s.id));
+        setSelected((prev) => {
+          const cachedIds = new Set((cached?.items || []).map((s) => s.id));
+          const sameSet = newIds.size === cachedIds.size &&
+            [...newIds].every((id) => cachedIds.has(id));
+          return sameSet ? prev : newIds;
+        });
+        pendingSuggestionsCache.set(agentId, { items: data });
       })
       .catch((err) => console.error("Failed to fetch suggestions:", err))
       .finally(() => setLoading(false));
+    // cached is captured at mount; intentionally not in deps to avoid
+    // re-running when the cache module mutates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
   const handleApply = async () => {
@@ -696,9 +716,10 @@ function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
       const res = await applyAgentSuggestions(agentId, { accepted, rejected_ids });
       // After backend commits, has_pending_suggestions=false flows through WS
       // and the parent unmounts this card → InsightsHistoryCard takes over.
-      // Invalidate so the next mount fetches fresh accepted/rejected rows
-      // instead of painting a stale (or empty) cached snapshot.
+      // Invalidate both caches: processed is now stale (new accepted/rejected
+      // rows landed), pending is now empty (suggestions were resolved).
       processedSuggestionsCache.invalidate(agentId);
+      pendingSuggestionsCache.invalidate(agentId);
       onApplied?.(res?.accepted ?? accepted.length);
     } catch (err) {
       console.error("Failed to apply suggestions:", err);
@@ -711,6 +732,7 @@ function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
     try {
       await discardAgentSuggestions(agentId);
       processedSuggestionsCache.invalidate(agentId);
+      pendingSuggestionsCache.invalidate(agentId);
       onDiscarded?.();
     } catch (err) {
       console.error("Failed to discard suggestions:", err);

@@ -140,3 +140,19 @@ export function cacheTaskBriefs(list) {
 export const processedSuggestionsCache = makeCache({
   persistKey: "xy:processed-suggestions-cache:v1",
 });
+
+// Keys: agent id. Value shape: { items: AgentInsightSuggestion[], ts }
+// Same pattern as processedSuggestionsCache but for the *pending*
+// suggestions surfaced by ProgressSuggestionsCard. Without this, the
+// card returns null during its 100-300ms fetch, leaving an obvious
+// gap below the messages on every chat-page entry. Selected/edits
+// local state is intentionally not cached — re-derived from the
+// suggestion ids on mount (all selected by default), matching the
+// no-cache behavior.
+//
+// Invalidate after apply/discard so a future render that sees
+// has_pending_suggestions=true again (regenerate flow) doesn't
+// resurrect the just-handled list.
+export const pendingSuggestionsCache = makeCache({
+  persistKey: "xy:pending-suggestions-cache:v1",
+});

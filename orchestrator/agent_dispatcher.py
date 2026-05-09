@@ -4334,45 +4334,6 @@ Here are the day's conversations (with timestamps):
                                     pane, agent_id,
                                 )
 
-                        # 10-min stale-EXECUTING fallback: SIGKILL / OOM /
-                        # pane-killed / power-loss leave the agent stuck at
-                        # EXECUTING because no JSONL signal can ever arrive.
-                        # When both last_message_at AND JSONL mtime are
-                        # >600s old AND status is still EXECUTING, write
-                        # IDLE as a no-signal fallback. This is the ONE
-                        # exception to "JSONL is the truth" — it covers
-                        # the case where there will never be a JSONL signal.
-                        if agent.status == AgentStatus.EXECUTING:
-                            _last_at = agent.last_message_at
-                            if _last_at:
-                                if _last_at.tzinfo is None:
-                                    _last_at = _last_at.replace(tzinfo=timezone.utc)
-                                _msg_age = (_utcnow() - _last_at).total_seconds()
-                            else:
-                                _msg_age = 9999
-                            try:
-                                _file_age = _time.time() - os.path.getmtime(ctx.jsonl_path)
-                            except OSError:
-                                _file_age = 9999
-                            if _msg_age >= 600 and _file_age >= 600:
-                                logger.warning(
-                                    "Stale EXECUTING for agent %s "
-                                    "(msg_age=%.0fs, file_age=%.0fs) — "
-                                    "writing IDLE as no-signal fallback",
-                                    agent_id[:8], _msg_age, _file_age,
-                                )
-                                agent.status = AgentStatus.IDLE
-                                agent.generating_msg_id = None
-                                db.commit()
-                                self._generating_agents.discard(agent_id)
-                                from websocket import emit_agent_stream_end as _emit_se
-                                self._emit(_emit_se(
-                                    agent_id,
-                                    generation_id=self._generation_ids.get(agent_id),
-                                ))
-                                self._emit(emit_agent_update(
-                                    agent_id, "IDLE", agent.project,
-                                ))
                     finally:
                         db.close()
 

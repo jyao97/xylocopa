@@ -1362,8 +1362,7 @@ async def hook_agent_session_start(request: Request):
             # post-clear JSONL is empty (no signals for sync_engine to
             # infer from), so this hook is the authoritative path. Without
             # it, agent stays EXECUTING from the USP hook that fired when
-            # the user sent /clear, until the next user message or the
-            # 10-min stale-EXECUTING fallback.
+            # the user sent /clear, until the next user message.
             _flipped_to_idle = False
             _db_status_clear = SessionLocal()
             try:

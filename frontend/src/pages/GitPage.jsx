@@ -92,7 +92,6 @@ function MergeDropdown({ branchName, currentName, isMerging, disabled, onMerge }
   );
 }
 
-// eslint-disable-next-line no-unused-vars
 export default function GitPage({ theme, onToggleTheme, isActive = true }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -116,6 +115,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
   const [cleaning, setCleaning] = useState(false);
   const [cleanupMode, setCleanupMode] = useState(false);       // branch selection mode
   const [selectedCleanup, setSelectedCleanup] = useState(new Set()); // selected branch names
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const toast = useToast();
   const addToast = useCallback((message, type) => type === "error" ? toast.error(message) : toast.success(message), [toast]);
@@ -158,12 +158,50 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
   // while a fresh fetch runs in the background. Cache lives only in memory
   // (page is kept-mounted, so this survives tab switches without a remount).
   const gitDataCacheRef = useRef({});
+  // Monotonic seq guards against stale refresh results racing the latest call
+  // (e.g. project switch mid-fetch, or manual click while activate-refresh is in flight).
+  const refreshSeqRef = useRef(0);
+
+  // Background refetch — never resets loading skeletons, so cached data stays
+  // visible while fresh data lands. Used by the project-change effect, the
+  // activate-on-tab-enter effect, and the manual refresh button.
+  const refresh = useCallback(async () => {
+    if (!selectedProject) return;
+    const seq = ++refreshSeqRef.current;
+    const project = selectedProject;
+    const t0 = performance.now();
+
+    const [commitRes, branchRes, statusRes, wtRes] = await Promise.allSettled([
+      fetchGitLog(project).catch(() => []),
+      fetchGitBranches(project).catch(() => []),
+      fetchGitStatus(project).catch(() => null),
+      fetchGitWorktrees(project).catch(() => []),
+    ]);
+
+    if (seq !== refreshSeqRef.current) return;
+
+    const fresh = {
+      commits: commitRes.status === "fulfilled" ? commitRes.value : [],
+      branches: branchRes.status === "fulfilled" ? branchRes.value : [],
+      status: statusRes.status === "fulfilled" ? statusRes.value : null,
+      worktrees: wtRes.status === "fulfilled" ? wtRes.value : [],
+    };
+    setCommits(fresh.commits);
+    setBranches(fresh.branches);
+    setStatus(fresh.status);
+    setWorktrees(fresh.worktrees);
+    setLoadingCommits(false);
+    setLoadingBranches(false);
+    setLoadingStatus(false);
+    setLoadingWorktrees(false);
+    gitDataCacheRef.current[project] = fresh;
+    const t1 = performance.now();
+    clog(`[git] refresh ${(t1 - t0).toFixed(0)}ms commits=${fresh.commits.length} branches=${fresh.branches.length} worktrees=${fresh.worktrees.length}`);
+  }, [selectedProject]);
 
   // --- Fetch commits and branches when project changes ---
   useEffect(() => {
     if (!selectedProject) return;
-    let cancelled = false;
-    const t0 = performance.now();
 
     const cached = gitDataCacheRef.current[selectedProject];
     clog(`[git] select project=${selectedProject} cache=${cached ? "hit" : "miss"}`);
@@ -190,39 +228,29 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
       setLoadingWorktrees(true);
     }
 
-    async function fetchGitData() {
-      // Always refetch in the background so cached data stays fresh.
-      const [commitRes, branchRes, statusRes, wtRes] = await Promise.allSettled([
-        fetchGitLog(selectedProject).catch(() => []),
-        fetchGitBranches(selectedProject).catch(() => []),
-        fetchGitStatus(selectedProject).catch(() => null),
-        fetchGitWorktrees(selectedProject).catch(() => []),
-      ]);
+    refresh();
+  }, [selectedProject, refresh]);
 
-      if (!cancelled) {
-        const t1 = performance.now();
-        const fresh = {
-          commits: commitRes.status === "fulfilled" ? commitRes.value : [],
-          branches: branchRes.status === "fulfilled" ? branchRes.value : [],
-          status: statusRes.status === "fulfilled" ? statusRes.value : null,
-          worktrees: wtRes.status === "fulfilled" ? wtRes.value : [],
-        };
-        setCommits(fresh.commits);
-        setBranches(fresh.branches);
-        setStatus(fresh.status);
-        setWorktrees(fresh.worktrees);
-        setLoadingCommits(false);
-        setLoadingBranches(false);
-        setLoadingStatus(false);
-        setLoadingWorktrees(false);
-        gitDataCacheRef.current[selectedProject] = fresh;
-        clog(`[git] fetch ${(t1 - t0).toFixed(0)}ms commits=${fresh.commits.length} branches=${fresh.branches.length} worktrees=${fresh.worktrees.length}`);
-      }
+  // Auto-refresh when the Git tab becomes active (false→true transition).
+  // Cache-first render keeps the UI instant; fresh data lands silently.
+  // Mirrors the AgentsPage activate-poll pattern.
+  const wasActiveRef = useRef(isActive);
+  useEffect(() => {
+    if (isActive && !wasActiveRef.current && selectedProject) {
+      clog(`[git] activate — refreshing`);
+      refresh();
     }
+    wasActiveRef.current = isActive;
+  }, [isActive, selectedProject, refresh]);
 
-    fetchGitData();
-    return () => { cancelled = true; };
-  }, [selectedProject]);
+  // Manual refresh button (header). 400ms minimum spinner duration matches
+  // AgentChatPage refresh — keeps the UX consistent across pages.
+  const handleManualRefresh = useCallback(async () => {
+    if (refreshing || !selectedProject) return;
+    setRefreshing(true);
+    try { await refresh(); } catch { /* ignore */ }
+    setTimeout(() => setRefreshing(false), 400);
+  }, [refreshing, selectedProject, refresh]);
 
   // --- Merge handler (spawns an agent) ---
   // direction: "into-current" = merge branch into current, "into-branch" = merge current into branch
@@ -410,7 +438,25 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
   // --- Render ---
   return (
     <div className="h-full flex flex-col">
-      <PageHeader title="Git" theme={theme} onToggleTheme={onToggleTheme} hideMonitor>
+      <PageHeader
+        title="Git"
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+        hideMonitor
+        actions={selectedProject ? (
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={refreshing || !selectedProject}
+            title="Refresh"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-dim hover:text-heading hover:bg-input transition-colors disabled:opacity-50"
+          >
+            <svg className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        ) : null}
+      >
         {loadingProjects ? (
           <div className="flex gap-1.5 px-4 pb-3 animate-pulse">
             {Array.from({ length: 3 }).map((_, i) => (

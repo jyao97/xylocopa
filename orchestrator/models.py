@@ -358,7 +358,6 @@ class Probe(Base):
         nullable=False, index=True,
     )
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    notify_user: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

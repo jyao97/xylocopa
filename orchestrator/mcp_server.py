@@ -1488,15 +1488,17 @@ def probe_create(
     agent_id: str,
     message: str,
     expires_in_hours: int = _PROBE_DEFAULT_HOURS,
-    notify_user: bool = True,
 ) -> str:
     """Register a webhook probe that wakes a chat when externally triggered.
 
     Returns a single-fire trigger URL. POSTing to that URL inserts a
-    fixed message into the target chat and (optionally) sends a push
-    notification to the user. The body of the trigger POST is ignored
-    — wake content is locked at create time. This is the secure path
-    for "external monitor → wake chat" without polling.
+    fixed message into the target chat. The body of the trigger POST is
+    ignored — wake content is locked at create time. This is the secure
+    path for "external monitor → wake chat" without polling.
+
+    Notifications: when the agent finishes responding to the probe, the
+    standard stop-hook notification fires (respects per-agent mute and
+    global toggle). No probe-specific push channel.
 
     Args:
         agent_id: Target agent (the chat to be woken). Must be explicit.
@@ -1505,9 +1507,9 @@ def probe_create(
             Write this from the perspective of the future you, e.g.
             "gamma containers cleared, restart docker now".
         expires_in_hours: Auto-expiry. Default 24h, max 168h (1 week).
-            Expired probes return 410 Gone if triggered.
-        notify_user: If True, also send a Web Push to the user's PWA
-            when the probe fires. Default True.
+            Expired probes return 410 Gone if triggered. Probes are
+            also auto-expired when their target agent transitions to
+            STOPPED or ERROR.
 
     Active per-agent limit: 10. Once reached, expire some via
     `probe_update` (set expires_at to a past time) or wait for them
@@ -1571,7 +1573,6 @@ def probe_create(
         probe = Probe(
             agent_id=agent_id,
             message=message.strip(),
-            notify_user=bool(notify_user),
             expires_at=now + timedelta(hours=expires_in_hours),
         )
         sess.add(probe)
@@ -1583,7 +1584,6 @@ def probe_create(
             f"Probe **{probe.id}** created for agent `{agent_id[:8]}`.\n\n"
             f"- Trigger URL: `{trigger_url}`\n"
             f"- Expires: {probe.expires_at.isoformat()} (in {expires_in_hours}h)\n"
-            f"- notify_user: {probe.notify_user}\n"
             f"- Single-fire: subsequent POSTs return 410 Gone.\n\n"
             f"To trigger from a script:\n"
             f"  curl -X POST '{trigger_url}'\n\n"
@@ -1655,7 +1655,6 @@ def probe_get(probe_id: str) -> str:
             f"- created_at: {probe.created_at.isoformat()}",
             f"- expires_at: {probe.expires_at.isoformat()}",
             f"- fired_at: {probe.fired_at.isoformat() if probe.fired_at else '(not fired)'}",
-            f"- notify_user: {probe.notify_user}",
             f"- trigger URL: `{trigger_url}`",
             "",
             "## Message",
@@ -1670,9 +1669,8 @@ def probe_get(probe_id: str) -> str:
 def probe_update(
     probe_id: str,
     expires_at: str = "",
-    notify_user: str = "",
 ) -> str:
-    """Update a probe — extend / shrink expiry, or toggle push notify.
+    """Update a probe — extend or shrink expiry.
 
     To CANCEL a not-yet-fired probe, set `expires_at` to a past time
     (e.g. "1970-01-01T00:00:00Z"). The MCP whitelist forbids `delete`,
@@ -1681,8 +1679,6 @@ def probe_update(
     Args:
         probe_id: ID of the probe to update.
         expires_at: New ISO timestamp (e.g. "2026-05-10T22:14:33Z").
-            Empty = no change.
-        notify_user: "true" or "false" — toggle push notification.
             Empty = no change.
     """
     sess = _get_write_session()
@@ -1696,29 +1692,16 @@ def probe_update(
         if probe.fired_at is not None:
             return f"Probe {probe_id} already fired — cannot update."
 
-        changed: list[str] = []
-        if expires_at:
-            try:
-                probe.expires_at = _dt.fromisoformat(expires_at.replace("Z", "+00:00"))
-                changed.append(f"expires_at={probe.expires_at.isoformat()}")
-            except ValueError:
-                return f"Error: invalid expires_at ISO timestamp: {expires_at!r}"
-
-        if notify_user:
-            v = notify_user.strip().lower()
-            if v in ("true", "1", "yes"):
-                probe.notify_user = True
-            elif v in ("false", "0", "no"):
-                probe.notify_user = False
-            else:
-                return f"Error: notify_user must be 'true' or 'false', got {notify_user!r}"
-            changed.append(f"notify_user={probe.notify_user}")
-
-        if not changed:
+        if not expires_at:
             return f"No fields to update for probe {probe_id}."
 
+        try:
+            probe.expires_at = _dt.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError:
+            return f"Error: invalid expires_at ISO timestamp: {expires_at!r}"
+
         sess.commit()
-        return f"Probe {probe_id} updated: {', '.join(changed)}"
+        return f"Probe {probe_id} updated: expires_at={probe.expires_at.isoformat()}"
     finally:
         sess.close()
 

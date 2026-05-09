@@ -807,6 +807,19 @@ def init_db():
             conn.commit()
             logger.info("migration: migrated %d agents from SYNCING to IDLE", _syncing_count)
 
+        # --- Drop probes.notify_user (probe-specific push channel removed) ---
+        # Probe responses now notify via the standard agent stop hook (message
+        # channel, respects mute / global toggle) instead of the dedicated
+        # probe channel that bypassed all gates.
+        if "probes" in [r[0] for r in conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )).fetchall()]:
+            probe_cols = _table_columns(conn, "probes")
+            if "notify_user" in probe_cols:
+                conn.execute(text("ALTER TABLE probes DROP COLUMN notify_user"))
+                conn.commit()
+                logger.info("migration: dropped probes.notify_user column")
+
     # Ensure jwt_secret exists in SystemConfig
     from auth import get_jwt_secret
     db = SessionLocal()

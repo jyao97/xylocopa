@@ -146,20 +146,18 @@ async def trigger_probe(
     asyncio.ensure_future(emit_pre_sent_created(agent.id, msg_id))
 
     # Live agent: dispatch immediately via existing pre_sent flow.
-    # STOPPED agent: pre_sent stays queued; user sees it on next resume.
+    # STOPPED agent: probes targeting a STOPPED agent are auto-expired by
+    # the SQL trigger on agents.status transition; this path normally won't
+    # be reached for stopped agents (the probe's expires_at == now would
+    # have caused a 410 earlier in this handler). Defensive guard kept.
     ad = getattr(request.app.state, "agent_dispatcher", None)
     if ad and agent.status != AgentStatus.STOPPED:
         asyncio.ensure_future(ad.dispatch_pending_message(agent.id, delay=0))
 
-    # Push notify the user — probe channel ignores mute / in-use / global.
-    if probe.notify_user:
-        from notify import notify
-        notify(
-            "probe", agent.id,
-            f"Probe fired: {agent.name or agent.id[:8]}",
-            probe.message[:160],
-            url=f"/chat/{agent.id}",
-        )
+    # No probe-specific push notify: the agent's stop hook will fire its own
+    # notification when the response turn completes (via the standard message
+    # channel). This respects per-agent mute and the global toggle, matching
+    # the behavior of any other web-originated message.
 
     logger.info(
         "probe %s fired for agent %s (queued msg=%s)",
@@ -192,7 +190,6 @@ async def list_probes(
             "id": p.id,
             "agent_id": p.agent_id,
             "message": p.message,
-            "notify_user": p.notify_user,
             "created_at": p.created_at.isoformat(),
             "expires_at": p.expires_at.isoformat(),
             "fired_at": p.fired_at.isoformat() if p.fired_at else None,
@@ -211,7 +208,6 @@ async def get_probe(probe_id: str, db: Session = Depends(get_db)):
         "id": probe.id,
         "agent_id": probe.agent_id,
         "message": probe.message,
-        "notify_user": probe.notify_user,
         "created_at": probe.created_at.isoformat(),
         "expires_at": probe.expires_at.isoformat(),
         "fired_at": probe.fired_at.isoformat() if probe.fired_at else None,

@@ -285,3 +285,72 @@ async def test_sync_uuid_dedup_skips_already_imported(sync_env):
         assert deferred == []
     finally:
         db.close()
+
+
+@pytest.mark.anyio
+async def test_sync_rejects_unwhitelisted_source(sync_env):
+    """A USER row with source NOT in the dedup whitelist must NOT be promoted.
+
+    Regression for the bug fixed in commit cd826ac, where adding a new
+    "probe" source caused duplicate bubbles because the source whitelist
+    was forgotten. ContentMatcher is purely content-based, so the source
+    whitelist is the primary gate against false-positive promotions —
+    this test guards against future "simplifications" that drop it.
+    """
+    from sync_engine import _promote_or_create_user_msg
+
+    agent_id = sync_env["agent_id"]
+    Session = sync_env["Session"]
+
+    # Simulate a tampered/buggy row with an unknown source but the same
+    # NULL-state fingerprint as a legitimate pre_sent → SENT row.
+    bogus_id = _fresh()
+    db = Session()
+    try:
+        db.add(Message(
+            id=bogus_id,
+            agent_id=agent_id,
+            role=MessageRole.USER,
+            content="hello from somewhere",
+            status=MessageStatus.SENT,
+            source="unknown_source",  # NOT in (web, plan_continue, task, probe)
+            jsonl_uuid=None,
+            delivered_at=None,
+            display_seq=1,
+            dispatch_seq=1,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    db = Session()
+    try:
+        ctx = _mk_sync_context(agent_id)
+        deferred: list[str] = []
+        msg = _promote_or_create_user_msg(
+            db, ctx,
+            content="hello from somewhere",   # same content
+            jsonl_uuid="uuid-x",
+            seq=7,
+            meta=None,
+            kind=None,
+            jsonl_ts=None,
+            deferred_updates=deferred,
+        )
+        # Whitelist must reject it — sync falls through to fresh CLI creation
+        # rather than promoting the bogus row.
+        assert msg is not None, "expected a fresh CLI row, got match-promote"
+        assert msg.source == "cli"
+        assert deferred == [], "bogus row must not be in deferred update list"
+    finally:
+        db.close()
+
+    # And the bogus row must remain untouched (status, NULL fields).
+    db = Session()
+    try:
+        row = db.get(Message, bogus_id)
+        assert row.status == MessageStatus.SENT
+        assert row.delivered_at is None
+        assert row.jsonl_uuid is None
+    finally:
+        db.close()

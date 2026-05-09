@@ -248,6 +248,21 @@ def _promote_or_create_user_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, 
     # (case a) would orphan task-launched rows and create a duplicate
     # `source=cli` row on JSONL import — losing the insights metadata
     # that the task row carries.
+    # Source whitelist — DO NOT REMOVE. ContentMatcher.match() (in
+    # content_matcher.py) is purely content-based with no source-awareness:
+    # any candidate that happens to share content with an incoming JSONL
+    # turn will be promoted, regardless of source. The (jsonl_uuid IS NULL,
+    # delivered_at IS NULL) pair narrows the pool to "unconfirmed", but
+    # that is NOT sufficient — we have several creation paths that briefly
+    # leave both fields NULL with sources outside this whitelist (e.g.
+    # certain hook + retry paths, future internal flows). The whitelist
+    # is the primary gate, the NULL checks are secondary.
+    #
+    # When adding a NEW source that creates pre_sent → SENT rows (i.e. rows
+    # that legitimately need JSONL match-promotion), add it here. Forgetting
+    # was the root cause of duplicate bubbles when probe was first added
+    # (commit cd826ac). Tests in test_sync_sent_to_delivered.py guard
+    # against future regressions.
     candidates = (
         db.query(Message)
         .filter(

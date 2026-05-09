@@ -341,6 +341,14 @@ class Probe(Base):
         Index("ix_probes_agent_active", "agent_id", "fired_at", "expires_at"),
     )
 
+    # Envelope markers — must be backend-controlled and never appear in
+    # user-supplied `message`, otherwise an attacker (or a chat self-attack)
+    # could synthesize a fake nested envelope and confuse the wake target
+    # about where the trigger ends.
+    ENVELOPE_PREFIX: str = "\U0001F514 Probe "
+    ENVELOPE_FOOTER: str = "— end of probe trigger —"
+    MAX_MESSAGE_LEN: int = 4000
+
     id: Mapped[str] = mapped_column(String(12), primary_key=True, default=_new_uuid)
     token: Mapped[str] = mapped_column(
         String(32), nullable=False, unique=True, index=True, default=_new_probe_token,
@@ -354,6 +362,43 @@ class Probe(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    @classmethod
+    def validate_message(cls, text: str | None) -> str | None:
+        """Reject probe messages that could break the envelope contract.
+
+        Returns an error reason (str) if invalid, or None if valid.
+        Used at BOTH probe_create (input gate) AND trigger time (defense
+        in depth — guards against direct DB tampering or future code paths
+        that mutate `message` post-create).
+        """
+        if not text or not text.strip():
+            return "message is empty"
+        if len(text) > cls.MAX_MESSAGE_LEN:
+            return (
+                f"message exceeds {cls.MAX_MESSAGE_LEN} chars (got {len(text)})"
+            )
+        if cls.ENVELOPE_PREFIX in text:
+            return (
+                f"message must not contain the envelope prefix "
+                f"{cls.ENVELOPE_PREFIX!r} (would synthesize a nested envelope)"
+            )
+        if cls.ENVELOPE_FOOTER in text:
+            return (
+                f"message must not contain the envelope footer "
+                f"{cls.ENVELOPE_FOOTER!r} (would forge envelope termination)"
+            )
+        # Reject control characters except newline and tab — protects tmux
+        # send-keys + Claude's prompt parsing from terminal escape injection.
+        for i, ch in enumerate(text):
+            cp = ord(ch)
+            if cp < 0x20 and ch not in ("\n", "\t"):
+                return (
+                    f"message contains control char U+{cp:04X} at offset {i}"
+                )
+            if cp == 0x7F:  # DEL
+                return f"message contains DEL char at offset {i}"
+        return None
 
 
 class SessionViewEvent(Base):

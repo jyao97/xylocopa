@@ -37,6 +37,10 @@ def _envelope(probe: Probe) -> str:
     Format mirrors `/loop wakeup`'s "Claude resuming /loop wakeup
     (Apr 24 3:05pm)" — same compact parens-time idiom — so the visual
     contract feels native.
+
+    Both prefix and footer are hard-coded backend-side; create-time and
+    dispatch-time validation reject any user message containing either
+    string, so the wake target sees a uniquely demarcated envelope.
     """
     fired_at = _utcnow()
     # %b → "May", %-d / %-I strip leading zeros (Linux glibc).
@@ -44,8 +48,9 @@ def _envelope(probe: Probe) -> str:
     month_day = fired_at.strftime("%b %-d")
     hour_min = fired_at.strftime("%-I:%M") + fired_at.strftime("%p").lower()
     return (
-        f"\U0001F514 Probe {probe.id} fired ({month_day} {hour_min})\n\n"
-        f"{probe.message}"
+        f"{Probe.ENVELOPE_PREFIX}{probe.id} fired ({month_day} {hour_min})\n\n"
+        f"{probe.message}\n\n"
+        f"{Probe.ENVELOPE_FOOTER}"
     )
 
 
@@ -87,6 +92,24 @@ async def trigger_probe(
         probe.fired_at = now
         db.commit()
         raise HTTPException(status_code=404, detail="Target agent no longer exists")
+
+    # Defense in depth: re-validate `message` at dispatch time. Catches the
+    # case where the probe row was tampered with directly in DB (bypassing
+    # probe_create's input gate) or where future code paths added a
+    # `probe_update(message=...)` without re-running validation. On failure,
+    # burn the probe (set fired_at) so the bad message can't be replayed.
+    err = Probe.validate_message(probe.message)
+    if err:
+        probe.fired_at = now
+        db.commit()
+        logger.warning(
+            "probe %s rejected at dispatch: %s. Either DB tampering or a "
+            "validation regression — investigate.", probe.id, err,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=f"Probe message failed validation: {err}",
+        )
 
     # Mark fired BEFORE attempting delivery — race-safe against double-POST.
     # If delivery fails downstream, the probe stays "fired" with a stale

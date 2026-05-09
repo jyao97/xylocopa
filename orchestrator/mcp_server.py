@@ -1535,17 +1535,21 @@ def probe_create(
     """
     if not agent_id or not isinstance(agent_id, str):
         return "Error: agent_id is required."
-    if not message or not message.strip():
-        return "Error: message is required and cannot be empty."
     if expires_in_hours <= 0 or expires_in_hours > _PROBE_MAX_HOURS:
         return f"Error: expires_in_hours must be in (0, {_PROBE_MAX_HOURS}]."
 
+    from models import Agent, Probe
+    from datetime import timedelta
+    from utils import utcnow as _utcnow
+
+    # Centralized validation — same rules apply at dispatch time as defense
+    # in depth. Catches embedded envelope spoofing, oversize, control chars.
+    err = Probe.validate_message(message)
+    if err:
+        return f"Error: {err}"
+
     sess = _get_write_session()
     try:
-        from models import Agent, Probe
-        from datetime import timedelta
-        from utils import utcnow as _utcnow
-
         agent = sess.get(Agent, agent_id)
         if agent is None:
             return f"Error: agent {agent_id} not found."

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.9] - 2026-05-08
+
+### Fixed
+
+- **Agents page no longer shows stale unread / message preview for 5 s after returning from background.** `AgentsPage.jsx` activate effect was setting up a `setInterval(POLL_INTERVAL=5000)` without an immediate first call, so resuming the PWA from background (or switching to the Agents tab from another tab) left the list rendering whatever data was last fetched before the page went idle — typically up to 5 s out of date — even though the push notification had already arrived and the DB had the new state. The mount-time seed (`seededRef`) didn't cover this path because it persists across activations. Activate now fires `pollTick()` and `loadUnlinked()` immediately before installing the interval, dropping the worst-case stale window from ~5 s to one network round-trip (~50 ms). MonitorContext's separate 2 s warm-up `fetchAgents` doesn't help here because it writes to its own state (used by MonitorPage), not the AgentsContext store.
+
 ## [0.10.5] - 2026-05-04
 
 ### Fixed

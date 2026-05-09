@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { Bell } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { projectBadgeColor, modelDisplayName } from "../../lib/constants";
 import { relativeTime } from "../../lib/formatters";
@@ -142,9 +143,7 @@ function PlanningCard({ task, selecting, selected, onToggle, expanded, onExpand,
               )}
               {task.notify_at && (
                 <span className="text-[11px] text-amber-500 dark:text-amber-400 flex items-center gap-0.5">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Bell className="w-3 h-3" strokeWidth={2} />
                   {relativeTime(task.notify_at)}
                 </span>
               )}

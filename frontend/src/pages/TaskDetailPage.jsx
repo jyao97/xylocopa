@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Bell } from "lucide-react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { fetchTaskV2, updateTaskV2, dispatchTask, cancelTask } from "../lib/api";
 import { TASK_STATUS_COLORS, TASK_STATUS_TEXT_COLORS, projectBadgeColor, modelDisplayName, POLL_INTERVAL } from "../lib/constants";
@@ -235,9 +236,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
           )}
           {task.notify_at && (
             <span className="text-[10px] text-amber-400 flex items-center gap-0.5">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <Bell className="w-3 h-3" strokeWidth={2} />
               {relativeTime(task.notify_at)}
             </span>
           )}
@@ -285,9 +284,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                     className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                       editNotifyAt ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-input border-edge text-dim hover:text-heading"
                     }`}>
-                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <Bell className="w-4 h-4 shrink-0" strokeWidth={2} />
                     {editNotifyAt ? new Date(editNotifyAt).toLocaleString([], DATE_SHORT) : "Set reminder"}
                   </button>
                   {showRemindPicker && (

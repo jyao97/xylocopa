@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
-import { Hourglass } from "lucide-react";
+import { Bell, Hourglass } from "lucide-react";
 import { modelDisplayName, MODEL_OPTIONS } from "../../lib/constants";
 import { relativeTime } from "../../lib/formatters";
 import { updateTaskV2, uploadFile, cancelTask, dispatchTask, regenerateTaskSummary } from "../../lib/api";
@@ -631,9 +631,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   )}
                   {task.notify_at && (
                     <span className="text-[10px] text-amber-500 dark:text-amber-400 flex items-center gap-0.5">
-                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Bell className="w-2.5 h-2.5" strokeWidth={2} />
                       {relativeTime(task.notify_at)}
                     </span>
                   )}
@@ -763,9 +761,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   )}
                   {task.notify_at && (
                     <span className="text-[11px] text-amber-500 dark:text-amber-400 flex items-center gap-0.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Bell className="w-3 h-3" strokeWidth={2} />
                       {relativeTime(task.notify_at)}
                     </span>
                   )}
@@ -836,9 +832,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                         task.notify_at ? "bg-amber-500 text-white" : "bg-elevated text-dim hover:text-heading"
                       }`}
                       title="Set notification time">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                      </svg>
+                      <Bell className="w-4 h-4" strokeWidth={2} />
                     </button>
                     {showRemindPicker && (
                       <SendLaterPicker

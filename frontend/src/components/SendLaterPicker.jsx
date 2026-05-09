@@ -33,11 +33,21 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
   const now = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
-  const [selectedDay, setSelectedDay] = useState(null); // { year, month, day }
-  // Store time in 12h format
-  const [hour12, setHour12] = useState(9);
-  const [minute, setMinute] = useState(0);
-  const [ampm, setAmpm] = useState("AM");
+  // Default to today + current time so a user wanting "soon" only has to
+  // step the minute (or click confirm after one nudge). Centralizing this
+  // here means every call site (defer, notify_at, scheduled message) gets
+  // the same behavior.
+  const [selectedDay, setSelectedDay] = useState(() => ({
+    year: now.getFullYear(),
+    month: now.getMonth(),
+    day: now.getDate(),
+  }));
+  const [hour12, setHour12] = useState(() => {
+    const h = now.getHours() % 12;
+    return h === 0 ? 12 : h;
+  });
+  const [minute, setMinute] = useState(() => now.getMinutes());
+  const [ampm, setAmpm] = useState(() => now.getHours() >= 12 ? "PM" : "AM");
 
   // Convert 12h → 24h for final output
   const to24h = () => {
@@ -134,10 +144,20 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
     setSelectedDay({ year: viewYear, month: viewMonth, day });
   };
 
-  const handleConfirm = () => {
-    if (!selectedDay) return;
+  // Recomputes when day/time changes so confirm enables exactly when the
+  // selected moment is in the future. Replaces the old silent past-check
+  // in handleConfirm (which left users wondering why the button "didn't
+  // work") with a visibly-disabled confirm.
+  const selectedIsFuture = useMemo(() => {
+    if (!selectedDay) return false;
     const d = new Date(selectedDay.year, selectedDay.month, selectedDay.day, to24h(), minute, 0, 0);
-    if (d <= new Date()) return;
+    return d > new Date();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDay, hour12, minute, ampm]);
+
+  const handleConfirm = () => {
+    if (!selectedIsFuture) return;
+    const d = new Date(selectedDay.year, selectedDay.month, selectedDay.day, to24h(), minute, 0, 0);
     onSelect(d.toISOString());
   };
 
@@ -274,9 +294,9 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={!selectedDay}
+          disabled={!selectedIsFuture}
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-            selectedDay ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-faint cursor-not-allowed"
+            selectedIsFuture ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-faint cursor-not-allowed"
           }`}
           title="Confirm"
         >

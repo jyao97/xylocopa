@@ -78,8 +78,12 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
   const loadRef = useRef(load);
   loadRef.current = load;
   useWsEvent((event) => {
-    if (event.type !== "task_update") return;
-    if (event.data?.task_id === id) loadRef.current();
+    if (event.type === "task_update") {
+      if (event.data?.task_id === id) loadRef.current();
+    } else if (event.type === "tasks_invalidated") {
+      const ids = event.data?.task_ids || [];
+      if (ids.includes(id)) loadRef.current();
+    }
   }, [id]);
 
   const toast = useToast();

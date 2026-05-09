@@ -235,6 +235,20 @@ async def emit_task_update(task_id: str, status: str, project: str,
     await ws_manager.broadcast("task_update", payload)
 
 
+async def emit_tasks_invalidated(task_ids: list[str], reason: str = ""):
+    """Broadcast that a batch of tasks has changed and clients should
+    refetch. Used for bulk mutations (e.g. defer-sweep) where emitting
+    per-task `task_update` would cause N parallel refetches at the
+    InboxTasksContext layer — that listener always does a full refetch,
+    so a single coalesced event is all that's needed. Carries task_ids
+    so per-task subscribers (e.g. TaskDetailPage) can filter precisely.
+    """
+    await ws_manager.broadcast("tasks_invalidated", {
+        "task_ids": list(task_ids),
+        "reason": reason,
+    })
+
+
 async def emit_worker_update(action: str, process_name: str, project: str = ""):
     await ws_manager.broadcast("worker_update", {
         "action": action,  # "created" | "destroyed"

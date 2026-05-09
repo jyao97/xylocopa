@@ -3063,13 +3063,17 @@ Here are the day's conversations (with timestamps):
         for t in expired_tasks:
             t.deferred_to = None
         db.commit()
-        from websocket import emit_agent_update, emit_task_update
+        from websocket import emit_agent_update, emit_tasks_invalidated
         for a in expired_agents:
             self._emit(emit_agent_update(a.id, a.status.value, a.project))
-        for t in expired_tasks:
-            self._emit(emit_task_update(
-                t.id, t.status.value, t.project_name or "",
-                title=t.title, agent_id=t.agent_id,
+        # Coalesce N task changes into one WS event — InboxTasksContext
+        # full-refetches on `tasks_invalidated`, so a single event avoids
+        # N parallel /api/v2/tasks calls. TaskDetailPage filters on
+        # task_ids so only the relevant detail page (if any) refetches.
+        if expired_tasks:
+            self._emit(emit_tasks_invalidated(
+                [t.id for t in expired_tasks],
+                reason="defer_expired",
             ))
         logger.info(
             "defer-sweep: cleared %d agent(s), %d task(s)",

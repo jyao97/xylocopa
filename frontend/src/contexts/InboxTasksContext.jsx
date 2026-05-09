@@ -88,9 +88,11 @@ export function InboxTasksProvider({ children }) {
     return () => { clearInterval(t); clearInterval(c); };
   }, [visible, refetch, refetchCounts]);
 
-  // WS-driven invalidation
+  // WS-driven invalidation. `task_update` fires per single-task mutation
+  // (PATCH endpoints); `tasks_invalidated` is the coalesced batch signal
+  // (e.g. defer-sweep) — both reach the same full-refetch path here.
   useWsEvent((event) => {
-    if (event.type !== "task_update") return;
+    if (event.type !== "task_update" && event.type !== "tasks_invalidated") return;
     refetch();
     refetchCounts();
   });

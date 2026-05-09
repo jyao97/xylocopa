@@ -1025,16 +1025,16 @@ async def hook_agent_permission(request: Request):
         _db_perm.commit()
         from display_writer import flush_agent as _flush_perm
         _flush_perm(agent_id)
+        # Bump unread + push notification for permission card
+        _ad = getattr(request.app.state, "agent_dispatcher", None)
+        if _ad:
+            _ad._bump_unread_and_notify_interactive(
+                agent_id, summary or f"Permission needed — {tool_name}",
+            )
     except Exception:
         logger.exception("hook_agent_permission: failed to persist permission card for agent %s", agent_id[:8])
     finally:
         _db_perm.close()
-    # Bump unread + push notification for permission card
-    _ad = getattr(request.app.state, "agent_dispatcher", None)
-    if _ad:
-        _ad._bump_unread_and_notify_interactive(
-            agent_id, summary or f"Permission needed — {tool_name}",
-        )
 
     from websocket import ws_manager
     await ws_manager.broadcast("permission_request", {

@@ -275,9 +275,15 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
   // Periodic 5s poll — gated on visibility + active so we don't burn
   // CPU on pages the user isn't looking at. WS handles the
   // foreground-update path; this is just the safety net.
+  // Fire one tick immediately on activate — without this, returning from
+  // background (or switching to the Agents tab) shows up to 5s of stale
+  // data before the first setInterval tick lands. The mount-time seed
+  // doesn't cover this path because seededRef persists across activations.
   useEffect(() => {
     if (!visible || !isActive) return;
     clog(`[agents] activate visible=${visible} isActive=${isActive}`);
+    pollTick();
+    loadUnlinked();
     pollRef.current = setInterval(() => { pollTick(); loadUnlinked(); }, POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
   }, [pollTick, loadUnlinked, visible, isActive]);

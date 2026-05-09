@@ -89,7 +89,7 @@ import useContextUsage from "../hooks/useContextUsage";
 import usePageVisible from "../hooks/usePageVisible";
 import { useToast } from "../contexts/ToastContext";
 import ChatSkeleton from "../components/skeletons/ChatSkeleton";
-import { agentBriefCache } from "../lib/detailCache";
+import { agentBriefCache, processedSuggestionsCache } from "../lib/detailCache";
 import { consumePrefetch } from "../lib/chatPrefetch";
 
 const ACTIVE_AGENT_STATUSES = new Set(["EXECUTING", "IDLE"]);
@@ -696,7 +696,9 @@ function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
       const res = await applyAgentSuggestions(agentId, { accepted, rejected_ids });
       // After backend commits, has_pending_suggestions=false flows through WS
       // and the parent unmounts this card → InsightsHistoryCard takes over.
-      // We just report the count so the parent can toast.
+      // Invalidate so the next mount fetches fresh accepted/rejected rows
+      // instead of painting a stale (or empty) cached snapshot.
+      processedSuggestionsCache.invalidate(agentId);
       onApplied?.(res?.accepted ?? accepted.length);
     } catch (err) {
       console.error("Failed to apply suggestions:", err);
@@ -708,6 +710,7 @@ function ProgressSuggestionsCard({ agentId, onApplied, onDiscarded }) {
     setSubmitting(true);
     try {
       await discardAgentSuggestions(agentId);
+      processedSuggestionsCache.invalidate(agentId);
       onDiscarded?.();
     } catch (err) {
       console.error("Failed to discard suggestions:", err);
@@ -848,13 +851,21 @@ function InsightStatusCard({ status, agentId, onRetry }) {
 }
 
 function InsightsHistoryCard({ agentId }) {
-  const [items, setItems] = useState([]);
+  // Seed from cache so re-entry / refresh paints the collapsed card
+  // immediately. Empty cache → fall back to the "Loading insights…"
+  // shimmer below until the first fetch resolves.
+  const cached = processedSuggestionsCache.get(agentId);
+  const [items, setItems] = useState(() => cached?.items || []);
   const [expanded, setExpanded] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(() => !!cached);
 
   useEffect(() => {
     fetchProcessedSuggestions(agentId)
-      .then((data) => { setItems(data); setLoaded(true); })
+      .then((data) => {
+        setItems(data);
+        setLoaded(true);
+        processedSuggestionsCache.set(agentId, { items: data });
+      })
       .catch(() => setLoaded(true));
   }, [agentId]);
 

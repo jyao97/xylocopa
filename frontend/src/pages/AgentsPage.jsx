@@ -12,7 +12,7 @@ import useWebSocket, { useWsEvent, isAgentNotificationsEnabled, setAgentNotifica
 import usePageVisible from "../hooks/usePageVisible";
 import { useToast } from "../contexts/ToastContext";
 import { forwardState } from "../lib/nav";
-import { cacheAgentBriefs } from "../lib/detailCache";
+import { cacheAgentBriefs, agentBriefCache } from "../lib/detailCache";
 import { useAgents, useAgentsActions } from "../contexts/AgentsContext";
 
 const FILTER_TABS = [
@@ -313,7 +313,14 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
     if (d.deferred_to !== undefined) partial.deferred_to = d.deferred_to;
     if (d.muted !== undefined) partial.muted = d.muted;
     if (d.name !== undefined) partial.name = d.name;
-    if (Object.keys(partial).length > 0) agentsActions.patchOne(agent_id, partial);
+    if (Object.keys(partial).length > 0) {
+      agentsActions.patchOne(agent_id, partial);
+      // Mirror the patch into agentBriefCache so AgentChatPage's
+      // first-paint seed (line ~2811) sees fresh state on cold-mount
+      // (deep link / reload) — not just on warm navigation from here.
+      const existing = agentBriefCache.get(agent_id);
+      if (existing) agentBriefCache.set(agent_id, { ...existing, ...partial });
+    }
   }, [agentsActions]));
 
   // New agent appearance via WebSocket (agent_created events).

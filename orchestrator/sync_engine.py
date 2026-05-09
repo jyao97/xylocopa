@@ -451,7 +451,8 @@ def _handle_streaming_update(ad, ctx: SyncContext, turns, current_size) -> str:
             last_msg.meta_json = _merge_interactive_meta(
                 last_msg.meta_json, _meta,
             )
-        agent.last_message_preview = (_content or "")[:200]
+        if (_content or "").strip():
+            agent.last_message_preview = _content[:200]
         agent.last_message_at = _utcnow()
         db.commit()
 
@@ -651,12 +652,38 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                 continue
 
         if _actually_inserted:
-            # Skip stop_hook turns for preview (they're signals, not content)
-            _preview_turn = next(
-                (t for t in reversed(new_turns) if not (len(t) > 4 and t[4] == "stop_hook")),
-                new_turns[-1],
-            )
-            agent.last_message_preview = (_preview_turn[1] or "")[:200]
+            # Pick the most recent meaningful turn for the preview.
+            # Skip stop_hook (signal, not content); for empty-content turns,
+            # synthesize a preview from interactive metadata so AskUserQuestion
+            # / ExitPlanMode show on the card instead of falling through to
+            # "No messages yet".  Otherwise the previous (still-meaningful)
+            # preview is preserved.
+            _preview_text: str | None = None
+            for _t in reversed(new_turns):
+                _kind = _t[4] if len(_t) > 4 else None
+                if _kind == "stop_hook":
+                    continue
+                _content = _t[1] or ""
+                if _content.strip():
+                    _preview_text = _content
+                    break
+                _meta = _t[2] if len(_t) > 2 else None
+                if isinstance(_meta, dict):
+                    _items = _meta.get("interactive") or []
+                    if _items:
+                        _first = _items[0]
+                        if _first.get("type") == "ask_user_question":
+                            _qs = _first.get("questions") or []
+                            if _qs:
+                                _q = _qs[0].get("question", "").strip()
+                                _preview_text = f"❓ {_q}" if _q else "❓ Question"
+                                break
+                        elif _first.get("type") == "exit_plan_mode":
+                            _plan = (_first.get("plan") or "").strip()
+                            _preview_text = f"📋 {_plan}" if _plan else "📋 Plan ready"
+                            break
+            if _preview_text is not None:
+                agent.last_message_preview = _preview_text[:200]
             agent.last_message_at = _utcnow()
 
         try:

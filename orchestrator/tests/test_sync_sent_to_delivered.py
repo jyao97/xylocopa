@@ -291,11 +291,14 @@ async def test_sync_uuid_dedup_skips_already_imported(sync_env):
 async def test_sync_rejects_unwhitelisted_source(sync_env):
     """A USER row with source NOT in the dedup whitelist must NOT be promoted.
 
-    Regression for the bug fixed in commit cd826ac, where adding a new
-    "probe" source caused duplicate bubbles because the source whitelist
-    was forgotten. ContentMatcher is purely content-based, so the source
-    whitelist is the primary gate against false-positive promotions —
-    this test guards against future "simplifications" that drop it.
+    The whitelist (web, plan_continue, task) is the primary gate against
+    false-positive promotions: ContentMatcher is purely content-based, so
+    any unconfirmed candidate that happens to share content with an
+    incoming JSONL turn would be promoted regardless of source. The
+    `(jsonl_uuid IS NULL, delivered_at IS NULL)` pair narrows the pool
+    but is not sufficient — hook + retry edge cases briefly leave both
+    NULL with non-whitelisted sources. This test guards against future
+    "simplifications" that drop the whitelist.
     """
     from sync_engine import _promote_or_create_user_msg
 
@@ -313,7 +316,7 @@ async def test_sync_rejects_unwhitelisted_source(sync_env):
             role=MessageRole.USER,
             content="hello from somewhere",
             status=MessageStatus.SENT,
-            source="unknown_source",  # NOT in (web, plan_continue, task, probe)
+            source="unknown_source",  # NOT in (web, plan_continue, task)
             jsonl_uuid=None,
             delivered_at=None,
             display_seq=1,

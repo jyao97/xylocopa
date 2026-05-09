@@ -260,9 +260,11 @@ def _promote_or_create_user_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, 
     #
     # When adding a NEW source that creates pre_sent → SENT rows (i.e. rows
     # that legitimately need JSONL match-promotion), add it here. Forgetting
-    # was the root cause of duplicate bubbles when probe was first added
-    # (commit cd826ac). Tests in test_sync_sent_to_delivered.py guard
-    # against future regressions.
+    # was the root cause of duplicate bubbles when probe was first added.
+    # Tests in test_sync_sent_to_delivered.py guard against future regressions.
+    # NOTE: probe was folded into source="web" — probe rows go through the
+    # standard web message path with metadata.probe_id for identification, so
+    # the whitelist needs no probe-specific entry.
     candidates = (
         db.query(Message)
         .filter(
@@ -273,7 +275,6 @@ def _promote_or_create_user_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, 
                 Message.source == "web",
                 Message.source == "plan_continue",
                 Message.source == "task",
-                Message.source == "probe",
             ),
             Message.jsonl_uuid.is_(None),
             Message.delivered_at.is_(None),

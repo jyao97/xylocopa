@@ -119,11 +119,15 @@ async def trigger_probe(
 
     envelope = _envelope(probe)
     msg_id = uuid.uuid4().hex[:12]
+    # source="web" — probe rides the standard web message path. Probe identity
+    # is preserved in metadata.probe_id (used by frontend SystemBubble to render
+    # as a system event rather than user input). Reusing source="web" means the
+    # sync_engine dedup whitelist needs no probe-specific entry.
     entry = {
         "id": msg_id,
         "role": "USER",
         "content": envelope,
-        "source": "probe",
+        "source": "web",
         "status": "queued",
         "created_at": now.isoformat(),
         "scheduled_at": None,

@@ -1153,7 +1153,9 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   // Probe-fired wake messages are USER role on the wire (must go via tmux),
   // but visually they belong with /loop wakeup and other system events —
   // they are external triggers, not user input. Render as SystemBubble.
-  if (message.source === "probe") {
+  // Identity carrier is metadata.probe_id; legacy rows (created before the
+  // probe→web source merge) used source==="probe" — keep both for back-compat.
+  if (message.metadata?.probe_id || message.source === "probe") {
     return <SystemBubble message={message} />;
   }
 

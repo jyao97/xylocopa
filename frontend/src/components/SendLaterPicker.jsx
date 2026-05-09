@@ -5,7 +5,23 @@ const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTHS = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
 
-function Stepper({ value, onUp, onDown, width = "w-6" }) {
+function Stepper({ value, min, max, onUp, onDown, onChange, padTo = 0, width = "w-6" }) {
+  const display = padTo > 0 ? String(value).padStart(padTo, "0") : String(value);
+  const handleInputChange = (e) => {
+    // Strip non-digits; keep last 2 digits typed (so "346" → 46).
+    const raw = e.target.value.replace(/\D/g, "").slice(-2);
+    if (raw === "") return;
+    let n = parseInt(raw, 10);
+    if (isNaN(n)) return;
+    if (n < min) n = min;
+    if (n > max) n = max;
+    onChange(n);
+  };
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowUp") { e.preventDefault(); onUp(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); onDown(); }
+    else if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+  };
   return (
     <div className="flex flex-col items-center">
       <button type="button" onClick={onUp}
@@ -14,7 +30,15 @@ function Stepper({ value, onUp, onDown, width = "w-6" }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
         </svg>
       </button>
-      <span className={`text-sm font-semibold text-heading ${width} text-center leading-6`}>{value}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onChange={handleInputChange}
+        onFocus={(e) => e.target.select()}
+        onKeyDown={handleKeyDown}
+        className={`text-sm font-semibold text-heading ${width} text-center leading-6 bg-transparent outline-none focus:bg-input rounded-sm`}
+      />
       <button type="button" onClick={onDown}
         className="w-7 h-5 rounded-b-md bg-input hover:bg-hover flex items-center justify-center text-dim hover:text-heading transition-colors active:scale-95">
         <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -277,14 +301,21 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
           <span className="text-xs font-medium text-label mr-0.5">Time</span>
           <Stepper
             value={hour12}
+            min={1}
+            max={12}
             onUp={() => cycleHour(1)}
             onDown={() => cycleHour(-1)}
+            onChange={setHour12}
           />
           <span className="text-sm font-semibold text-dim leading-6">:</span>
           <Stepper
-            value={String(minute).padStart(2, "0")}
-            onUp={() => cycleMinute(5)}
-            onDown={() => cycleMinute(-5)}
+            value={minute}
+            min={0}
+            max={59}
+            padTo={2}
+            onUp={() => cycleMinute(1)}
+            onDown={() => cycleMinute(-1)}
+            onChange={setMinute}
           />
           <button type="button" onClick={() => setAmpm(v => v === "AM" ? "PM" : "AM")}
             className="ml-1 px-2 py-1 rounded-md bg-input hover:bg-hover text-xs font-semibold text-heading transition-colors active:scale-95">

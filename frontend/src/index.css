@@ -348,6 +348,100 @@ html.eink :where(
   stroke: var(--color-heading) !important;
 }
 
+/* Exception to the popover button transparency rule: when a button
+   declares a saturated bg as a complete class token (e.g. SendLaterPicker's
+   selected day cell, primary confirm button), restore the saturated
+   heading-bg highlight from the global saturated-bg rule below.
+   `[class~=...]` whole-token match intentionally skips alpha variants
+   (`bg-cyan-500/15`) and hover-only classes (`hover:bg-cyan-500`) so we
+   don't paint inactive buttons solid (the original popover button bug).
+   Mirrors the color set used by the global saturated-bg rule. */
+html.eink :where(
+  [class*="shadow-lg"][class*="border-divider"],
+  [class*="shadow-xl"][class*="border-divider"],
+  [class*="shadow-popover"][class*="border-divider"],
+  [class*="shadow-md"][class*="border-divider"]
+) button:where(
+  [class~="bg-cyan-500"], [class~="bg-cyan-600"], [class~="bg-cyan-700"],
+  [class~="bg-blue-500"], [class~="bg-blue-600"], [class~="bg-blue-700"],
+  [class~="bg-sky-500"], [class~="bg-sky-600"], [class~="bg-sky-700"],
+  [class~="bg-indigo-500"], [class~="bg-indigo-600"], [class~="bg-indigo-700"],
+  [class~="bg-emerald-500"], [class~="bg-emerald-600"], [class~="bg-emerald-700"],
+  [class~="bg-green-500"], [class~="bg-green-600"], [class~="bg-green-700"],
+  [class~="bg-red-500"], [class~="bg-red-600"], [class~="bg-red-700"],
+  [class~="bg-rose-500"], [class~="bg-rose-600"], [class~="bg-rose-700"],
+  [class~="bg-pink-500"], [class~="bg-pink-600"], [class~="bg-pink-700"],
+  [class~="bg-amber-500"], [class~="bg-amber-600"], [class~="bg-amber-700"],
+  [class~="bg-orange-500"], [class~="bg-orange-600"], [class~="bg-orange-700"],
+  [class~="bg-yellow-500"], [class~="bg-yellow-600"], [class~="bg-yellow-700"],
+  [class~="bg-lime-500"], [class~="bg-lime-600"], [class~="bg-lime-700"],
+  [class~="bg-teal-500"], [class~="bg-teal-600"], [class~="bg-teal-700"],
+  [class~="bg-violet-500"], [class~="bg-violet-600"], [class~="bg-violet-700"],
+  [class~="bg-purple-500"], [class~="bg-purple-600"], [class~="bg-purple-700"],
+  [class~="bg-fuchsia-500"], [class~="bg-fuchsia-600"], [class~="bg-fuchsia-700"]
+) {
+  background-color: var(--color-heading) !important;
+  color: var(--color-page) !important;
+}
+/* Repaint SVG inside the active button so the icon contrasts against
+   the now-dark fill (existing rule pinned svg stroke/fill to heading). */
+html.eink :where(
+  [class*="shadow-lg"][class*="border-divider"],
+  [class*="shadow-xl"][class*="border-divider"],
+  [class*="shadow-popover"][class*="border-divider"],
+  [class*="shadow-md"][class*="border-divider"]
+) button:where(
+  [class~="bg-cyan-500"], [class~="bg-blue-500"], [class~="bg-sky-500"],
+  [class~="bg-indigo-500"], [class~="bg-emerald-500"], [class~="bg-green-500"],
+  [class~="bg-red-500"], [class~="bg-rose-500"], [class~="bg-pink-500"],
+  [class~="bg-amber-500"], [class~="bg-orange-500"], [class~="bg-yellow-500"],
+  [class~="bg-lime-500"], [class~="bg-teal-500"], [class~="bg-violet-500"],
+  [class~="bg-purple-500"], [class~="bg-fuchsia-500"]
+) svg[stroke]:not([stroke="none"]),
+html.eink :where(
+  [class*="shadow-lg"][class*="border-divider"],
+  [class*="shadow-xl"][class*="border-divider"],
+  [class*="shadow-popover"][class*="border-divider"],
+  [class*="shadow-md"][class*="border-divider"]
+) button:where(
+  [class~="bg-cyan-500"], [class~="bg-blue-500"], [class~="bg-sky-500"],
+  [class~="bg-indigo-500"], [class~="bg-emerald-500"], [class~="bg-green-500"],
+  [class~="bg-red-500"], [class~="bg-rose-500"], [class~="bg-pink-500"],
+  [class~="bg-amber-500"], [class~="bg-orange-500"], [class~="bg-yellow-500"],
+  [class~="bg-lime-500"], [class~="bg-teal-500"], [class~="bg-violet-500"],
+  [class~="bg-purple-500"], [class~="bg-fuchsia-500"]
+) svg [stroke]:not([stroke="none"]) {
+  stroke: var(--color-page) !important;
+}
+html.eink :where(
+  [class*="shadow-lg"][class*="border-divider"],
+  [class*="shadow-xl"][class*="border-divider"],
+  [class*="shadow-popover"][class*="border-divider"],
+  [class*="shadow-md"][class*="border-divider"]
+) button:where(
+  [class~="bg-cyan-500"], [class~="bg-blue-500"], [class~="bg-sky-500"],
+  [class~="bg-indigo-500"], [class~="bg-emerald-500"], [class~="bg-green-500"],
+  [class~="bg-red-500"], [class~="bg-rose-500"], [class~="bg-pink-500"],
+  [class~="bg-amber-500"], [class~="bg-orange-500"], [class~="bg-yellow-500"],
+  [class~="bg-lime-500"], [class~="bg-teal-500"], [class~="bg-violet-500"],
+  [class~="bg-purple-500"], [class~="bg-fuchsia-500"]
+) svg[fill]:not([fill="none"]),
+html.eink :where(
+  [class*="shadow-lg"][class*="border-divider"],
+  [class*="shadow-xl"][class*="border-divider"],
+  [class*="shadow-popover"][class*="border-divider"],
+  [class*="shadow-md"][class*="border-divider"]
+) button:where(
+  [class~="bg-cyan-500"], [class~="bg-blue-500"], [class~="bg-sky-500"],
+  [class~="bg-indigo-500"], [class~="bg-emerald-500"], [class~="bg-green-500"],
+  [class~="bg-red-500"], [class~="bg-rose-500"], [class~="bg-pink-500"],
+  [class~="bg-amber-500"], [class~="bg-orange-500"], [class~="bg-yellow-500"],
+  [class~="bg-lime-500"], [class~="bg-teal-500"], [class~="bg-violet-500"],
+  [class~="bg-purple-500"], [class~="bg-fuchsia-500"]
+) svg [fill]:not([fill="none"]) {
+  fill: var(--color-page) !important;
+}
+
 /* Toast pills (ToastContext.jsx) use inline styles — rgba(255,255,255,0.95)
    bg + box-shadow as a hairline ring + backdrop-filter blur. With our
    global no-shadow rule the hairline ring disappears, leaving the

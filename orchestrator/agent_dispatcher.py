@@ -3035,12 +3035,57 @@ Here are the day's conversations (with timestamps):
         parts.append("- Leave a summary of what was done as your final message")
         return "\n".join(parts), insights_list
 
+    def _sweep_expired_defers(self, db: Session):
+        """Clear `deferred_to` on agents/tasks whose snooze has elapsed and
+        broadcast the change so the UI can move them out of the Deferred
+        section without waiting for the next 5s poll.
+
+        Why this lives in the dispatcher tick: avoids spawning a separate
+        timer; the 2s tick gives ≤2s detection latency. With this sweep,
+        every consumer (deferred-section grouping, defer-button highlight,
+        Hourglass chip) can rely on `deferred_to is None` as the single
+        source of truth — no parallel `> now` checks scattered across the
+        frontend.
+        """
+        now = datetime.utcnow()
+        expired_agents = db.query(Agent).filter(
+            Agent.deferred_to.isnot(None),
+            Agent.deferred_to <= now,
+        ).all()
+        expired_tasks = db.query(Task).filter(
+            Task.deferred_to.isnot(None),
+            Task.deferred_to <= now,
+        ).all()
+        if not expired_agents and not expired_tasks:
+            return
+        for a in expired_agents:
+            a.deferred_to = None
+        for t in expired_tasks:
+            t.deferred_to = None
+        db.commit()
+        from websocket import emit_agent_update, emit_task_update
+        for a in expired_agents:
+            self._emit(emit_agent_update(a.id, a.status.value, a.project))
+        for t in expired_tasks:
+            self._emit(emit_task_update(
+                t.id, t.status.value, t.project_name or "",
+                title=t.title, agent_id=t.agent_id,
+            ))
+        logger.info(
+            "defer-sweep: cleared %d agent(s), %d task(s)",
+            len(expired_agents), len(expired_tasks),
+        )
+
     async def _tick(self, db: Session):
         # Invalidate per-tick tmux map cache
         self._tmux_map_cache = None
 
         # Refresh tmux pane-attached cache for notification suppression
         self._refresh_pane_attached()
+
+        # 0pre. Sweep expired defers — clears deferred_to and emits WS so
+        # the UI's Deferred section flushes within ≤2s of expiry.
+        self._sweep_expired_defers(db)
 
         # 0pre. Check scheduled tasks (notify_at reminders + dispatch_at auto-dispatch)
         self._check_scheduled_tasks(db)

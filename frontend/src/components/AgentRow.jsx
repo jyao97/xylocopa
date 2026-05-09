@@ -201,7 +201,7 @@ const AgentRow = memo(function AgentRow({
                 failed
               </span>
             )}
-            {agent.deferred_to && new Date(agent.deferred_to) > new Date() && (
+            {agent.deferred_to && (
               <span className="text-[10px] text-indigo-400 flex items-center gap-0.5">
                 <Hourglass className="w-2.5 h-2.5" strokeWidth={2} />
                 {relativeTime(agent.deferred_to)}

@@ -49,13 +49,15 @@ export default function InboxView({ tasks, loading, selecting, selected, onToggl
     if (optimisticIds) setOptimisticIds(null);
   }
 
-  // Split tasks into active and deferred
+  // Split tasks into active and deferred. Truthy `deferred_to` is the
+  // source of truth: the dispatcher sweep
+  // (agent_dispatcher._sweep_expired_defers) clears it on expiry and emits
+  // task_update, so we don't need a `> now` time comparison here.
   const { activeTasks, deferredTasks } = useMemo(() => {
-    const now = new Date();
     const active = [];
     const deferred = [];
     for (const t of tasks) {
-      if (t.deferred_to && new Date(t.deferred_to) > now) {
+      if (t.deferred_to) {
         deferred.push(t);
       } else {
         active.push(t);

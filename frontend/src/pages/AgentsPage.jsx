@@ -383,19 +383,20 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
     return list;
   }, [statusFiltered, search]);
 
-  // Split filtered into active vs deferred (deferred_to in the future).
-  // Only group deferred separately on Active — that tab is the "what's live"
-  // view where snoozed agents would be noise. On All / Insights / Stopped,
-  // deferred agents render inline.
+  // Split filtered into active vs deferred. Only group deferred separately
+  // on Active — that tab is the "what's live" view where snoozed agents
+  // would be noise. On All / Insights / Stopped, deferred agents render
+  // inline. Truthy `deferred_to` is the source of truth: the dispatcher
+  // sweep (agent_dispatcher._sweep_expired_defers) clears it on expiry and
+  // emits agent_update, so we don't need a `> now` time comparison here.
   const { activeAgents, deferredAgents } = useMemo(() => {
     if (filter !== "ACTIVE") {
       return { activeAgents: filtered, deferredAgents: [] };
     }
-    const now = new Date();
     const active = [];
     const deferred = [];
     for (const a of filtered) {
-      if (a.deferred_to && new Date(a.deferred_to) > now) deferred.push(a);
+      if (a.deferred_to) deferred.push(a);
       else active.push(a);
     }
     deferred.sort((a, b) => new Date(a.deferred_to) - new Date(b.deferred_to));

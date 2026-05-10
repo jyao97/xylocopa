@@ -195,8 +195,6 @@ async def _dispatch_task_tmux(db: Session, task: Task, proj: Project, ad) -> str
                  "--output-format", "stream-json", "--verbose"]
     if skip_permissions:
         cmd_parts.append("--dangerously-skip-permissions")
-    # Suppress interactive cards (Xylocopa surfaces clarification as plain chat).
-    cmd_parts += ["--disallowedTools", "AskUserQuestion,ExitPlanMode"]
     if model:
         cmd_parts += ["--model", model]
     if effort:

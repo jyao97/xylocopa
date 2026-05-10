@@ -132,6 +132,14 @@ describe("extractFileAttachments", () => {
     expect(result[0].type).toBe("csv");
   });
 
+  it("detects bare LaTeX source paths (.tex)", () => {
+    const text = "/home/jyao073/xylocopa-projects/random-things/ee266_proposal_v2.tex\n\nbody";
+    const result = extractFileAttachments(text, PROJECT);
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe("doc");
+    expect(result[0].ext).toBe("tex");
+  });
+
   // --- Workspace prefix stripping ---
 
   it("strips /projects/{project}/ prefix from absolute workspace paths", () => {

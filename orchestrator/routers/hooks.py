@@ -831,7 +831,9 @@ async def hook_agent_tool_activity(request: Request):
                 _db2.close()
             # Bump unread + push notification for permission card
             if ad:
-                ad._bump_unread_and_notify_interactive(agent_id, _perm_question)
+                ad._bump_unread_and_notify_interactive(
+                    agent_id, f"[interactive cards] {_perm_question}",
+                )
 
     # Wake the JSONL sync loop so new message content is picked up
     # immediately instead of waiting for the next poll cycle.
@@ -1029,7 +1031,8 @@ async def hook_agent_permission(request: Request):
         _ad = getattr(request.app.state, "agent_dispatcher", None)
         if _ad:
             _ad._bump_unread_and_notify_interactive(
-                agent_id, summary or f"Permission needed — {tool_name}",
+                agent_id,
+                f"[interactive cards] {summary or f'{tool_name} requires permission'}",
             )
     except Exception:
         logger.exception("hook_agent_permission: failed to persist permission card for agent %s", agent_id[:8])

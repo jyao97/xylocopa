@@ -126,24 +126,30 @@ def _end_compact_activity(db, agent_id: str, session_id: str):
 
 def _notify_interactive(ad, agent, new_turns):
     """Bump unread + send push for unanswered interactive items."""
-    _interactive_types = []
+    _plan_content: str | None = None
+    _question_content: str | None = None
     for _r, _c, *_rest in new_turns:
         if _r == "assistant" and _rest:
             _meta = _rest[0] if _rest else None
             if isinstance(_meta, dict):
                 for _item in _meta.get("interactive", []):
-                    if _item.get("answer") is None:
-                        _interactive_types.append(_item.get("type", ""))
+                    if _item.get("answer") is not None:
+                        continue
+                    _t = _item.get("type", "")
+                    if _t == "exit_plan_mode" and _plan_content is None:
+                        _plan_content = (_item.get("plan") or "").strip()
+                    elif _t == "ask_user_question" and _question_content is None:
+                        _qs = _item.get("questions") or []
+                        if _qs:
+                            _question_content = _qs[0].get("question", "").strip()
 
-    if not _interactive_types:
-        return
-
-    if "exit_plan_mode" in _interactive_types:
-        ad._bump_unread_and_notify_interactive(agent.id, "Plan approval needed")
-    elif "ask_user_question" in _interactive_types:
-        ad._bump_unread_and_notify_interactive(
-            agent.id, "Question — waiting for your answer",
-        )
+    # Plan takes precedence (preserves original elif ordering).
+    if _plan_content is not None:
+        body = f"[interactive cards] {_plan_content}" if _plan_content else "[interactive cards] plan ready"
+        ad._bump_unread_and_notify_interactive(agent.id, body)
+    elif _question_content is not None:
+        body = f"[interactive cards] {_question_content}" if _question_content else "[interactive cards] question"
+        ad._bump_unread_and_notify_interactive(agent.id, body)
 
 
 def _infer_status_from_signals(
@@ -695,11 +701,11 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                             _qs = _first.get("questions") or []
                             if _qs:
                                 _q = _qs[0].get("question", "").strip()
-                                _preview_text = f"❓ {_q}" if _q else "❓ Question"
+                                _preview_text = f"[interactive cards] {_q}" if _q else "[interactive cards] question"
                                 break
                         elif _first.get("type") == "exit_plan_mode":
                             _plan = (_first.get("plan") or "").strip()
-                            _preview_text = f"📋 {_plan}" if _plan else "📋 Plan ready"
+                            _preview_text = f"[interactive cards] {_plan}" if _plan else "[interactive cards] plan ready"
                             break
             if _preview_text is not None:
                 agent.last_message_preview = _preview_text[:200]

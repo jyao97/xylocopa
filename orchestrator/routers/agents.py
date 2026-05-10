@@ -657,6 +657,8 @@ async def create_agent(body: AgentCreate, request: Request, db: Session = Depend
                      "--output-format", "stream-json", "--verbose"]
         if body.skip_permissions:
             cmd_parts.append("--dangerously-skip-permissions")
+        # Suppress interactive cards (Xylocopa surfaces clarification as plain chat).
+        cmd_parts += ["--disallowedTools", "AskUserQuestion,ExitPlanMode"]
         if agent_model:
             cmd_parts += ["--model", agent_model]
         if body.effort:
@@ -816,6 +818,8 @@ async def launch_tmux_agent(request: Request, db: Session = Depends(get_db)):
                   "--output-format", "stream-json", "--verbose"]
     if skip_permissions:
         cmd_parts.append("--dangerously-skip-permissions")
+    # Suppress interactive cards (Xylocopa surfaces clarification as plain chat).
+    cmd_parts += ["--disallowedTools", "AskUserQuestion,ExitPlanMode"]
     if model:
         cmd_parts += ["--model", model]
     if effort:
@@ -2435,6 +2439,8 @@ async def resume_agent(agent_id: str, request: Request, db: Session = Depends(ge
                           "--output-format", "stream-json", "--verbose"]
             if agent.skip_permissions:
                 cmd_parts.append("--dangerously-skip-permissions")
+            # Suppress interactive cards (Xylocopa surfaces clarification as plain chat).
+            cmd_parts += ["--disallowedTools", "AskUserQuestion,ExitPlanMode"]
             if agent.model:
                 cmd_parts += ["--model", agent.model]
             if agent.worktree:

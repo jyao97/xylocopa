@@ -522,6 +522,29 @@ export default function App() {
   const navigate = useNavigate();
   const showDebug = useDebugLines();
 
+  // SW update gate — block all UI (including LoginPage) until we know
+  // whether a new Service Worker is pending. Prevents the race where SW
+  // activation reloads the page mid-login (two-unlocks bug).
+  const [swState, setSwState] = useState('checking');
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) { setSwState('ready'); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) { if (!cancelled) setSwState('ready'); return; }
+        try { await reg.update(); } catch { /* offline — proceed */ }
+        if (cancelled) return;
+        setSwState(reg.installing || reg.waiting ? 'updating' : 'ready');
+      } catch {
+        if (!cancelled) setSwState('ready');
+      }
+    })();
+    // Safety: never sit on the gate forever
+    const timer = setTimeout(() => { if (!cancelled) setSwState('ready'); }, 8000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
+
   // Service Worker notification click — split-screen aware navigation.
   // Listener is mounted ONCE and reads pathname/navigate via refs so it
   // never detaches across route changes.  Previous deps-based effect
@@ -586,6 +609,27 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
+  if (swState !== 'ready') {
+    return (
+      <ErrorBoundary>
+      <ToastProvider>
+      <div className="flex flex-col h-screen bg-page text-heading min-w-[320px] overflow-x-hidden">
+        <main className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-4">
+          {swState === 'checking' ? (
+            <p className="text-dim text-sm animate-pulse">Loading...</p>
+          ) : (
+            <>
+              <p className="text-label text-sm animate-pulse">Updating to latest version…</p>
+              <p className="text-dim text-xs">The app will reload automatically.</p>
+            </>
+          )}
+        </main>
+      </div>
+      </ToastProvider>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>

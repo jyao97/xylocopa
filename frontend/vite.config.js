@@ -33,28 +33,39 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // 'prompt' (vs 'autoUpdate'): new SW installs in background but does
-      // NOT auto-reload the page. Combined with clientsClaim removed below,
-      // existing tabs keep using the old SW until manually refreshed —
-      // avoiding the iOS controllerchange→reload loop.
-      registerType: 'prompt',
+      // autoUpdate (vs prompt): new SW installs + activates without user
+      // intervention. Combined with skipWaiting + no NavigationRoute below,
+      // tabs see fresh HTML on next navigation without the "zombie SW
+      // serving stale cached index.html" failure mode that made cert-regen
+      // recovery require website-data clearing.
+      registerType: 'autoUpdate',
       devOptions: { enabled: true },
       workbox: {
-        // skipWaiting kept: new SW activates without waiting for old SW to
-        // be released. clientsClaim removed: new SW will only control NEW
-        // navigations, not steal currently-loaded pages.
         skipWaiting: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        clientsClaim: true,
+        // No 'html' here — index.html is NOT precached. Navigation requests
+        // go straight to the network (NetworkOnly route below), so a TLS
+        // failure surfaces as Safari's warning page instead of a silent
+        // SW-served stale shell.
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
         // Import existing push notification handler into generated SW
         importScripts: ['/push-handler.js'],
-        // Workbox's NavigationRoute serves cached index.html for any
-        // navigation request — that's correct for SPA routes like /tasks,
-        // but it was also intercepting /api/cert link clicks and returning
-        // index.html instead of the actual cert file (no extension =
-        // not in the default denylist). Same problem for any other backend
-        // resource users might link to.
-        navigateFallbackDenylist: [/^\/api\//],
+        // Belt-and-suspenders: explicitly tell Workbox NOT to register a
+        // default NavigationRoute for SPA fallback (we use NetworkOnly
+        // below).  Without this, vite-plugin-pwa would auto-register one
+        // that serves precached index.html as the SPA shell.
+        navigateFallback: null,
         runtimeCaching: [
+          // Navigation requests (top-level page loads) — go straight to
+          // network. If TLS / network fails, Safari shows its own warning
+          // page or "no internet" UX, which is recoverable. If we cached
+          // and served stale HTML here, fetches inside the page would fail
+          // silently after cert changes and the user would have to clear
+          // website data manually.
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkOnly',
+          },
           // Fluent UI emoji SVGs from jsdelivr — immutable assets, cache forever
           {
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/gh\/microsoft\/fluentui-emoji.*\.svg$/,

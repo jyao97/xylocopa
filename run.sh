@@ -123,6 +123,11 @@ case "$CMD" in
         echo "Restarting Xylocopa..."
         # Self-heal venv shebangs/activate paths if the project dir was moved
         "$SCRIPT_DIR/heal-venv.sh" || echo "heal-venv: continuing despite errors"
+        # Auto-regen self-signed cert if current host IPs aren't all in SAN
+        # (Tailscale reinstall / LAN-IP change otherwise leaves clients with
+        # "Not secure" warnings).  mkcert path preserves CA → existing client
+        # trust survives the regen; openssl fallback warns to reinstall CA.
+        "$SCRIPT_DIR/tools/ensure-cert.sh" || echo "ensure-cert: continuing despite errors"
         # Rebuild frontend dist/ if src/ has moved ahead — `vite preview`
         # serves the static bundle, so a stale dist would mask code changes.
         _build_frontend_if_stale || exit 1

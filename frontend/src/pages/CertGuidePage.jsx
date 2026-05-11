@@ -119,8 +119,15 @@ function CertRegenSection() {
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
-      setMsg({ kind: "ok", text: "Done. Reloading…" });
-      setTimeout(() => window.location.reload(), 2000);
+      // Backend skipped the regen because the current cert already covers
+      // this IP — no leaf fingerprint change, no Safari trust loss, no
+      // reload needed.  This is the happy path on repeat clicks.
+      if (j.skipped) {
+        setMsg({ kind: "ok", text: "Already covered — no regen needed." });
+      } else {
+        setMsg({ kind: "ok", text: "Done. Reloading…" });
+        setTimeout(() => window.location.reload(), 2000);
+      }
     } catch (e) {
       setMsg({ kind: "error", text: String(e.message || e) });
     } finally {

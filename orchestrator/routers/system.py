@@ -104,6 +104,32 @@ async def cert_regenerate(request: Request):
     key_path = os.path.join(certs_dir, "selfsigned.key")
     os.makedirs(certs_dir, exist_ok=True)
 
+    # Idempotency: if current cert SAN already covers everything we'd sign,
+    # skip — re-signing changes the leaf fingerprint and invalidates every
+    # client's "visit this website" trust (the entire reason today went
+    # sideways). Only regen when SAN would actually change.
+    requested_ips = set(ips) | {"127.0.0.1"}
+    requested_dns = set(dns)
+    if os.path.isfile(cert_path):
+        try:
+            san_proc = subprocess.run(
+                ["openssl", "x509", "-in", cert_path, "-noout", "-ext", "subjectAltName"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if san_proc.returncode == 0:
+                current_ips = set(re.findall(r"IP Address:([0-9.a-fA-F:]+)", san_proc.stdout))
+                current_dns = set(re.findall(r"DNS:([\w.\-]+)", san_proc.stdout))
+                if requested_ips.issubset(current_ips) and requested_dns.issubset(current_dns):
+                    return {
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "current cert already covers requested IPs/DNS",
+                        "current_ips": sorted(current_ips),
+                        "current_dns": sorted(current_dns),
+                    }
+        except Exception as e:
+            logger.warning("[cert] SAN inspection failed, proceeding with regen: %s", e)
+
     # 127.0.0.1 always included so server-internal callers (vite preview
     # proxy → backend) keep working regardless of what the user typed.
     mkcert_args = [

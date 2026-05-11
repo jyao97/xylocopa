@@ -94,6 +94,85 @@ const androidPwaSteps = [
 export const CERT_FLOW_KEY = "xy:cert-flow-pending";
 export const CERT_FLOW_TTL_MS = 60_000;
 
+// Pre-fills with the host the browser is currently using (window.location.hostname)
+// — that's the server identity from this client's vantage point, which is exactly
+// what the cert SAN needs to cover. User confirms, server re-signs with just that
+// one IP. ensure-cert.sh always adds 127.0.0.1 + DNS names server-side.
+function CertRegenSection() {
+  const [ip, setIp] = useState(typeof window !== "undefined" ? window.location.hostname : "");
+  const [regenerating, setRegenerating] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const handleRegenerate = async () => {
+    const cleaned = ip.trim();
+    if (!/^[0-9.]+$/.test(cleaned)) {
+      setMsg({ kind: "error", text: "Enter a valid IP first" });
+      return;
+    }
+    setRegenerating(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/cert/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ips: [cleaned], dns: ["xylocopa", "localhost"] }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+      setMsg({ kind: "ok", text: "Done. Reloading…" });
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (e) {
+      setMsg({ kind: "error", text: String(e.message || e) });
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-3">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white text-sm font-bold flex items-center justify-center">
+          1
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium text-heading text-sm">Confirm IP address</div>
+          <p className="text-xs text-dim mt-0.5">The address you're using to access this app.</p>
+          <input
+            type="text"
+            value={ip}
+            onChange={(e) => setIp(e.target.value)}
+            className="mt-2 w-full font-mono text-xs bg-page/50 border border-divider/50 rounded-md px-2 py-1.5 text-heading"
+            spellCheck={false}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white text-sm font-bold flex items-center justify-center">
+          2
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium text-heading text-sm">Regenerate certificate</div>
+          <p className="text-xs text-dim mt-0.5">Re-issues the cert for this IP only.</p>
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="mt-2 px-3 py-1.5 rounded-md text-xs bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white"
+          >
+            {regenerating ? "Regenerating…" : "Regenerate"}
+          </button>
+          {msg && (
+            <p className={`text-xs mt-2 ${msg.kind === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+              {msg.text}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StepList({ steps, onLinkClick }) {
   return (
     <div className="space-y-4">
@@ -189,9 +268,20 @@ export default function CertGuidePage() {
           </button>
         </div>
 
-        {/* Section 1: CA Certificate (must be done first) */}
+        {/* Step 1: Regenerate cert for the current IP (only needed if the
+            host's address changed since the last cert was signed). */}
         <div className="text-center mb-5">
-          <h1 className="text-lg font-semibold text-heading">Step 1: Trust Certificate</h1>
+          <h1 className="text-lg font-semibold text-heading">Step 1: Regenerate Certificate</h1>
+          <p className="text-sm text-dim mt-1">Sign a fresh cert for the address you're using</p>
+        </div>
+
+        <div className="rounded-2xl bg-surface/60 backdrop-blur-md border border-divider/50 p-5 shadow-lg">
+          <CertRegenSection />
+        </div>
+
+        {/* Section 2: CA Certificate (must be done first) */}
+        <div className="text-center mt-8 mb-5">
+          <h1 className="text-lg font-semibold text-heading">Step 2: Trust Certificate</h1>
           <p className="text-sm text-dim mt-1">Required for voice input, file uploads, and the app to work without warnings</p>
         </div>
 
@@ -202,9 +292,9 @@ export default function CertGuidePage() {
           />
         </div>
 
-        {/* Section 2: Add to Home Screen */}
+        {/* Section 3: Add to Home Screen */}
         <div className="text-center mt-8 mb-5">
-          <h2 className="text-base font-semibold text-heading">Step 2: Add to Home Screen</h2>
+          <h2 className="text-base font-semibold text-heading">Step 3: Add to Home Screen</h2>
           <p className="text-sm text-dim mt-1">
             {isAndroid ? "Install as a PWA from Chrome" : "Install as a PWA from Safari"}
           </p>

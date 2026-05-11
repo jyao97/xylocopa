@@ -63,6 +63,69 @@ def _check_reload_storm(ip: str, reason: str, path: str) -> None:
 
 # ---- Certificate download (for mobile trust setup) ----
 
+@router.post("/api/cert/regenerate")
+async def cert_regenerate(request: Request):
+    """Regenerate the leaf cert with an explicit IP/DNS list.
+
+    Body: {"ips": ["1.2.3.4", ...], "dns": ["xylocopa", "localhost"]}
+    Both fields optional — empty falls back to ensure-cert.sh defaults.
+
+    Runs tools/ensure-cert.sh with --force.  Caller (frontend) is expected
+    to ask the user to reload the page; vite preview picks up the new cert
+    on the next pm2 reload, which we trigger best-effort here.
+    """
+    import subprocess
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    ips = body.get("ips") or []
+    dns = body.get("dns") or []
+    if not isinstance(ips, list) or not isinstance(dns, list):
+        raise HTTPException(status_code=400, detail="ips/dns must be lists")
+    # Basic validation — only digits/dots for IPs, alphanumerics/dot/hyphen for DNS
+    import re
+    for ip in ips:
+        if not isinstance(ip, str) or not re.match(r"^[0-9.]+$", ip):
+            raise HTTPException(status_code=400, detail=f"invalid IP: {ip!r}")
+    for name in dns:
+        if not isinstance(name, str) or not re.match(r"^[\w.\-]+$", name):
+            raise HTTPException(status_code=400, detail=f"invalid DNS name: {name!r}")
+
+    script = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "tools", "ensure-cert.sh")
+    )
+    if not os.path.isfile(script):
+        raise HTTPException(status_code=500, detail="ensure-cert.sh not found")
+
+    args = [script, "--force"]
+    if ips:
+        args.extend(["--ips", ",".join(ips)])
+    if dns:
+        args.extend(["--dns", ",".join(dns)])
+
+    proc = subprocess.run(args, capture_output=True, text=True, timeout=30)
+    if proc.returncode != 0:
+        logger.error("[cert] regen failed: stdout=%s stderr=%s", proc.stdout, proc.stderr)
+        raise HTTPException(
+            status_code=500,
+            detail=f"regen failed: {(proc.stderr or proc.stdout).strip()[:500]}",
+        )
+
+    # Best-effort frontend reload so vite preview picks up the new cert.
+    # If pm2 isn't around (dev mode), this just no-ops.
+    try:
+        subprocess.Popen(
+            ["pm2", "reload", "xylocopa-frontend"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+    return {"ok": True, "log": proc.stdout.strip()}
+
+
 @router.get("/api/cert")
 async def download_cert():
     """Serve the CA root certificate for mobile trust setup.

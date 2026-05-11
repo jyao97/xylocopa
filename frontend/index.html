@@ -57,7 +57,7 @@
     <script>
       (function(){
         // Force-clear stale PWA caches — bump version to trigger
-        var CV="v3";
+        var CV="v4";
         if(navigator.serviceWorker&&!localStorage.getItem("ah-cv-"+CV)){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             var p=regs.map(function(r){return r.unregister()});
@@ -82,6 +82,49 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Self-heal stale SW pointing at deleted chunk hashes.
+      // The PWA service worker can serve a cached index.html that references
+      // /assets/index-XXXX.js after the file was deleted by a rebuild.
+      // Capture-phase 'error' listener catches resource 404s on script/link
+      // tags (regular bubbling listeners don't see these). Recovery is
+      // gated by sessionStorage to prevent infinite reload loops.
+      (function(){
+        var KEY="xy-chunk-recover";
+        function recover(){
+          try { if(sessionStorage.getItem(KEY)==="1") return; sessionStorage.setItem(KEY,"1"); } catch(_){}
+          var unreg = (navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)
+            ? navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))})
+            : Promise.resolve();
+          unreg.then(function(){
+            return ("caches" in window) ? caches.keys().then(function(ns){return Promise.all(ns.map(function(n){return caches.delete(n)}))}) : null;
+          }).catch(function(){}).then(function(){
+            var u = new URL(location.href);
+            u.searchParams.set("_xr", Date.now());
+            location.replace(u.toString());
+          });
+        }
+        window.addEventListener("error", function(e){
+          var t = e && e.target;
+          if(!t || t === window) return;
+          var src = t.src || t.href || "";
+          if(typeof src !== "string") return;
+          if(!/\/assets\/.+\.(js|css|mjs)(\?|$)/.test(src)) return;
+          recover();
+        }, true);
+        window.addEventListener("unhandledrejection", function(e){
+          var msg = (e && e.reason && (e.reason.message || e.reason)) || "";
+          msg = String(msg);
+          if(/Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(msg)){
+            recover();
+          }
+        });
+        // Clear recovery flag once the page successfully loads enough to run modules.
+        window.addEventListener("load", function(){
+          try { sessionStorage.removeItem(KEY); } catch(_){}
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -63,49 +63,6 @@ def _check_reload_storm(ip: str, reason: str, path: str) -> None:
 
 # ---- Certificate download (for mobile trust setup) ----
 
-@router.get("/api/cert/info")
-async def cert_info():
-    """Return SAN IPs + DNS names from the current cert, plus issuer / expiry.
-
-    The /cert-guide page shows this so a user can verify the URL they're
-    accessing via is covered by the cert.  Tailscale-shared nodes get a
-    different CGNAT IP in each consuming tailnet, so a mismatch here is the
-    most common reason a phone's URL bar still shows "Not secure" after
-    installing the CA.
-    """
-    import re
-    import subprocess
-    cert_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "certs", "selfsigned.crt")
-    cert_path = os.path.normpath(cert_path)
-    if not os.path.isfile(cert_path):
-        raise HTTPException(status_code=404, detail="Certificate not found")
-
-    san_result = subprocess.run(
-        ["openssl", "x509", "-in", cert_path, "-noout", "-ext", "subjectAltName"],
-        capture_output=True, text=True, timeout=5,
-    )
-    ips: list[str] = []
-    dns: list[str] = []
-    if san_result.returncode == 0:
-        ips = re.findall(r"IP Address:([0-9.a-fA-F:]+)", san_result.stdout)
-        dns = re.findall(r"DNS:([\w.\-]+)", san_result.stdout)
-
-    meta_result = subprocess.run(
-        ["openssl", "x509", "-in", cert_path, "-noout", "-issuer", "-dates"],
-        capture_output=True, text=True, timeout=5,
-    )
-    issuer = ""
-    not_after = ""
-    if meta_result.returncode == 0:
-        for line in meta_result.stdout.splitlines():
-            if line.startswith("issuer="):
-                issuer = line[len("issuer="):]
-            elif line.startswith("notAfter="):
-                not_after = line[len("notAfter="):]
-
-    return {"ips": ips, "dns": dns, "issuer": issuer, "expires": not_after}
-
-
 @router.get("/api/cert")
 async def download_cert():
     """Serve the CA root certificate for mobile trust setup.

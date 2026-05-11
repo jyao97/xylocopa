@@ -163,26 +163,6 @@ export default function CertGuidePage() {
     }
   };
 
-  // Fetch the cert SAN so the user can verify the URL they're using is
-  // actually covered.  Tailscale-shared nodes get different CGNAT IPs in
-  // each consuming tailnet — a mismatch here is the most common reason a
-  // phone keeps showing "Not secure" even after installing the CA.
-  const [certInfo, setCertInfo] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/cert/info")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (!cancelled) setCertInfo(data); })
-      .catch(() => { /* ignore — card just won't render */ });
-    return () => { cancelled = true; };
-  }, []);
-
-  const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
-  const covered = certInfo && (
-    (certInfo.ips || []).includes(currentHost) ||
-    (certInfo.dns || []).includes(currentHost)
-  );
-
   const isAndroid = platform === "android";
 
   return (
@@ -208,58 +188,6 @@ export default function CertGuidePage() {
             Android
           </button>
         </div>
-
-        {/* Cert coverage panel — tells the user whether the URL they're on
-            is actually in the cert SAN.  Tailscale-shared nodes have
-            different CGNAT IPs per consuming tailnet, so a mismatch here is
-            the most common cause of "Not secure" after CA install. */}
-        {certInfo && (
-          <div className={`rounded-2xl backdrop-blur-md border p-4 mb-5 shadow-lg ${
-            covered
-              ? "bg-surface/60 border-divider/50"
-              : "bg-amber-500/10 border-amber-500/40"
-          }`}>
-            <div className="flex items-start gap-2 mb-2">
-              <span className={covered ? "text-cyan-400" : "text-amber-400"}>
-                {covered ? "✓" : "⚠"}
-              </span>
-              <div className="text-sm font-medium text-heading">
-                {covered
-                  ? "This URL is covered by the certificate"
-                  : "This URL is NOT covered by the certificate"}
-              </div>
-            </div>
-            <div className="text-xs text-dim mb-2">
-              Currently accessing via <span className="font-mono text-heading">{currentHost}</span>
-            </div>
-            <div className="text-xs text-dim mb-1">Certificate is valid for:</div>
-            <div className="flex flex-wrap gap-1.5">
-              {[...(certInfo.ips || []), ...(certInfo.dns || [])]
-                .filter(h => h !== "127.0.0.1" && h !== "localhost" && h !== "xylocopa")
-                .map(h => (
-                  <span
-                    key={h}
-                    className={`px-2 py-0.5 rounded-md text-xs font-mono ${
-                      h === currentHost
-                        ? "bg-cyan-500/20 text-cyan-200"
-                        : "bg-surface/80 text-dim"
-                    }`}
-                  >
-                    {h}
-                  </span>
-                ))}
-            </div>
-            {!covered && (
-              <div className="text-xs text-amber-200/80 mt-3 leading-relaxed">
-                Installing the CA on this device will trust the certificate, but
-                browsers will still warn because the URL host isn't in the SAN.
-                Bookmark one of the addresses above instead, or ask the server
-                admin to re-run <span className="font-mono">tools/ensure-cert.sh</span>{" "}
-                with this host added.
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Section 1: CA Certificate (must be done first) */}
         <div className="text-center mb-5">

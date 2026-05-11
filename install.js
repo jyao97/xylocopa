@@ -292,78 +292,35 @@ async function main() {
   if (fs.existsSync(path.join(certsDir, 'selfsigned.crt'))) {
     info('Certificates already exist');
   } else {
-    // Detect ALL non-loopback IPv4 interfaces (LAN + Tailscale + Docker
-    // bridges all show up here).  Putting every reachable IP into the SAN
-    // means client connections from any of them validate, and run.sh's
-    // ensure-cert.sh will keep this list current across Tailscale/LAN
-    // reassignments after install.
-    let allIps = [];
+    // Detect LAN IP
+    let lanIp = '127.0.0.1';
     if (PLATFORM === 'linux') {
       const r = spawnSync('hostname', ['-I'], { encoding: 'utf8' });
-      if (r.status === 0) {
-        allIps = r.stdout.trim().split(/\s+/)
-          .filter(s => /^\d+\.\d+\.\d+\.\d+$/.test(s) && !s.startsWith('127.'));
-      }
+      if (r.status === 0) lanIp = r.stdout.trim().split(/\s+/)[0] || '127.0.0.1';
     } else {
-      // macOS: enumerate en0..en5, dedupe
-      const seen = new Set();
-      for (const iface of ['en0', 'en1', 'en2', 'en3', 'en4', 'en5']) {
+      // macOS: try en0 first, then en1 (some Macs use en1 for Wi-Fi)
+      for (const iface of ['en0', 'en1']) {
         const r = spawnSync('ipconfig', ['getifaddr', iface], { encoding: 'utf8' });
-        const ip = r.stdout && r.stdout.trim();
-        if (r.status === 0 && ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !seen.has(ip)) {
-          seen.add(ip);
-          allIps.push(ip);
-        }
+        if (r.status === 0 && r.stdout.trim()) { lanIp = r.stdout.trim(); break; }
       }
     }
-    if (allIps.length === 0) allIps = ['127.0.0.1'];
 
     console.log(`\n  ${DIM}HTTPS is required for mobile microphone access and PWA install.${R}`);
     console.log(`  ${DIM}A self-signed certificate will be generated for LAN use.${R}`);
-    info(`Detected IPs: ${B}${allIps.join(', ')}${R}`);
+    info(`Detected LAN IP: ${B}${lanIp}${R}`);
 
-    const ipsAnswer = await ask('IPs for certificate SAN (comma-separated)', allIps.join(','));
-    const certIps = ipsAnswer.split(/[\s,]+/).filter(Boolean);
+    const certIp = await ask('LAN IP for certificate (verify above)', lanIp);
     fs.mkdirSync(certsDir, { recursive: true });
 
-    // Prefer mkcert when available — it creates (or reuses) a stable CA so
-    // future regens via tools/ensure-cert.sh preserve client trust.  Plain
-    // openssl produces a self-signed leaf that IS its own CA, so every regen
-    // forces clients to reinstall.
-    const certPath = path.join(certsDir, 'selfsigned.crt');
-    const keyPath = path.join(certsDir, 'selfsigned.key');
-    const mkcertOk = (() => {
-      const r = spawnSync('mkcert', ['-CAROOT'], { encoding: 'utf8' });
-      return r.status === 0 && r.stdout.trim();
-    })();
-    if (mkcertOk) {
-      run(`mkcert -install`, { allowFail: true, quiet: true });
-      const hostArgs = ['xylocopa', 'localhost', '127.0.0.1', ...certIps]
-        .map(s => `"${s}"`).join(' ');
-      run(
-        `mkcert -cert-file "${certPath}" -key-file "${keyPath}" ${hostArgs}`,
-        { quiet: true }
-      );
-      // Mirror CA into certs/ so /api/cert serves it from the install dir
-      const caroot = spawnSync('mkcert', ['-CAROOT'], { encoding: 'utf8' }).stdout.trim();
-      const caSrc = path.join(caroot, 'rootCA.pem');
-      if (fs.existsSync(caSrc)) {
-        fs.copyFileSync(caSrc, path.join(certsDir, 'rootCA.pem'));
-      }
-      info('Certificate generated via mkcert (CA preserved across regens)');
-    } else {
-      const sanParts = ['DNS:xylocopa', 'DNS:localhost', 'IP:127.0.0.1',
-        ...certIps.map(ip => `IP:${ip}`)].join(',');
-      run(
-        `openssl req -x509 -nodes -days 365 -newkey rsa:2048 ` +
-        `-keyout "${keyPath}" ` +
-        `-out "${certPath}" ` +
-        `-subj "/CN=xylocopa" ` +
-        `-addext "subjectAltName=${sanParts}"`,
-        { quiet: true }
-      );
-      info('Certificate generated via openssl (install mkcert for CA-preserving regens)');
-    }
+    run(
+      `openssl req -x509 -nodes -days 365 -newkey rsa:2048 ` +
+      `-keyout "${path.join(certsDir, 'selfsigned.key')}" ` +
+      `-out "${path.join(certsDir, 'selfsigned.crt')}" ` +
+      `-subj "/CN=xylocopa" ` +
+      `-addext "subjectAltName=DNS:xylocopa,DNS:localhost,IP:127.0.0.1,IP:${certIp}"`,
+      { quiet: true }
+    );
+    info('Certificate generated');
 
     // Trust certificate
     if (await confirm('Trust certificate system-wide? (requires sudo password)')) {

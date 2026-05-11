@@ -65,15 +65,16 @@ def _check_reload_storm(ip: str, reason: str, path: str) -> None:
 
 @router.post("/api/cert/regenerate")
 async def cert_regenerate(request: Request):
-    """Regenerate the leaf cert with an explicit IP/DNS list.
+    """Re-sign the leaf cert with mkcert for explicit IPs/DNS.
 
     Body: {"ips": ["1.2.3.4", ...], "dns": ["xylocopa", "localhost"]}
-    Both fields optional — empty falls back to ensure-cert.sh defaults.
-
-    Runs tools/ensure-cert.sh with --force.  Caller (frontend) is expected
-    to ask the user to reload the page; vite preview picks up the new cert
-    on the next pm2 reload, which we trigger best-effort here.
+    Both fields REQUIRED. No auto-detect fallback — host-self-detection
+    can't see tailnet-shared IPs (a node-shared machine appears at
+    different IPs across tailnets), so a silent fallback would lock those
+    clients out of TLS. Same mkcert CA is preserved, so any client that
+    trusts the CA root sees the new leaf as valid automatically.
     """
+    import re
     import subprocess
 
     try:
@@ -84,8 +85,11 @@ async def cert_regenerate(request: Request):
     dns = body.get("dns") or []
     if not isinstance(ips, list) or not isinstance(dns, list):
         raise HTTPException(status_code=400, detail="ips/dns must be lists")
-    # Basic validation — only digits/dots for IPs, alphanumerics/dot/hyphen for DNS
-    import re
+    if not ips:
+        raise HTTPException(
+            status_code=400,
+            detail="ips list cannot be empty — cert needs at least one explicit IP",
+        )
     for ip in ips:
         if not isinstance(ip, str) or not re.match(r"^[0-9.]+$", ip):
             raise HTTPException(status_code=400, detail=f"invalid IP: {ip!r}")
@@ -93,28 +97,35 @@ async def cert_regenerate(request: Request):
         if not isinstance(name, str) or not re.match(r"^[\w.\-]+$", name):
             raise HTTPException(status_code=400, detail=f"invalid DNS name: {name!r}")
 
-    script = os.path.normpath(
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "tools", "ensure-cert.sh")
+    certs_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "certs")
     )
-    if not os.path.isfile(script):
-        raise HTTPException(status_code=500, detail="ensure-cert.sh not found")
+    cert_path = os.path.join(certs_dir, "selfsigned.crt")
+    key_path = os.path.join(certs_dir, "selfsigned.key")
+    os.makedirs(certs_dir, exist_ok=True)
 
-    args = [script, "--force"]
-    if ips:
-        args.extend(["--ips", ",".join(ips)])
-    if dns:
-        args.extend(["--dns", ",".join(dns)])
-
-    proc = subprocess.run(args, capture_output=True, text=True, timeout=30)
-    if proc.returncode != 0:
-        logger.error("[cert] regen failed: stdout=%s stderr=%s", proc.stdout, proc.stderr)
+    # 127.0.0.1 always included so server-internal callers (vite preview
+    # proxy → backend) keep working regardless of what the user typed.
+    mkcert_args = [
+        "mkcert", "-cert-file", cert_path, "-key-file", key_path,
+        *dns, "127.0.0.1", *ips,
+    ]
+    try:
+        proc = subprocess.run(mkcert_args, capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
         raise HTTPException(
             status_code=500,
-            detail=f"regen failed: {(proc.stderr or proc.stdout).strip()[:500]}",
+            detail="mkcert binary not found — install it from https://github.com/FiloSottile/mkcert",
+        )
+    if proc.returncode != 0:
+        logger.error("[cert] mkcert failed: stdout=%s stderr=%s", proc.stdout, proc.stderr)
+        raise HTTPException(
+            status_code=500,
+            detail=f"mkcert failed: {(proc.stderr or proc.stdout).strip()[:500]}",
         )
 
-    # Best-effort frontend reload so vite preview picks up the new cert.
-    # If pm2 isn't around (dev mode), this just no-ops.
+    # Best-effort reload so vite preview re-reads the new cert
+    # (it caches the cert in memory at startup via fs.readFileSync).
     try:
         subprocess.Popen(
             ["pm2", "reload", "xylocopa-frontend"],
@@ -123,7 +134,7 @@ async def cert_regenerate(request: Request):
     except Exception:
         pass
 
-    return {"ok": True, "log": proc.stdout.strip()}
+    return {"ok": True}
 
 
 @router.get("/api/cert")

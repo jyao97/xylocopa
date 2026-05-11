@@ -272,11 +272,17 @@ export default function CertGuidePage() {
   const isAndroid = platform === "android";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
-      <div className="absolute inset-0 bg-page/60 backdrop-blur-2xl" />
+    // Top-aligned scrollable container.  We deliberately do NOT use
+    // `flex items-center justify-center` on the scroller: with tall content
+    // (this page has 3 step sections), vertical centering pushes the top
+    // off-screen and you can't scroll back up.  Backdrop is `fixed` +
+    // `pointer-events-none` so it covers the whole viewport regardless of
+    // scroll position and doesn't intercept taps.
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="fixed inset-0 bg-page/60 backdrop-blur-2xl pointer-events-none" />
 
       <div
-        className="relative z-10 w-full max-w-sm mx-4"
+        className="relative z-10 w-full max-w-sm mx-auto px-4"
         style={{
           // Respect iOS safe areas (notch / Dynamic Island / home indicator).
           // viewport-fit=cover is set in index.html, so env() returns non-zero.

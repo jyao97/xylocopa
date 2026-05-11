@@ -63,6 +63,35 @@ def _check_reload_storm(ip: str, reason: str, path: str) -> None:
 
 # ---- Certificate download (for mobile trust setup) ----
 
+@router.get("/api/cert/info")
+async def cert_info():
+    """Return just the current cert's SAN (IPs + DNS).  Used by /cert-guide
+    to tell the user whether their current address is already covered —
+    avoids the "click Regenerate not knowing if anything will happen"
+    UX gap. Minimal on purpose: no host detection, no diff, no enrichment."""
+    import re
+    import subprocess
+
+    cert_path = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "certs", "selfsigned.crt")
+    )
+    if not os.path.isfile(cert_path):
+        raise HTTPException(status_code=404, detail="cert not found")
+    try:
+        proc = subprocess.run(
+            ["openssl", "x509", "-in", cert_path, "-noout", "-ext", "subjectAltName"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"openssl: {e}")
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail="openssl exit nonzero")
+    return {
+        "ips": re.findall(r"IP Address:([0-9.a-fA-F:]+)", proc.stdout),
+        "dns": re.findall(r"DNS:([\w.\-]+)", proc.stdout),
+    }
+
+
 @router.post("/api/cert/regenerate")
 async def cert_regenerate(request: Request):
     """Re-sign the leaf cert with mkcert for explicit IPs/DNS.

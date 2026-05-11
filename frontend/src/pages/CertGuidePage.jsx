@@ -102,6 +102,20 @@ function CertRegenSection() {
   const [ip, setIp] = useState(typeof window !== "undefined" ? window.location.hostname : "");
   const [regenerating, setRegenerating] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [coveredIps, setCoveredIps] = useState(null);  // null=loading, [] on err
+
+  // Pull the live SAN so we can tell the user up-front whether the typed
+  // IP is already covered (button becomes a no-op).  Re-fetch after a real
+  // regen completes so the badge updates.
+  const refreshSan = () => {
+    fetch("/api/cert/info")
+      .then((r) => r.json())
+      .then((j) => setCoveredIps(Array.isArray(j?.ips) ? j.ips : []))
+      .catch(() => setCoveredIps([]));
+  };
+  useEffect(refreshSan, []);
+
+  const isCovered = coveredIps !== null && coveredIps.includes(ip.trim());
 
   const handleRegenerate = async () => {
     const cleaned = ip.trim();
@@ -124,6 +138,7 @@ function CertRegenSection() {
       // reload needed.  This is the happy path on repeat clicks.
       if (j.skipped) {
         setMsg({ kind: "ok", text: "Already covered — no regen needed." });
+        refreshSan();
       } else {
         setMsg({ kind: "ok", text: "Done. Reloading…" });
         setTimeout(() => window.location.reload(), 2000);
@@ -151,6 +166,11 @@ function CertRegenSection() {
             className="mt-2 w-full font-mono text-xs bg-page/50 border border-divider/50 rounded-md px-2 py-1.5 text-heading"
             spellCheck={false}
           />
+          {coveredIps !== null && ip.trim() && (
+            <p className={`text-xs mt-1.5 ${isCovered ? "text-emerald-400" : "text-amber-400"}`}>
+              {isCovered ? "✓ Already in cert" : "⚠ Not in cert yet — click Regenerate to add"}
+            </p>
+          )}
         </div>
       </div>
 
@@ -164,10 +184,10 @@ function CertRegenSection() {
           <button
             type="button"
             onClick={handleRegenerate}
-            disabled={regenerating}
-            className="mt-2 px-3 py-1.5 rounded-md text-xs bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white"
+            disabled={regenerating || isCovered}
+            className="mt-2 px-3 py-1.5 rounded-md text-xs bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
           >
-            {regenerating ? "Regenerating…" : "Regenerate"}
+            {regenerating ? "Regenerating…" : isCovered ? "No regen needed" : "Regenerate"}
           </button>
           {msg && (
             <p className={`text-xs mt-2 ${msg.kind === "ok" ? "text-emerald-400" : "text-red-400"}`}>
@@ -255,7 +275,15 @@ export default function CertGuidePage() {
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
       <div className="absolute inset-0 bg-page/60 backdrop-blur-2xl" />
 
-      <div className="relative z-10 w-full max-w-sm mx-4 my-8">
+      <div
+        className="relative z-10 w-full max-w-sm mx-4"
+        style={{
+          // Respect iOS safe areas (notch / Dynamic Island / home indicator).
+          // viewport-fit=cover is set in index.html, so env() returns non-zero.
+          paddingTop: "max(2rem, env(safe-area-inset-top))",
+          paddingBottom: "max(2rem, env(safe-area-inset-bottom))",
+        }}
+      >
         {/* Platform toggle — UA detection isn't always right (e.g. desktop Chrome
             request-mobile-site, or testing iOS flow on Android), let users override. */}
         <div className="flex justify-center mb-4 gap-1 text-xs">

@@ -104,10 +104,10 @@ async def cert_regenerate(request: Request):
     key_path = os.path.join(certs_dir, "selfsigned.key")
     os.makedirs(certs_dir, exist_ok=True)
 
-    # Idempotency: if current cert SAN already covers everything we'd sign,
-    # skip — re-signing changes the leaf fingerprint and invalidates every
-    # client's "visit this website" trust (the entire reason today went
-    # sideways). Only regen when SAN would actually change.
+    # Idempotency: if current cert SAN is EXACTLY what we'd sign, skip.
+    # Strict equality (not subset) so a stale external IP from a previous
+    # regen also triggers a clean re-sign — the design contract is "one
+    # external IP at a time, plus the always-resident internal set".
     requested_ips = set(ips) | {"127.0.0.1"}
     requested_dns = set(dns)
     if os.path.isfile(cert_path):
@@ -119,11 +119,11 @@ async def cert_regenerate(request: Request):
             if san_proc.returncode == 0:
                 current_ips = set(re.findall(r"IP Address:([0-9.a-fA-F:]+)", san_proc.stdout))
                 current_dns = set(re.findall(r"DNS:([\w.\-]+)", san_proc.stdout))
-                if requested_ips.issubset(current_ips) and requested_dns.issubset(current_dns):
+                if requested_ips == current_ips and requested_dns == current_dns:
                     return {
                         "ok": True,
                         "skipped": True,
-                        "reason": "current cert already covers requested IPs/DNS",
+                        "reason": "current cert SAN already matches requested set exactly",
                         "current_ips": sorted(current_ips),
                         "current_dns": sorted(current_dns),
                     }

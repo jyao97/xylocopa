@@ -18,63 +18,42 @@ setupFrameLogger();
 // Suspense "Loading..." fallback.
 prefetchHeavyChunks();
 
-// Mark non-mobile Linux as glass-incapable: backdrop-filter parses on
-// Linux Chrome/Firefox so @supports reports true, but the GPU compositor
-// frequently fails to actually render the blur (X11 + lots of driver
-// combos), so chat history bleeds through translucent surfaces. Mobile
-// platforms (iOS, Android phones) and macOS/Windows render glass correctly.
-// E-ink Android tablets (BOOX/Onyx, Kindle, reMarkable, PocketBook,
-// Likebook) share the same failure mode — UA-sniff them as a fallback for
-// devices whose browser doesn't honor `@media (update: slow)`.
-(function tagGlassCapability() {
+// User-toggled full e-ink theme (Settings > Display).
+applyEinkModeFromStorage();
+
+// On-screen diagnostic — visit any page with ?eink-diag=1 to see UA +
+// detection results overlaid (no console / dev tools needed).
+if (/[?&]eink-diag=1/.test(location.search)) {
   try {
     const ua = navigator.userAgent || "";
-    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    const isLinux = /Linux/i.test(ua) && !/Android/i.test(ua);
-    const isEInk = /Onyx|BOOX|Kindle|Silk|reMarkable|PocketBook|Likebook|InkPad|MEEbook|Bigme|Hisense.*ink|Meebook|iReader/i.test(ua);
-    if ((isLinux && !isMobile) || isEInk) {
-      document.documentElement.classList.add("no-glass");
-    }
-
-    // User-toggled full e-ink theme (Settings > Display). Independent
-    // from no-glass auto-detection — manual override always honored.
-    applyEinkModeFromStorage();
-
-    // On-screen diagnostic — visit any page with ?eink-diag=1 to see UA +
-    // detection results overlaid (no console / dev tools needed). Only
-    // activates when the param is present, so it's harmless for normal use.
-    if (/[?&]eink-diag=1/.test(location.search)) {
-      const updateSlow = matchMedia("(update: slow)").matches;
-      const monochrome = matchMedia("(monochrome)").matches;
-      const monoDepth = matchMedia("(min-monochrome: 1)").matches;
-      const noGlass = document.documentElement.classList.contains("no-glass");
-      const info = {
-        ua, isMobile, isLinux, isEInk,
-        noGlass, updateSlow, monochrome, monoDepth,
-        colorDepth: screen.colorDepth,
-        dpr: devicePixelRatio,
-        viewport: `${innerWidth}x${innerHeight}`,
-      };
-      const ready = () => {
-        const box = document.createElement("pre");
-        box.textContent = "EINK-DIAG\n" + JSON.stringify(info, null, 2);
-        Object.assign(box.style, {
-          position: "fixed", top: "0", left: "0", right: "0",
-          zIndex: "999999",
-          background: "#fff", color: "#000",
-          font: "12px/1.4 monospace",
-          padding: "12px", margin: "0",
-          border: "2px solid #000",
-          whiteSpace: "pre-wrap", wordBreak: "break-all",
-          maxHeight: "60vh", overflow: "auto",
-        });
-        document.body.appendChild(box);
-      };
-      if (document.body) ready();
-      else document.addEventListener("DOMContentLoaded", ready);
-    }
+    const updateSlow = matchMedia("(update: slow)").matches;
+    const monochrome = matchMedia("(monochrome)").matches;
+    const monoDepth = matchMedia("(min-monochrome: 1)").matches;
+    const info = {
+      ua, updateSlow, monochrome, monoDepth,
+      colorDepth: screen.colorDepth,
+      dpr: devicePixelRatio,
+      viewport: `${innerWidth}x${innerHeight}`,
+    };
+    const ready = () => {
+      const box = document.createElement("pre");
+      box.textContent = "EINK-DIAG\n" + JSON.stringify(info, null, 2);
+      Object.assign(box.style, {
+        position: "fixed", top: "0", left: "0", right: "0",
+        zIndex: "999999",
+        background: "#fff", color: "#000",
+        font: "12px/1.4 monospace",
+        padding: "12px", margin: "0",
+        border: "2px solid #000",
+        whiteSpace: "pre-wrap", wordBreak: "break-all",
+        maxHeight: "60vh", overflow: "auto",
+      });
+      document.body.appendChild(box);
+    };
+    if (document.body) ready();
+    else document.addEventListener("DOMContentLoaded", ready);
   } catch { /* best-effort */ }
-})();
+}
 
 // --- Reload tracing probe (event listeners only) ---------------------------
 // The location.reload() monkey-patch lives in index.html so it installs

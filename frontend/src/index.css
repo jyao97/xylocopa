@@ -25,8 +25,6 @@
   --color-hint:       #9ca3af;
   --color-shadow:     rgba(0,0,0,0.06);
   --color-skel:       #e5e7eb;
-  /* Default opaque values — browsers that do support backdrop-filter
-     opt into translucent rgba via the @supports block below. */
   --color-glass:      #e6e9ee;
   --color-glass-nav:  #f0f2f5;
   --color-glass-edge: rgba(255,255,255,0.5);
@@ -58,49 +56,6 @@
   --color-glass:      #1e293b;
   --color-glass-nav:  #283246;
   --color-glass-edge: rgba(255,255,255,0.22);
-}
-
-/* Opt-in to translucent glass only when the browser actually supports
-   backdrop-filter. Browsers without support keep the opaque defaults
-   above, so content underneath never bleeds through.
-   `html.no-glass` (set in main.jsx for Linux desktop, where the GPU
-   compositor frequently fails to render the blur even though the CSS
-   property parses) wins over this @supports block via specificity. */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root {
-    --color-glass:     rgba(230,233,238,0.68);
-    --color-glass-nav: rgba(240,242,245,0.3);
-  }
-  .dark {
-    --color-glass:     rgba(30,41,59,0.7);
-    --color-glass-nav: rgba(40,50,70,0.45);
-  }
-}
-
-html.no-glass {
-  --color-glass:     #e6e9ee;
-  --color-glass-nav: #f0f2f5;
-}
-html.no-glass.dark {
-  --color-glass:     #1e293b;
-  --color-glass-nav: #283246;
-}
-
-/* E-ink / low-refresh-rate displays (BOOX, Onyx, Kindle, reMarkable, etc.):
-   backdrop-filter parses on their Android Chromium build so @supports reports
-   true, but the e-ink compositor doesn't actually render the blur, so the
-   translucent rgba above lets chat content bleed through the input bar.
-   `(update: slow)` is the W3C-standard media feature for this class of
-   device. Pin back to opaque values, same as html.no-glass. */
-@media (update: slow) {
-  :root {
-    --color-glass:     #e6e9ee;
-    --color-glass-nav: #f0f2f5;
-  }
-  .dark {
-    --color-glass:     #1e293b;
-    --color-glass-nav: #283246;
-  }
 }
 
 /* ── E-ink mode (manually toggled in Settings > Display) ───────────────
@@ -255,8 +210,6 @@ html.eink :where(*) {
 /* Glass utilities collapse to plain bordered surfaces. */
 html.eink .glass-bar,
 html.eink .glass-bar-nav {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   background: var(--color-surface) !important;
   border: 1px solid var(--color-edge) !important;
   box-shadow: none !important;
@@ -1087,19 +1040,17 @@ svg text { font-family: inherit; }
     -webkit-touch-callout: none;
   }
 
-  /* Glass bar */
+  /* Opaque "glass" surfaces — name kept for compatibility, no actual blur.
+     Translucent backdrop-filter rendering was buggy across platforms
+     (Linux Chrome, e-ink, some Mac/Windows GPU configs); opaque is reliable. */
   .glass-bar {
     background: var(--color-glass);
     border: 1px solid var(--color-glass-edge);
-    backdrop-filter: blur(28px) saturate(190%);
-    -webkit-backdrop-filter: blur(28px) saturate(190%);
     box-shadow: 0 6px 32px rgba(0,0,0,0.15), inset 0 0.5px 0 var(--color-glass-edge);
   }
   .glass-bar-nav {
     background: var(--color-glass-nav);
     border: 1px solid var(--color-glass-edge);
-    backdrop-filter: blur(48px) saturate(180%);
-    -webkit-backdrop-filter: blur(48px) saturate(180%);
     box-shadow: 0 4px 24px rgba(0,0,0,0.1), inset 0 0.5px 0 var(--color-glass-edge);
   }
 

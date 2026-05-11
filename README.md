@@ -43,7 +43,6 @@ Turn tasks into agents and let them run.
 - **AI batch dispatch**: one click to triage and fire off a pile of inbox tasks.
 - **RAG-powered context**: new agents are seeded with relevant lessons from past sessions in the same project.
 - **Cross-session reference**: tell an agent "check xy session `<id>`" and it reads another agent's curated display file via a built-in [MCP server](orchestrator/mcp_server.py), ~54× fewer tokens than raw JSONL.
-- **External trigger (probes)**: an agent registers a one-shot webhook via `probe_create`, hands the URL to whatever monitors the condition (CI, cron, IoT, a long-running build), and gets woken when it fires. See [Agent control plane](#agent-control-plane).
 
 ### 3. Monitor
 
@@ -60,6 +59,7 @@ Watch everything in real time, from desk or phone.
 
   ![CLI sync demo](docs/cli-sync.gif)
 - **Smart notifications**: Web Push, suppressed when you're already viewing the agent (WebSocket or tmux). Permission requests always cut through.
+- **External wake (probes)**: an agent registers a one-shot webhook via `probe_create` and hands the URL to whatever monitors an external condition (CI, cron, IoT, a long-running build). The trigger wakes the chat with an envelope-wrapped message — same delivery path as a typed user message, same notification surface. See [Agent control plane](#agent-control-plane).
 - **Context usage pill**: per-agent context-window meter on the chat header — live percentage with a tap-to-expand breakdown (system / tools / MCP / messages / cache split, free vs. used). Inline suggestion when usage gets high. Counts come straight from the Claude Code session JSONL, not estimated.
 - **System monitoring**: disk, memory, GPU, token usage. Per-agent **lifetime cost** (cumulative spend across resumes, deduped by message id; Opus / Sonnet / Haiku priced separately, with 5m/1h cache split).
 - **E-ink display mode**: Monitor → Display toggle that flattens glass effects, collapses colored badges to grayscale, and switches saturated bubbles to outlined style for readable contrast on e-paper screens (Bigme, BOOX, Kindle, reMarkable). Two-finger horizontal swipe page-scrolls the chat (left = page down, right = page up) so you can read long sessions without dragging the scrollbar on a slow refresh panel.

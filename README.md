@@ -5,7 +5,7 @@
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
 
-> [**The Loop**](#the-loop) · [**Getting Started**](#getting-started) · [**Features**](#features) · [**Architecture**](docs/ARCHITECTURE.md) · [**Contributing**](CONTRIBUTING.md) · [**新手入门（中文）**](docs/getting-started-zh.md)
+> [**The Loop**](#the-loop) · [**Getting Started**](#getting-started) · [**Features**](#features) · [**What's New**](CHANGELOG.md) · [**Architecture**](docs/ARCHITECTURE.md) · [**Contributing**](CONTRIBUTING.md) · [**新手入门（中文）**](docs/getting-started-zh.md)
 
 <p align="center"><img src="docs/hero.png" alt="Xylocopa — Many projects. One attention." width="640"></p>
 
@@ -43,6 +43,7 @@ Turn tasks into agents and let them run.
 - **AI batch dispatch**: one click to triage and fire off a pile of inbox tasks.
 - **RAG-powered context**: new agents are seeded with relevant lessons from past sessions in the same project.
 - **Cross-session reference**: tell an agent "check xy session `<id>`" and it reads another agent's curated display file via a built-in [MCP server](orchestrator/mcp_server.py), ~54× fewer tokens than raw JSONL.
+- **External trigger (probes)**: an agent registers a one-shot webhook via `probe_create`, hands the URL to whatever monitors the condition (CI, cron, IoT, a long-running build), and gets woken when it fires. See [Agent control plane](#agent-control-plane).
 
 ### 3. Monitor
 
@@ -299,6 +300,14 @@ Xylocopa-managed agents can call back into the orchestrator via a built-in
 MCP server — list/create/dispatch tasks, read each other's sessions,
 scaffold projects, check health. The surface is deliberately
 non-destructive (verb whitelist + blacklist).
+
+**Event-driven wake-up (probes):** an agent registers a one-shot webhook via
+`probe_create` and hands the trigger URL to whatever monitors an external
+condition (CI, cron, IoT, a long-running build). POSTing the URL injects an
+envelope-wrapped message into the chat and burns the token. Envelopes are
+hardened (size cap, control-char filter, no embedded envelope markers),
+default to 24 h expiry, and auto-expire when the agent transitions to
+STOPPED/ERROR.
 
 See **[docs/agent-mcp-tools.md](docs/agent-mcp-tools.md)** for the full
 tool list, safety model, and what's intentionally not exposed.

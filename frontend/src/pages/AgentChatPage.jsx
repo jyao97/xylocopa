@@ -4859,7 +4859,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
               scrollToLiveTail();
               setShowScrollToBottom(false);
             }}
-            className="glass-bar w-9 h-9 rounded-full flex items-center justify-center text-dim hover:text-heading transition-all active:scale-90 pointer-events-auto mb-2"
+            className="glass-bar-nav w-9 h-9 rounded-full flex items-center justify-center text-dim hover:text-heading transition-all active:scale-90 pointer-events-auto mb-2"
           >
             <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />

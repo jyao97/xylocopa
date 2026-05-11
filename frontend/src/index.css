@@ -62,7 +62,16 @@
    .glass-bar-nav (bottom nav + text input bars) stays opaque always — those
    are persistent surfaces where bleed-through was a real bug across many
    GPU configs. `html.no-glass` (set in main.jsx for Linux desktop) and
-   `@media (update: slow)` (e-ink) pin .glass-bar back to opaque too. */
+   `@media (update: slow)` (e-ink) pin .glass-bar back to opaque too.
+
+   CAVEAT — `@supports (backdrop-filter)` only reports whether the property
+   *parses*, not whether the GPU compositor actually renders the blur. On
+   devices that pass this check but fail to render (Mac Chrome with HW accel
+   off, "Reduce transparency" on, Linux Chrome, some e-ink, some weak GPUs),
+   the translucent rgba below applies without any blur — i.e. content
+   underneath becomes ~30% visible and the "glass" looks nearly transparent.
+   The main.jsx UA sniff catches the most common cases but is not
+   comprehensive. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
     --color-glass: rgba(230,233,238,0.68);

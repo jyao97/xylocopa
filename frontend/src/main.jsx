@@ -23,6 +23,20 @@ prefetchHeavyChunks();
 // parses on these platforms but the GPU compositor frequently fails to render
 // the blur, so content underneath bleeds through. `.glass-bar-nav` is already
 // opaque for everyone so it doesn't need this fallback.
+//
+// CAVEAT — best-effort, not authoritative. Real glass rendering depends on
+// the GPU compositor / driver / OS-level accessibility settings, none of
+// which can be reliably sniffed from the browser. Devices that slip past
+// this check and still fail to render the blur will show translucent rgba
+// surfaces *without* any blur — content underneath bleeds through and the
+// "glass" ends up looking almost fully transparent. Known slip-throughs:
+//   - Mac Chrome with hardware acceleration disabled
+//   - Mac Chrome with macOS "Reduce transparency" accessibility on
+//   - Windows Chrome on weaker integrated GPUs
+//   - New e-ink devices with UA strings not matching the regex below
+// `.glass-bar-nav` stays opaque-always for exactly this reason; do not
+// expand translucent glass to more persistent surfaces without a similar
+// opt-out.
 (function tagGlassCapability() {
   try {
     const ua = navigator.userAgent || "";

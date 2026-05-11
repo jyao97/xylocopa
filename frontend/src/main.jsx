@@ -18,42 +18,55 @@ setupFrameLogger();
 // Suspense "Loading..." fallback.
 prefetchHeavyChunks();
 
-// User-toggled full e-ink theme (Settings > Display).
-applyEinkModeFromStorage();
-
-// On-screen diagnostic — visit any page with ?eink-diag=1 to see UA +
-// detection results overlaid (no console / dev tools needed).
-if (/[?&]eink-diag=1/.test(location.search)) {
+// Mark non-mobile Linux and e-ink Android tablets as glass-incapable for
+// `.glass-bar` (translucent login card, bot icon, small FABs): backdrop-filter
+// parses on these platforms but the GPU compositor frequently fails to render
+// the blur, so content underneath bleeds through. `.glass-bar-nav` is already
+// opaque for everyone so it doesn't need this fallback.
+(function tagGlassCapability() {
   try {
     const ua = navigator.userAgent || "";
-    const updateSlow = matchMedia("(update: slow)").matches;
-    const monochrome = matchMedia("(monochrome)").matches;
-    const monoDepth = matchMedia("(min-monochrome: 1)").matches;
-    const info = {
-      ua, updateSlow, monochrome, monoDepth,
-      colorDepth: screen.colorDepth,
-      dpr: devicePixelRatio,
-      viewport: `${innerWidth}x${innerHeight}`,
-    };
-    const ready = () => {
-      const box = document.createElement("pre");
-      box.textContent = "EINK-DIAG\n" + JSON.stringify(info, null, 2);
-      Object.assign(box.style, {
-        position: "fixed", top: "0", left: "0", right: "0",
-        zIndex: "999999",
-        background: "#fff", color: "#000",
-        font: "12px/1.4 monospace",
-        padding: "12px", margin: "0",
-        border: "2px solid #000",
-        whiteSpace: "pre-wrap", wordBreak: "break-all",
-        maxHeight: "60vh", overflow: "auto",
-      });
-      document.body.appendChild(box);
-    };
-    if (document.body) ready();
-    else document.addEventListener("DOMContentLoaded", ready);
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    const isLinux = /Linux/i.test(ua) && !/Android/i.test(ua);
+    const isEInk = /Onyx|BOOX|Kindle|Silk|reMarkable|PocketBook|Likebook|InkPad|MEEbook|Bigme|Hisense.*ink|Meebook|iReader/i.test(ua);
+    if ((isLinux && !isMobile) || isEInk) {
+      document.documentElement.classList.add("no-glass");
+    }
+
+    applyEinkModeFromStorage();
+
+    if (/[?&]eink-diag=1/.test(location.search)) {
+      const updateSlow = matchMedia("(update: slow)").matches;
+      const monochrome = matchMedia("(monochrome)").matches;
+      const monoDepth = matchMedia("(min-monochrome: 1)").matches;
+      const noGlass = document.documentElement.classList.contains("no-glass");
+      const info = {
+        ua, isMobile, isLinux, isEInk,
+        noGlass, updateSlow, monochrome, monoDepth,
+        colorDepth: screen.colorDepth,
+        dpr: devicePixelRatio,
+        viewport: `${innerWidth}x${innerHeight}`,
+      };
+      const ready = () => {
+        const box = document.createElement("pre");
+        box.textContent = "EINK-DIAG\n" + JSON.stringify(info, null, 2);
+        Object.assign(box.style, {
+          position: "fixed", top: "0", left: "0", right: "0",
+          zIndex: "999999",
+          background: "#fff", color: "#000",
+          font: "12px/1.4 monospace",
+          padding: "12px", margin: "0",
+          border: "2px solid #000",
+          whiteSpace: "pre-wrap", wordBreak: "break-all",
+          maxHeight: "60vh", overflow: "auto",
+        });
+        document.body.appendChild(box);
+      };
+      if (document.body) ready();
+      else document.addEventListener("DOMContentLoaded", ready);
+    }
   } catch { /* best-effort */ }
-}
+})();
 
 // --- Reload tracing probe (event listeners only) ---------------------------
 // The location.reload() monkey-patch lives in index.html so it installs

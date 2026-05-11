@@ -58,6 +58,36 @@
   --color-glass-edge: rgba(255,255,255,0.22);
 }
 
+/* Translucent glass only for .glass-bar (login card, bot icon, small FABs).
+   .glass-bar-nav (bottom nav + text input bars) stays opaque always — those
+   are persistent surfaces where bleed-through was a real bug across many
+   GPU configs. `html.no-glass` (set in main.jsx for Linux desktop) and
+   `@media (update: slow)` (e-ink) pin .glass-bar back to opaque too. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --color-glass: rgba(230,233,238,0.68);
+  }
+  .dark {
+    --color-glass: rgba(30,41,59,0.7);
+  }
+}
+
+html.no-glass {
+  --color-glass: #e6e9ee;
+}
+html.no-glass.dark {
+  --color-glass: #1e293b;
+}
+
+@media (update: slow) {
+  :root {
+    --color-glass: #e6e9ee;
+  }
+  .dark {
+    --color-glass: #1e293b;
+  }
+}
+
 /* ── E-ink mode (manually toggled in Settings > Display) ───────────────
    Auto-detection is unreliable: devices like Bigme report a generic
    Android Chrome UA and don't honor (update: slow) or (monochrome).
@@ -210,6 +240,8 @@ html.eink :where(*) {
 /* Glass utilities collapse to plain bordered surfaces. */
 html.eink .glass-bar,
 html.eink .glass-bar-nav {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   background: var(--color-surface) !important;
   border: 1px solid var(--color-edge) !important;
   box-shadow: none !important;
@@ -1040,14 +1072,19 @@ svg text { font-family: inherit; }
     -webkit-touch-callout: none;
   }
 
-  /* Opaque "glass" surfaces — name kept for compatibility, no actual blur.
-     Translucent backdrop-filter rendering was buggy across platforms
-     (Linux Chrome, e-ink, some Mac/Windows GPU configs); opaque is reliable. */
+  /* Glass bar (translucent — login card, bot icon, small FABs).
+     UA-detected bad platforms (Linux desktop, e-ink) fall back to
+     opaque via --color-glass overrides above. */
   .glass-bar {
     background: var(--color-glass);
     border: 1px solid var(--color-glass-edge);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
     box-shadow: 0 6px 32px rgba(0,0,0,0.15), inset 0 0.5px 0 var(--color-glass-edge);
   }
+  /* Glass bar nav — kept opaque always (bottom nav + text inputs).
+     Translucent + backdrop-filter was unreliable on these persistent
+     surfaces across platforms; bleed-through was the bug. */
   .glass-bar-nav {
     background: var(--color-glass-nav);
     border: 1px solid var(--color-glass-edge);

@@ -394,6 +394,94 @@ def _create_agent_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, meta, meta
     )
 
 
+_DISMISS_PREFIXES = (
+    "The user doesn't want to proceed",
+    "User declined",
+    "Tool use rejected",
+)
+
+
+def _is_dismiss_answer(s) -> bool:
+    return isinstance(s, str) and any(s.startswith(p) for p in _DISMISS_PREFIXES)
+
+
+def _detect_interactive_mismatches(db, ctx: "SyncContext", turns) -> None:
+    """Side-channel: emit a SystemBubble when DB has a UI-written answer
+    but JSONL's tool_result for the same interactive item is dismiss-pattern.
+
+    Pure read on existing interactive metadata — never mutates the card.
+    Dedup is per tool_use_id (synthetic jsonl_uuid="mismatch-{tid}"), so
+    a second sync that re-observes the same condition won't duplicate.
+    """
+    for t in turns:
+        if t[0] != "assistant":
+            continue
+        meta = t[2] if len(t) > 2 else None
+        if not isinstance(meta, dict):
+            continue
+        for jsonl_item in meta.get("interactive") or []:
+            tid = jsonl_item.get("tool_use_id")
+            if not tid:
+                continue
+            jsonl_ans = jsonl_item.get("answer")
+            if not _is_dismiss_answer(jsonl_ans):
+                continue
+
+            db_msg = (
+                db.query(Message)
+                .filter(
+                    Message.agent_id == ctx.agent_id,
+                    Message.tool_use_id == tid,
+                )
+                .order_by(Message.created_at.desc())
+                .first()
+            )
+            if not db_msg or not db_msg.meta_json:
+                continue
+            try:
+                db_meta = json.loads(db_msg.meta_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            db_ans = None
+            for db_item in db_meta.get("interactive") or []:
+                if db_item.get("tool_use_id") == tid:
+                    db_ans = db_item.get("answer")
+                    break
+            if db_ans is None or _is_dismiss_answer(db_ans):
+                continue
+
+            bubble_uuid = f"mismatch-{tid}"
+            already_emitted = (
+                db.query(Message.id)
+                .filter(
+                    Message.agent_id == ctx.agent_id,
+                    Message.jsonl_uuid == bubble_uuid,
+                )
+                .first()
+            )
+            if already_emitted:
+                continue
+
+            short = (jsonl_ans or "")[:60]
+            content = f'Selection didn\'t reach Claude (got "{short}")'
+            db.add(Message(
+                agent_id=ctx.agent_id,
+                role=MessageRole.SYSTEM,
+                kind="interactive_mismatch",
+                content=content,
+                source="cli",
+                status=MessageStatus.COMPLETED,
+                jsonl_uuid=bubble_uuid,
+                created_at=_utcnow(),
+                completed_at=_utcnow(),
+                delivered_at=_utcnow(),
+            ))
+            logger.info(
+                "interactive_mismatch: agent=%s tid=%s ui_answer=%r jsonl_answer=%r",
+                ctx.agent_id[:8], tid[:12], (db_ans or "")[:60], short,
+            )
+
+
 def _create_system_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, kind, jsonl_ts=None):
     """UUID dedup, then create SYSTEM message. Returns Message or None."""
     if jsonl_uuid:
@@ -675,6 +763,10 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                     bool(_existing), str(_exc)[:120],
                 )
                 continue
+
+        # Side-channel: detect UI/JSONL answer mismatches and emit a
+        # SystemBubble. Doesn't touch existing card metadata.
+        _detect_interactive_mismatches(db, ctx, turns)
 
         if _actually_inserted:
             # Pick the most recent meaningful turn for the preview.

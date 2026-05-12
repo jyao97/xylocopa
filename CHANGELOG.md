@@ -147,6 +147,97 @@ A focused release covering the new probe → chat wake-up flow, interactive-card
 
 - **Agents page no longer shows stale unread / message preview for 5 s after returning from background.** `AgentsPage.jsx` activate effect was setting up a `setInterval(POLL_INTERVAL=5000)` without an immediate first call, so resuming the PWA from background (or switching to the Agents tab from another tab) left the list rendering whatever data was last fetched before the page went idle — typically up to 5 s out of date — even though the push notification had already arrived and the DB had the new state. The mount-time seed (`seededRef`) didn't cover this path because it persists across activations. Activate now fires `pollTick()` and `loadUnlinked()` immediately before installing the interval, dropping the worst-case stale window from ~5 s to one network round-trip (~50 ms). MonitorContext's separate 2 s warm-up `fetchAgents` doesn't help here because it writes to its own state (used by MonitorPage), not the AgentsContext store.
 
+## [0.10.8] - 2026-05-08
+
+Maintenance release. Two real bugs surfaced from chasing visual glitches in the interactive cards: a static `bg-hover` utility was missing (so the "selected" fill on Question / Permission / Plan cards was transparent for many iterations), and Tailwind v4 doesn't generate alpha modifiers for `@layer utilities` custom classes — so `border-divider/60`, `text-dim/50`, `border-edge/40` etc. silently fell back to `currentColor`, which is what the dimmed borders looked "near-black". Backend side: the 150ms timer that woke the agent dispatcher after JSONL flush was replaced with a watchdog-driven event, and PostCompact status flips now stop lying via the rotation path. Other touches across lightbox/media handling, cert-install flow, scheduled-message editing, and insight bubble plumbing.
+
+### Interactive cards
+
+- Watchdog-driven JSONL flush wake replaces the fixed 150ms `_delayed_interactive_wake`; agent dispatcher and `routers/hooks.py` now subscribe to real flush events (caught 111 ms / 204 ms in production)
+- Insights bubble state machine simplified to backend-truth-only; full WS plumbing for apply/discard with persisted confirmation
+- Add static `.bg-hover` and `.border-ring-hover` utilities so the selected-state fill and the option/tick borders actually render
+- Replace `border-divider/60` and `text-dim/50` (Tailwind v4 doesn't compile alpha modifiers on plain @layer utilities) with `border-ring-hover` and `text-faint` across QuestionBubble / PermissionPromptBubble / PlanBubble dimmed and locked branches
+- Iterated through cyan-tinted cards, gray cards, borderless layouts, and outlined idle / filled selected before landing on the current ring-hover unification
+
+### Compaction
+
+- PostCompact: separate drain kick from status-flip gating; manual PostCompact drains pending queue after IDLE flip
+- Compact status reads trigger from PostCompact body (drop ctx stash); `_rotate_agent_session` preserves `compact_trigger` across rotation
+- Compact / clear status: stop lying via `_rotate_agent_session`
+
+### Media / lightbox / project browser
+
+- Lightbox: cache-bust on open + 404 fallback; two-stage error retries the original URL before declaring missing; drop unreliable onError → "missing" overlay; manual refresh button; drop cache-bust on video to prevent playback restart
+- Project browser: skip cache-bust on video/audio to match lightbox; show missing-file card when viewer file is gone
+- Media: retry on missing-file cards; extract shared file-existence + cache-bust primitives
+- Backend `files`: extend exists-batch to accept upload paths
+- SW: exclude `/api/*` from navigation fallback
+- Missing-card: drop redundant retry icon — whole card is the action
+
+### Install flow
+
+- Cert-guide: native iOS Add-to-Home-Screen flow replaces the webclip dance; cert download opens in new tab to keep the page alive, then routes back via flag
+
+### Scheduled / queued messages
+
+- Inline edit for queued and scheduled bubbles with transparent auto-grow textarea; popover save/cancel/time
+- Grid-mirror so view↔edit wrap identically
+- Move 📅 reschedule into the main action menu
+- Scheduled bubble shows relative countdown like deferred
+
+## [0.10.7] - 2026-05-05
+
+Patch release covering the file-attachment UX rework: missing-file detection, batch existence probing, and a single universal download path.
+
+### File downloads
+
+- Collapse `downloadFile` to one synchronous `<a href="…?download=1" download>` click. The backend's `FileResponse` already streams from disk in 64 KB chunks with Range support and emits `Content-Disposition: attachment`, so the browser owns progress, pause/resume, and disk writes — no JS Blob, no size threshold, no platform branching. Net −125 lines across `api.js`, `FilePreview`, `ImageLightbox`, `ProjectBrowserModal`.
+- Strip `?token=…` from the URL before `parseFileUrl` matches it, so `exists-batch` resolves the actual filename instead of `<path>?token=…`.
+
+### File existence probing
+
+- Replace per-attachment HEAD probes with `POST /api/files/exists-batch`. FastAPI doesn't auto-register HEAD on a GET route, so every probe was returning 405 and marking attachments as missing. The batch endpoint takes `[{project, path}, …]` and returns `{exists, size, mtime}` per item in one round-trip.
+
+### Missing-file UI
+
+- Render a muted `[missing]` card when the resolver returns `exists: false`, instead of `[ext]` plus broken download/copy buttons. Doc-group rows probe each path independently via the shared batch result.
+- Two-stage image error: fall back from `/api/thumbs/` to full-res before showing the missing-file card; videos fall through to missing if the thumbnail 404s.
+
+### NewTask redesign
+
+- Drop the title input — titles auto-generate via `gpt-4o-mini` from the prompt body (≤ 50 chars / ≤ 15 CJK, language-matched, anchors preserved).
+- ⌘+Enter dispatches; the launch button stays mounted and greys out when no project is selected. The project-miss highlight reuses the bookmark-flash CSS class.
+- Simplified icon bar: drop reminder / quick-save / inbox buttons, add a swipe-down hint, restore the inbox button next to launch.
+
+### Misc
+
+- Generate video thumbnails via `/api/thumbs` ffmpeg frame-grab, cached next to the source under `.thumbcache/`.
+- `flash-cyan` keyframes match the bookmark breath (0.75 brightness, 0.85 saturate, 1 s × 2) and dim the selector itself rather than an outer ring.
+
+## [0.10.6] - 2026-05-05
+
+This release improves the in-app file viewer and preview experience: inline rendering for media/PDF, video thumbnail generation, iOS-compatible mp4 handling, and graceful fallbacks for missing files.
+
+### Frontend
+
+- FileViewer: render videos / images / audio / PDF inline by extension
+- FilePreview: HEAD-probe doc/generic/group cards for missing paths and show a muted "missing" card when the thumb 404s
+- FilePreview: move missing-file early return below `useCallback` to keep hook order stable
+- TasksPage: drop gradient / shadow / `transition-all` on the AI button to avoid a GPU compositor layer
+- download: guard against duplicate `share()` calls
+- formatters: recognize Office formats (xlsx/xls/docx/doc/pptx/ppt) as agent attachments
+
+### Backend
+
+- `/api/thumbs`: generate video thumbnails via ffmpeg frame grab
+- files: transcode mp4 to an iOS-compatible profile when codec / level is unsupported
+- files: remux non-faststart mp4 on demand for iOS playback
+- browse: remove the 512 KB file size cap
+
+### Cleanup
+
+- drop the attempt-1 download guard and rename the mp4 lock dict
+
 ## [0.10.5] - 2026-05-04
 
 ### Fixed
@@ -164,6 +255,63 @@ A focused release covering the new probe → chat wake-up flow, interactive-card
 
 - **Backend: `rebuild_agent` migration to `flush_agent` / targeted `_replace` appends.** `_rotate_agent_session` now uses `flush_agent`; sync compact path uses targeted `_replace` instead of a full rebuild; `PreCompact` flips agent status to `EXECUTING` so the compact window is visible in the UI. Removes the recurring full-display-file rewrites that previously fired on every compaction.
 - **`/new` entry: long-press `+` opens "New Project"; short-press opens `/new/task`.** Reverts the brief `/new`-as-only-New-Project layout from earlier in this cycle. The plus button on the inbox/agents bar is now the affordance for both flows.
+
+## [0.10.4] - 2026-05-04
+
+Reliability fixes — three independent paths where the same content was getting re-injected into agents (or the wrong agents) without the user re-sending it. Each had been a known sharp edge that's now closed at the source rather than worked around.
+
+### Backend — restart no longer re-dispatches sent-but-not-acked messages
+
+Under the post-Phase-2 architecture, `status=SENT` in DB is only written *after* `send_tmux_message` returns OK, so a SENT-without-`delivered_at` row guarantees tmux already received it; `delivered_at=NULL` only means the agent's `UserPromptSubmit` hook hasn't fired (TUI modal, agent busy, agent crashed). The legacy startup migration kept moving every such row back into the pre-sent zone, where the next stop hook would re-promote it through `dispatch_pending_message` — observed in the wild as one user message dispatched 3× across 2 restarts before it was finally acked. The migration now leaves SENT rows alone; `CANCELLED` handling is unchanged.
+
+### Backend — display files no longer rebuilt on every restart
+
+`startup_rebuild_all` was forcing every active agent's display file through a full truncate + DB reflush + pre-sent re-append cycle on every server start. That cycle was what re-exposed the SENT-no-`delivered_at` rows above to the dispatch path (migration moves them back to queued → rebuild re-emits the queued line into the index → next stop hook picks them up). Files are append-only mirrors of DB state and stay consistent through the normal write paths, so the eager rebuild was defensive overkill. Compact and session-rotation paths still call `rebuild_agent` where it's actually needed (JSONL identity changes); the pre-sent index now loads lazily on first read.
+
+### Frontend — voice transcript bound to recording's persistKey
+
+`AgentChatPage` is reused across `/agents/:id` navigation (React Router doesn't remount on param change), so `persistKeyRef` and `onTranscriptRef` both flip to the new agent while the in-flight transcribe → refine pipeline keeps running. The old code delivered the final text to whichever chat happened to be visible. Snapshot `persistKey` at recording-start time, propagate it through `recorder.onstop` → save → transcribe → refine → deliver, and skip delivery if the snapshot doesn't match the current `persistKey` — leaving the "done" entry in IndexedDB for the recovery effect to pick up when the user returns to the recorded chat.
+
+### Frontend — list-page unstar deferred until navigation
+
+Tapping the inline star on AgentsPage / ProjectDetailPage rows used to fire `unstarSession` immediately, and the resulting `session_star_changed` WS event then patched `agent.starred=false` in the store, moving the row out of STARRED filter mid-tap (visible flicker). Lifted to a parent-page `pendingUnstars` Map flushed only on navigation away (`isActive=false` / unmount / project change); a re-tap before navigation cancels the pending entry — accidental taps are free to undo. Chat-page star toggle is unchanged (immediate). Reconcile clears stale entries when `agent.starred` flips externally.
+
+### Backend — ESC clears input via C-u instead of Esc Esc + Esc
+
+Stop-button-from-IDLE path swapped from `Escape Escape` + safety `Escape` to `C-u`, which clears the input line in one keystroke without the double-tap timing race that the previous combination relied on.
+
+## [0.10.3] - 2026-05-04
+
+Realtime sync fixes — close the WS gaps where mutations took up to 5 s to land on other tabs / devices because the page polls /api/agents (or /api/projects) every 5 s as the only convergence path. Several mutation endpoints emitted no WS event at all; star/unstar emitted one but the UI surfaces that show stars on agent rows weren't subscribed to it. Fixes here all converge on the same shape: emit on commit, subscribe on the source of truth.
+
+### Backend — WS emits added on mutation
+
+- `PUT /api/agents/{id}`: emit `agent_update` so deferred_to / muted / name flips propagate.
+- `agent_update` payload: include deferred_to, muted, name (sparse; only when changed) so AgentsPage can patch without a follow-up GET.
+- Mark-read endpoint: emit `agent_update` carrying unread_count=0.
+- Project settings + task reorder: emit `project_update` / `task_update`.
+- Star/unstar: targeted `session_star_changed` event (replaces the project_update path that forced AgentChatPage to refetch /sessions just to read one boolean).
+- Bookmarks CRUD (POST /messages/{id}/bookmark, PATCH /bookmarks/{id}, DELETE /messages/{id}/bookmark): emit `project_update` after each commit.
+
+### Backend — WS dispatch under sync endpoints
+
+- `bookmarks` router endpoints are sync `def`, so they run in AnyIO's thread pool with no event loop. `asyncio.ensure_future` raised RuntimeError. Adopted the projects.py pattern: module-level _main_event_loop set during lifespan + `_emit_ws()` helper that uses `run_coroutine_threadsafe` (closes the coro if the loop isn't running yet to suppress "never awaited" warnings).
+
+### Backend — session_star_changed payload
+
+- Now carries `agent_id` (resolved via the same Agent.session_id == sid OR Agent.id == sid predicate as enrich_agent_briefs, covering legacy id-keyed stars). Lets AgentsPage patch the shared store keyed by agent.id without maintaining a session→agent reverse index on the frontend.
+
+### Frontend — subscribe / patch
+
+- AgentsPage `agent_update` handler: merge unread_count, last_message_preview, last_message_at, has_pending_suggestions, insight_status, deferred_to, muted, name when present. patchOne preserves keys the WS payload doesn't carry (sparse field semantics).
+- AgentsPage: subscribe to `session_star_changed` → `patchOne(agent_id, { starred })`. Single patch updates AgentsPage rows AND ProjectDetailPage rows (both read from useAgents()).
+- AgentChatPage: subscribe to `session_star_changed` for the chat-header star button (no /sessions refetch).
+- AgentChatPage: subscribe to `project_update` for the chat-page sessions list. Hoisted above the agent_id guard since project-scoped events have no agent_id.
+- ProjectDetailPage: subscribe to `project_update` → loadData (refreshes bookmarks + stats).
+
+### Frontend — local-tap optimistic
+
+- AgentChatPage star button: flip setStarred immediately, dispatch agent-star-changed for same-tab listeners, rollback on HTTP failure. Mute and rename were already optimistic; star matches now.
 
 ## [0.10.2] - 2026-05-03
 
@@ -228,6 +376,164 @@ A focused release covering the new probe → chat wake-up flow, interactive-card
 - Lifetime cost double-counting on resumed agents (now deduped by message id).
 - Various e-ink-mode contrast and badge-rendering edge cases (saturated bg → light text/SVG, status dots inside saturated pills, popover/toast borders, inline code styling).
 - `frameLogger.js`: bumped class-attr truncation 60 → 200 chars so longer Tailwind utility chains aren't cut off in mutation logs.
+
+## [0.9.9] - 2026-05-01
+
+Patch release covering an iOS PWA notification regression, agent-resume insight cleanup, preview-row badge layout, and a README refresh with hero image and PWA screenshots.
+
+### Frontend — agent preview row
+
+- Moved generating/insights badges into the preview row so they no longer push the timestamp out of place (`7d4cef7`).
+- Grouped preview-row badges into a single right-aligned, vertically-centered cluster (`e0104e7`).
+
+### Frontend — iOS PWA notifications
+
+- Stable Service Worker `message` listener — fixes notification clicks dropped after iOS PWA resume (`4203c86`).
+
+### Orchestrator — agent resume
+
+- Drop pending insight suggestions when an agent is resumed (`16b3410`).
+- Cancel in-flight insight generation on resume so it doesn't race with the new session (`623059b`).
+
+### Internal
+
+- Removed dead `delivered_at` column and `SENT→COMPLETED` migration paths from the message-delivery code (`32efefc`).
+
+### README & docs
+
+- Added a hero image above the nav links (`033a590`).
+- Added a 6-up row of PWA screenshots (Inbox / Projects / Agents / Chat / Git / Monitor) above The Loop, reflowed to a 3×2 grid for narrow viewports (`f07cfc0`, `787051c`).
+- Added a transparent 512px bee icon PNG under `docs/pwa/` (`7e9d57e`).
+- Added a hook line to the Lessons Compound section (`15abe99`).
+
+## [0.9.8] - 2026-04-30
+
+Patch release covering UI polish across `AgentsPage` and `BookmarksSection`, a rework of glass/translucent surfaces for better cross-platform rendering, a backend pagination fix for the agents endpoint, and a scaffolder backfill fix.
+
+### Frontend — agent row & bookmarks layout
+
+- Replaced the Starred filter tab with an inline pin + amber star toggle on each row (`5fbf2de`).
+- Reorganized `AgentRow` so time sits top-right with the star/unread badge below it (`5f171d4`, `f476fb8`, `ce54ec0`).
+- Mirrored the same layout in `BookmarksSection`, aligned pencil/bookmark icon sizes, and centered the pencil vertically (`d401315`, `a904af2`, `6324cb9`).
+- Dropped the `min-h-[72px]` floor on bookmark rows so density matches `AgentRow` (`a9a1de2`).
+- Aligned the chat-header id pill style with the other pills (`19558af`).
+
+### Frontend — glass-surface rework
+
+- Made glass surfaces fully opaque, then re-introduced translucency only where `backdrop-filter` is supported (`debbc55`, `1734b53`, `25cfd30`).
+- Raised composer alpha so it reads as solid even without blur (`44b546f`).
+- Disabled glass on Linux desktop where `backdrop-filter` renders weakly (`d8e9a3b`).
+
+### Backend
+
+- Dropped the default `limit` on the agents endpoints so the UI no longer silently truncates large agent lists (`874f0fd`).
+
+### Internal
+
+- Scaffolder now skips the host project on backfill and folds release/commit-safety rules into the project-rules section of the generated CLAUDE.md (`3e366c7`).
+
+## [0.9.7] - 2026-04-30
+
+Adds an agent-callable MCP control plane: running xylocopa-managed agents can now inspect and grow orchestrator state (projects, tasks, sessions, agents) from inside their own session, via 11 new MCP tools alongside the original 6 (kept as byte-identical aliases). The surface is non-destructive by construction — a verb-axis allow/deny list rules out destructive ops at the tool name level, with no override.
+
+### MCP control plane (new)
+
+- **project**: `project_list`, `project_get`, `project_create`, `project_scaffold`, `project_regenerate_claude_md`. `project_create` is idempotent on name (re-activates archived projects), rolls back the DB row if registry write fails, does not clone (caller clones first).
+- **task**: `task_get` (full task detail), `task_counts` (per-status counts, optionally project-scoped). Existing `task_list/task_create/task_update/task_dispatch` retained.
+- **session**: `session_tail` (default 10-turn snapshot, same backend as `session_read`).
+- **agent**: `agent_list` (filter by project + status), `agent_get` (full agent record by id/session_id/prefix).
+- **system**: `system_health` (DB liveness, registry parseability, project/task/agent counts).
+
+### Compatibility
+
+- The original 6 tools (`list_sessions`, `read_session`, `create_task`, `update_task`, `dispatch_task`, `list_tasks`) remain as `@server.tool()` alias wrappers. Output strings are byte-identical to the previous release.
+- Verb whitelist: `list / get / read / tail / count / health / create / update / dispatch / scaffold / regenerate`.
+- Verb blacklist (will never be exposed): `delete / archive / kill / force / reset / drop / wipe / clean / cancel / stop / purge / restore / truncate / restart`. Destructive ops stay in the web UI.
+
+### Scaffolder
+
+- Project CLAUDE.md template now includes a "Xylocopa context" section pointing managed-project agents at the available MCP tool prefixes and the new reference doc. Existing projects pick this up on the next `project_regenerate_claude_md` call (or `backfill_all_projects`).
+
+### Documentation
+
+- New `docs/agent-mcp-tools.md` — canonical agent-facing reference: safety model, per-domain tool tables, what's intentionally not exposed, operational notes. Linked from README.
+
+### Tests
+
+- `orchestrator/test_mcp_tools.py` — standalone test (no pytest). Sets up temp `XYLOCOPA_ROOT`, exercises every tool's happy + error path, verifies alias byte-equality, tears down. 46 assertions across 23 tools.
+
+### Frontend
+
+- AgentsPage and ProjectDetailPage gain a Starred filter tab, ordered before Active. Deferred-section visibility is now scoped to Starred/Active tabs only (cleaner Stopped/Insights tabs). ProjectDetailPage's deferred section renders inline (revert of the brief collapsible variant).
+
+### Insights
+
+- All insight-generating prompts now force English output regardless of the agent's conversation language, for consistent rendering in the UI.
+
+### Instrumentation
+
+- Adds `ghost_probe_scan.py` — harvests `GHOST_PROBE` and `GHOST_DELIVERED` log lines into a single report for diagnosing dispatch ghosting. Probe logs added around dispatch and startup migrations.
+
+## [0.9.6] - 2026-04-30
+
+End-to-end CJK dispatch latency dropped from 1883ms (v0.9.5) to 1581ms (v0.9.6) across 4-sample averages. Three orthogonal changes account for the cut, plus a separate audit fixed a latent cross-thread session hazard. Sync-loop crashes (the `database is locked` failure mode that flagged 0.9.4) have not recurred since `8d2e6bf` shipped in 0.9.5.
+
+### Backend
+
+- `[92e9339]` Run `create_tmux_claude_session` in `asyncio.to_thread` at all four callsites (task dispatch, legacy create, launch-tmux, resume). The 5 sync `tmux` subprocess calls (kill-session, new-session, display-message, send-keys × 2) no longer stall the event loop during dispatch.
+- `[a4664d5]` Stop passing the request-scoped SQLAlchemy session into `asyncio.to_thread` workers. New `_query_insights_threadsafe` / `_query_insights_ai_threadsafe` open a short-lived `SessionLocal` inside the worker so cross-thread session sharing — a latent bug masked by SQLite serialization — is gone.
+- `[e3d52b4]` `TUI_SETTLE_DELAY` trimmed 0.5s → 0.3s. The buffer now covers only the React-input-handler wire-up gap; verified across 4 dispatches with no character drops.
+- `[ebc9a43]` Removed the auto-dismiss of Claude Code's `/rate-limit-options` TUI menu. Users dismiss it manually with Enter; the change clears one event-loop dependency in `sync_import_new_turns`.
+- `[f7b028a]` `agent_created` WebSocket event for event-driven new-agent visibility, with diagnostics added in `[690ca69]`.
+
+### Frontend
+
+- `[17e2561]` Optimistic `launchAgent`: sheet dismisses immediately while create + dispatch run in the background — perceived launch becomes instant.
+- `[65a2bc4]` Focus-slice lazy load: clicking a bookmark now centers the message in one fetch.
+- `[ed510d7]` Search results append `?focus=<msg_id>` so opening a result centers + flashes the matched message.
+- `[6449721]` Yellow text highlight on matched search query.
+- `[32faf50]` Search highlight survives `ChatBubble` re-renders on busy agents.
+- `[4ae89ce]` `userScrolledUp` now includes `hasLater`, so focus-slice == scrolled-up state.
+- `[d0c18b9]` `[e0051c3]` `[00eb25d]` `[3852a22]` `[d5469f6]` `[3aad92d]` Focus-mode + auto-pin-to-bottom corrections; `scrollToLiveTail` extracted and deferred to commit-time `useLayoutEffect`.
+- `[8095d14]` `[151bec7]` Bookmark edit: stable row height, single-line textarea.
+- `[68b7055]` Bookmark focus-flash: brightness pulse inverted (dim instead of brighten).
+- `[6165566]` `[71e69dd]` `[82c5052]` `useLongPress`: text-selection disable baked in; no `onTap` after a swipe/scroll; iOS card long-press disables native text selection.
+- `[aecad0b]` `loadNewerMessages` advances `nextOffsetRef` to the read cursor.
+
+### Tools
+
+- `[61affd4]` `tools/benchmark3.py` measures Chinese → English translation latency via OpenAI for diagnosing CJK dispatch slowness.
+
+## [0.9.5] - 2026-04-29
+
+Dispatch endpoint no longer blocks the event loop during the OpenAI translate call used by `query_insights`. CJK prompts that previously serialized translation behind TUI startup polling now run the two phases in parallel, cutting user-perceived agent launch latency from ~3.3s to ~2s. Frontend ships an expanded emoji picker, and the getting-started docs add a dedicated Bookmarks section.
+
+### Backend
+
+- Convert `_prepare_dispatch`, `_prepare_pre_sent_entry`, `_dispatch_task_tmux`, `_dispatch_pending_tasks`, `_tick` to async; wrap `query_insights` / `query_insights_ai` calls with `asyncio.to_thread` so the synchronous OpenAI HTTP request runs in a worker thread instead of the FastAPI event loop. Insights semantics unchanged — the translated query is still awaited and folded into the prompt.
+
+### Frontend
+
+- `FLUENT_MAP` expanded from 152 to 229 emoji entries (77 new entries commonly chosen by LLMs for resume hints).
+- Emoji picker: 4 new tabs + keyword coverage to surface the new entries.
+- Bookmarks: vertically center emoji on multi-line rows.
+
+### Docs
+
+- `getting-started`: dedicated section emphasizing message-level Bookmarks.
+
+## [0.9.4] - 2026-04-29
+
+This release fixes a long-standing issue where an expired Anthropic OAuth access token would bounce users back to the login screen 2–3 times in a row, even though their Xylocopa session was perfectly valid.
+
+### Bug Fixes
+
+- **Backend — `/api/system/token-usage` no longer pollutes session auth.** When Anthropic's upstream OAuth check returned 401/403 (e.g. expired access token), the orchestrator forwarded that status verbatim to the frontend. The frontend's `request()` wrapper treats any 401 as session expiry and dispatches `auth-expired` → unconditional `navigate("/login")`. Now upstream 401/403 are remapped to 502 (Bad Gateway), so they're handled as a degraded-monitor signal instead of a session signal.
+- **Frontend — `auth-expired` handler still navigated even when the grace period blocked the token clear.** Reproducing the [2026-04-11] "unconditional navigation" anti-pattern: `clearAuthToken` correctly returned `false` during the 3-second post-login grace window, but `navigate("/login")` always fired. The token-usage backend fix removes the trigger; this is a separate latent bug worth tracking.
+
+### Refactor
+
+- **Frontend — token-usage polling fully decoupled from `MonitorContext`.** Previously bundled into the warm-up loop (1 min when monitor inactive) and active fast-poll loop (10 min when MonitorPage open). Now lives in its own `useEffect`: one fetch ~2 s after mount, then every 30 minutes, regardless of `monitorActive` or page visibility. Backend's existing 2-min cache means real cost is ~one Anthropic API call per 30 min per session.
 
 ## [0.9.3] - 2026-04-29
 

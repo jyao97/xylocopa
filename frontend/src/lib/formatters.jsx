@@ -23,7 +23,7 @@ function CodeBlock({ code }) {
       <button
         type="button"
         onClick={handleCopy}
-        className="absolute top-2 right-2 p-1 rounded bg-surface border border-divider text-dim opacity-100 sm:opacity-0 sm:group-hover/code:opacity-100 hover:text-body active:scale-95 transition-all cursor-pointer shadow-sm"
+        className="absolute top-2 right-2 p-1 rounded bg-surface border border-divider text-dim opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/code:opacity-100 hover:text-body active:scale-95 transition-all cursor-pointer shadow-sm"
         title="Copy code"
       >
         {copied ? <Check size={13} strokeWidth={2.5} className="text-emerald-500" /> : <Copy size={13} />}
@@ -113,7 +113,7 @@ function TableBlock({ header, bodyCells }) {
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-        className="absolute top-2 right-2 p-1 rounded bg-surface border border-divider text-dim opacity-100 sm:opacity-0 sm:group-hover/table:opacity-100 hover:text-body active:scale-95 transition-all cursor-pointer shadow-sm"
+        className="absolute top-2 right-2 p-1 rounded bg-surface border border-divider text-dim opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/table:opacity-100 hover:text-body active:scale-95 transition-all cursor-pointer shadow-sm"
         title="Expand table"
       >
         <Maximize2 size={13} />

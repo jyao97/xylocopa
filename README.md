@@ -301,13 +301,19 @@ MCP server — list/create/dispatch tasks, read each other's sessions,
 scaffold projects, check health. The surface is deliberately
 non-destructive (verb whitelist + blacklist).
 
-**Event-driven wake-up (probes):** an agent registers a one-shot webhook via
-`probe_create` and hands the trigger URL to whatever monitors an external
-condition (CI, cron, IoT, a long-running build). POSTing the URL injects an
-envelope-wrapped message into the chat and burns the token. Envelopes are
-hardened (size cap, control-char filter, no embedded envelope markers),
-default to 24 h expiry, and auto-expire when the agent transitions to
-STOPPED/ERROR.
+**Event-driven wake-up (probes):** tell an agent what to wait for —
+_"set a probe for when the GPU box is free,"_ _"ping me when CI on PR #42
+goes green,"_ _"wake me when the nightly backup finishes"_ — it registers
+a one-shot webhook via `probe_create` and hands you the URL to wire into
+whatever monitors the condition (CI, cron, IoT, a long-running build).
+POSTing the URL injects an envelope-wrapped message into the chat, burns
+the token, and the chat wakes with a system bubble and a notification:
+
+![Probe fired](docs/probe-fired.png)
+
+Envelopes are hardened (size cap, control-char filter, no embedded
+envelope markers), default to 24 h expiry, and auto-expire when the agent
+transitions to STOPPED/ERROR.
 
 See **[docs/agent-mcp-tools.md](docs/agent-mcp-tools.md)** for the full
 tool list, safety model, and what's intentionally not exposed.

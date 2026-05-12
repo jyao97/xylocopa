@@ -1545,17 +1545,38 @@ def _get_jsonl_observer():
     return _jsonl_observer
 
 
-async def wait_for_jsonl_flush(jsonl_path: str, timeout: float = 5.0) -> bool:
+async def wait_for_jsonl_flush(
+    jsonl_path: str,
+    timeout: float = 10.0,
+    min_size: int | None = None,
+) -> bool:
     """Block until JSONL file is modified, or until timeout elapses.
 
     Replaces fixed JSONL_FLUSH_DELAY sleep — wakes as soon as CC actually
     flushes the new turn to disk, instead of betting on a static delay.
-    Returns True on observed modify event, False on timeout.
+
+    Fast path: if `min_size` is given and the file already exceeds it,
+    returns True immediately. Handles the race where CC flushed BEFORE
+    this call set up the watch (otherwise we would wait the full timeout
+    for a modify event that already fired).
+
+    Slow path: install watchdog listener on the JSONL's directory, wait
+    up to `timeout` seconds for a modify event on this exact file.
+
+    Returns True on observed flush, False on timeout / unreadable path.
     """
     from watchdog.events import FileSystemEventHandler
 
     if not jsonl_path or not os.path.exists(os.path.dirname(jsonl_path)):
         return False
+
+    # Fast path: file already grew past the caller's baseline.
+    if min_size is not None:
+        try:
+            if os.path.getsize(jsonl_path) > min_size:
+                return True
+        except OSError:
+            return False
 
     event = asyncio.Event()
     loop = asyncio.get_event_loop()

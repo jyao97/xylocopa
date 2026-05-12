@@ -72,6 +72,41 @@ def _is_subprocess_session(agent_id: str, hook_session_id: str, request: Request
     return ctx.session_id != hook_session_id
 
 
+async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
+    """Wait for the agent's JSONL to flush new content past ``last_offset``.
+
+    Replaces the fixed ``asyncio.sleep(JSONL_FLUSH_DELAY)`` pattern: watches
+    for the actual disk-modify event instead of betting on a static 150ms
+    delay. When CC's internal buffer flushes slower than the static delay,
+    the next wake_sync would see "file unchanged" and bail, leaving the
+    agent stuck until POLL_INTERVAL (5min) elapsed.
+
+    Also briefly polls for the sync context to be installed — at
+    SessionStart, the launch task races with this hook to register ctx.
+
+    Returns True if flush observed (or already happened), False on timeout
+    or if no sync context could be resolved.
+    """
+    if not ad:
+        return False
+    ctx = ad._sync_contexts.get(agent_id)
+    if ctx is None:
+        # Brief poll for ctx install (SessionStart race; ~10-20ms typical).
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + 0.5
+        while ctx is None and loop.time() < deadline:
+            await asyncio.sleep(0.02)
+            ctx = ad._sync_contexts.get(agent_id)
+        if ctx is None:
+            return False
+    if not ctx.jsonl_path:
+        return False
+    from agent_dispatcher import wait_for_jsonl_flush
+    return await wait_for_jsonl_flush(
+        ctx.jsonl_path, timeout=timeout, min_size=ctx.last_offset,
+    )
+
+
 # ---- Claude Code Hooks Endpoints ----
 
 # Stop hook signal file directory.  The dispatcher reads (and deletes)
@@ -128,8 +163,7 @@ async def hook_agent_session_end(request: Request):
     # imported — the new session writes a fresh JSONL file and the old
     # one is no longer watched. Mirrors the PreCompact drain pattern.
     if ctx:
-        from config import JSONL_FLUSH_DELAY
-        await asyncio.sleep(JSONL_FLUSH_DELAY)
+        await _await_jsonl_flush(ad, agent_id)
         await ad._drain_session_sync(agent_id)
 
     logger.info("hook_agent_session_end: agent=%s", agent_id[:8])
@@ -148,16 +182,15 @@ async def hook_agent_user_prompt(request: Request):
 
       1. Flip agent.status IDLE/STARTING → EXECUTING (DB write + WS emit).
          JSONL is the canonical truth for status, but the user turn isn't
-         always flushed within JSONL_FLUSH_DELAY (150ms). When wake_sync
-         sees "file unchanged" the sync-side EXECUTING write is missed and
-         the next poll is POLL_INTERVAL=300s away, so the hook itself
-         writes EXECUTING for snappy + reliable UI feedback. Stop-side
-         transitions still flow through sync (they need the JSONL
-         stop_hook entry first).
-      2. Wake the sync loop after JSONL_FLUSH_DELAY so sync can import the
-         newly-written user turn, match it to the pre-dispatched web message
-         (if any), set delivered_at/jsonl_uuid/status in one commit, and
-         promote it into the display file's delivered partition.
+         always flushed by the time wake_sync would otherwise run, so the
+         hook itself writes EXECUTING for snappy + reliable UI feedback.
+         Stop-side transitions still flow through sync (they need the
+         JSONL stop_hook entry first).
+      2. Wake the sync loop once CC actually flushes the user turn (via
+         _await_jsonl_flush watchdog) so sync can import the newly-written
+         turn, match it to the pre-dispatched web message (if any), set
+         delivered_at/jsonl_uuid/status in one commit, and promote it into
+         the display file's delivered partition.
 
     The green "delivered" tick therefore surfaces ~300-500ms after the hook
     fires (JSONL flush delay + sync cycle). Gained in exchange: there is no
@@ -195,13 +228,11 @@ async def hook_agent_user_prompt(request: Request):
             logger.exception("GHOST_PROBE ack_on_user_prompt failed")
         # Flip IDLE/STARTING → EXECUTING here for snappy UI feedback. The
         # JSONL-driven path (sync_engine._infer_status_from_signals) is
-        # still the canonical writer, but it depends on CC having flushed
-        # the user turn within JSONL_FLUSH_DELAY (150ms). When that flush
-        # is slower, the next wake_sync sees "file unchanged" and bails,
-        # leaving the agent stuck IDLE until something else wakes sync —
-        # POLL_INTERVAL=300s makes that recovery window unbounded in
-        # practice. Stop-side transitions still flow through sync (they
-        # need the JSONL stop_hook entry to be promoted first).
+        # still the canonical writer, but _await_jsonl_flush below can
+        # time out (10s) if CC stalls; the hook-side write avoids leaving
+        # the agent stuck IDLE in that edge case. Stop-side transitions
+        # still flow through sync (they need the JSONL stop_hook entry to
+        # be promoted first).
         try:
             _db_usp = SessionLocal()
             try:
@@ -223,8 +254,7 @@ async def hook_agent_user_prompt(request: Request):
         # match) still runs once CC flushes the user turn.
         logger.info("hook_agent_user_prompt: waking sync for %s", agent_id[:8])
         async def _post_prompt_sync(_aid):
-            from config import JSONL_FLUSH_DELAY
-            await asyncio.sleep(JSONL_FLUSH_DELAY)
+            await _await_jsonl_flush(ad, _aid)
             ad.wake_sync(_aid)
         asyncio.ensure_future(_post_prompt_sync(agent_id))
 
@@ -276,8 +306,7 @@ async def hook_agent_stop(request: Request):
                 ad.wake_sync(agent_id)
             else:
                 async def _post_stop_sync(_aid):
-                    from config import JSONL_FLUSH_DELAY
-                    await asyncio.sleep(JSONL_FLUSH_DELAY)
+                    await _await_jsonl_flush(ad, _aid)
                     ad.wake_sync(_aid)
                 asyncio.ensure_future(_post_stop_sync(agent_id))
         else:
@@ -352,8 +381,7 @@ async def hook_agent_post_compact(request: Request):
     # the boundary + summary sys bubbles land in DB, the compact tool_activity
     # row is finalized — all visible by the time the hook returns.
     if ctx:
-        from config import JSONL_FLUSH_DELAY
-        await asyncio.sleep(JSONL_FLUSH_DELAY)
+        await _await_jsonl_flush(ad, agent_id)
         await ad._drain_session_sync(agent_id, run_compact_full_scan=True)
 
     # Compact resets the in-session running counter (in-place rotation);
@@ -470,10 +498,7 @@ async def hook_agent_tool_activity(request: Request):
             # flush. Replaces a fixed JSONL_FLUSH_DELAY sleep that missed
             # cases where CC's internal buffer flushed slower than expected.
             async def _wait_jsonl_then_wake(_aid):
-                from agent_dispatcher import wait_for_jsonl_flush
-                ctx = ad._sync_contexts.get(_aid)
-                if ctx and ctx.jsonl_path:
-                    await wait_for_jsonl_flush(ctx.jsonl_path, timeout=5.0)
+                await _await_jsonl_flush(ad, _aid)
                 ad.wake_sync(_aid)
             asyncio.ensure_future(_wait_jsonl_then_wake(agent_id))
     elif hook_event in ("PostToolUse", "PostToolUseFailure"):
@@ -717,8 +742,7 @@ async def hook_agent_tool_activity(request: Request):
         # post-rotation created_at and mis-order against the rotation
         # marker.
         if ad and ad._sync_contexts.get(agent_id):
-            from config import JSONL_FLUSH_DELAY
-            await asyncio.sleep(JSONL_FLUSH_DELAY)
+            await _await_jsonl_flush(ad, agent_id)
             await ad._drain_session_sync(agent_id)
             # Now pause sync — JSONL is about to be rewritten
             ad._sync_contexts[agent_id].compact_notified = True
@@ -1328,8 +1352,7 @@ async def hook_agent_session_start(request: Request):
             # the post-clear breakdown, not the stale pre-clear one.
             ad_clear = getattr(request.app.state, "agent_dispatcher", None)
             if ad_clear:
-                from config import JSONL_FLUSH_DELAY
-                await asyncio.sleep(JSONL_FLUSH_DELAY)
+                await _await_jsonl_flush(ad_clear, agent_id)
                 await ad_clear._drain_session_sync(agent_id)
             # /clear resets the in-session running counter to 0; push a fresh
             # breakdown so the pill shrinks immediately.
@@ -1374,14 +1397,13 @@ async def hook_agent_session_start(request: Request):
             if fut and not fut.done():
                 fut.set_result(session_id)
 
-            # Same JSONL_FLUSH_DELAY-then-wake pattern as the other hooks:
-            # gives the launch task time to set agent.session_id and call
-            # start_session_sync (~10-20ms typical), then wakes the freshly
-            # registered sync loop so it imports the user's first turn
-            # without waiting for the next external hook.
+            # Wait for the launch task to install the sync ctx (~10-20ms
+            # typical, handled by _await_jsonl_flush's ctx poll), then wait
+            # for CC to flush the user's first turn — same event-driven
+            # pattern as the other hooks. Wakes the freshly registered
+            # sync loop so it imports without waiting for the next hook.
             async def _delayed_wake(_aid: str):
-                from config import JSONL_FLUSH_DELAY
-                await asyncio.sleep(JSONL_FLUSH_DELAY)
+                await _await_jsonl_flush(ad, _aid)
                 ad.wake_sync(_aid)
             asyncio.ensure_future(_delayed_wake(agent_id))
 

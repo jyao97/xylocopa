@@ -185,6 +185,26 @@ async def lifespan(app: FastAPI):
     logger.info("Xylocopa starting up...")
     _main_event_loop = asyncio.get_event_loop()
 
+    # Ensure a tmux server is running before any agent resume/launch.
+    # On reboot, pm2 resurrects the backend before any interactive tmux
+    # invocation has materialized /tmp/tmux-<uid>/, and the first
+    # `tmux new-session -d` from the orchestrator can race-fail. Preflight
+    # `tmux start-server` is a no-op if already running.
+    try:
+        import subprocess as _sp_init
+        r = _sp_init.run(
+            ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0:
+            logger.info("tmux preflight: server ready")
+        else:
+            logger.warning(
+                "tmux preflight: start-server rc=%d stderr=%s",
+                r.returncode, r.stderr.strip(),
+            )
+    except (OSError, _sp_init.TimeoutExpired) as e:
+        logger.warning("tmux preflight failed (non-fatal): %s", e)
+
     # Anonymous daily heartbeat (opt-out). See orchestrator/telemetry.py.
     try:
         import telemetry

@@ -2521,6 +2521,7 @@ async def resume_agent(agent_id: str, request: Request, db: Session = Depends(ge
                     ad.start_session_sync(agent.id, sid, project.path)
                     resumed_sync = True
     except Exception:
+        logger.exception("resume_agent failed for agent %s (mode=%s)", agent_id, resume_mode)
         # Roll status back so the UI shows Resume again instead of
         # being stuck in STARTING. Use a fresh commit independent of any
         # partial state left on the session.

@@ -124,7 +124,12 @@ async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
     from config import JSONL_FLUSH_DELAY
     await asyncio.sleep(JSONL_FLUSH_DELAY)
     try:
-        if os.path.getsize(ctx.jsonl_path) > baseline:
+        cur = os.path.getsize(ctx.jsonl_path)
+        if cur > baseline:
+            logger.info(
+                "_await_jsonl_flush: agent=%s phase=1 grew=%d bytes (baseline=%d → %d)",
+                agent_id[:8], cur - baseline, baseline, cur,
+            )
             return True
     except OSError:
         return False
@@ -132,7 +137,27 @@ async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
     # Phase 2: watchdog for the remaining budget.
     remaining = max(0.05, timeout - JSONL_FLUSH_DELAY)
     from agent_dispatcher import wait_for_jsonl_flush
-    return await wait_for_jsonl_flush(ctx.jsonl_path, timeout=remaining)
+    t_p2_start = time.monotonic()
+    result = await wait_for_jsonl_flush(ctx.jsonl_path, timeout=remaining)
+    elapsed_ms = (time.monotonic() - t_p2_start) * 1000
+    try:
+        cur = os.path.getsize(ctx.jsonl_path)
+    except OSError:
+        cur = baseline
+    if result:
+        logger.info(
+            "_await_jsonl_flush: agent=%s phase=2 watchdog fired after %.0fms "
+            "(baseline=%d → %d, grew=%d bytes)",
+            agent_id[:8], elapsed_ms, baseline, cur, cur - baseline,
+        )
+    else:
+        logger.warning(
+            "_await_jsonl_flush: agent=%s phase=2 TIMEOUT after %.0fms "
+            "(baseline=%d → %d, grew=%d bytes — CC flush > %ds)",
+            agent_id[:8], elapsed_ms, baseline, cur, cur - baseline,
+            int(remaining),
+        )
+    return result
 
 
 # ---- Claude Code Hooks Endpoints ----

@@ -299,6 +299,10 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
       consumeExpandFocusGuard();
       return;
     }
+    // Preserve native text selection: drag, dblclick word, triple-click line.
+    // Otherwise placeCaretAtPoint below collapses it on every click.
+    const sel = window.getSelection();
+    if (e.detail > 1 || (sel && !sel.isCollapsed)) return;
     const { clientX, clientY } = e;
     if (!descEditing) {
       // First edit-tap: stash coords + flip state. The useLayoutEffect
@@ -529,6 +533,11 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                         consumeExpandFocusGuard();
                         return;
                       }
+                      // Preserve native text selection: drag, dblclick word,
+                      // triple-click line. Otherwise placeCaretAtPoint below
+                      // collapses it on every click.
+                      const sel = window.getSelection();
+                      if (e.detail > 1 || (sel && !sel.isCollapsed)) return;
                       const { clientX, clientY } = e;
                       if (!titleEditing) {
                         // First edit-tap: stash coords + flip state. The

@@ -239,38 +239,13 @@ def merge_interactive_meta(db_meta_json: str | None, new_meta: dict | None) -> s
                 item["selected_index"] = db_item["selected_index"]
             if db_item.get("selected_indices"):
                 item["selected_indices"] = db_item["selected_indices"]
-        # JSONL has a real answer → usually authoritative, but carry over
-        # selected_index/selected_indices if the JSONL version doesn't have them.
-        # Exception: if the JSONL answer is a dismiss/rejection artifact (e.g.
-        # from context-clear terminating the session) but the DB already has a
-        # valid non-dismissed answer, keep the DB answer — it reflects the
-        # user's actual selection via the web UI.
+        # JSONL has a real answer → authoritative. Carry selected_index from
+        # DB since CC's tool_result doesn't always include the numeric index.
         elif item.get("answer") is not None:
-            jsonl_answer = item["answer"]
-            jsonl_is_dismiss = isinstance(jsonl_answer, str) and (
-                jsonl_answer.startswith("The user doesn't want to proceed")
-                or jsonl_answer.startswith("User declined")
-                or jsonl_answer.startswith("Tool use rejected")
-            )
-            db_answer = db_item.get("answer")
-            db_has_valid = (
-                db_answer is not None
-                and isinstance(db_answer, str)
-                and not db_answer.startswith("The user doesn't want to proceed")
-                and not db_answer.startswith("User declined")
-                and not db_answer.startswith("Tool use rejected")
-            )
-            if jsonl_is_dismiss and db_has_valid:
-                item["answer"] = db_item["answer"]
-                if db_item.get("selected_index") is not None:
-                    item["selected_index"] = db_item["selected_index"]
-                if db_item.get("selected_indices"):
-                    item["selected_indices"] = db_item["selected_indices"]
-            else:
-                if db_item.get("selected_index") is not None:
-                    item["selected_index"] = db_item["selected_index"]
-                if db_item.get("selected_indices"):
-                    item["selected_indices"] = db_item["selected_indices"]
+            if db_item.get("selected_index") is not None:
+                item["selected_index"] = db_item["selected_index"]
+            if db_item.get("selected_indices"):
+                item["selected_indices"] = db_item["selected_indices"]
 
     return json.dumps(merged)
 

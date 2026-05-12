@@ -3403,19 +3403,27 @@ async def answer_agent_interactive(
             return {"detail": "ok", "method": "updatedInput"}
         else:
             # Fallback: tmux keys (no pending hook request — race condition or old CC)
-            logger.info("AskUserQuestion fallback to tmux keys for agent %s (no pending hook request)", agent_id[:8])
-            if has_tmux:
-                keys = ["Down"] * body.selected_index + ["Enter"]
-                if not send_tmux_keys(pane_id, keys):
-                    raise HTTPException(status_code=500, detail="Failed to send keys to tmux")
-                # Multi-Q submit confirmation
-                if total_questions > 1 and body.question_index == total_questions - 1:
-                    await asyncio.sleep(0.5)
-                    send_tmux_keys(pane_id, ["Enter"])
-                    return {"detail": "ok", "method": "tmux", "keys_sent": body.selected_index + 2, "submitted": True}
-                return {"detail": "ok", "method": "tmux", "keys_sent": body.selected_index + 1}
-            else:
+            if not has_tmux:
                 return {"detail": "ok", "method": "tmux", "keys_sent": 0, "auto_approved": True}
+            if total_questions > 1:
+                # Multi-Q fallback can't replay per-question Down×N navigation
+                # from a single final-question request — would corrupt earlier
+                # answers (CC then writes "User declined"). Dismiss the picker
+                # and ask the user to answer in TUI.
+                send_tmux_keys(pane_id, ["Escape"])
+                logger.warning(
+                    "AskUserQuestion multi-Q fallback unavailable for agent %s — picker dismissed",
+                    agent_id[:8],
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Multi-question fallback unavailable (no live hook). Picker dismissed; please answer in TUI."
+                )
+            logger.info("AskUserQuestion single-Q tmux fallback for agent %s", agent_id[:8])
+            keys = ["Down"] * body.selected_index + ["Enter"]
+            if not send_tmux_keys(pane_id, keys):
+                raise HTTPException(status_code=500, detail="Failed to send keys to tmux")
+            return {"detail": "ok", "method": "tmux", "keys_sent": body.selected_index + 1}
 
     elif body.type == "exit_plan_mode":
         # Claude Code TUI plan approval options (arrow-navigated):

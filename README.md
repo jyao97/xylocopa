@@ -60,6 +60,8 @@ Watch everything in real time, from desk or phone.
   ![CLI sync demo](docs/cli-sync.gif)
 - **Smart notifications**: Web Push, suppressed when you're already viewing the agent (WebSocket or tmux). Permission requests always cut through.
 - **External wake (probes)**: an agent registers a one-shot webhook via `probe_create` and hands the URL to whatever monitors an external condition (CI, cron, IoT, a long-running build). The trigger wakes the chat with an envelope-wrapped message — same delivery path as a typed user message, same notification surface. See [Agent control plane](#agent-control-plane).
+
+  ![Probe fired](docs/probe-fired.png)
 - **Context usage pill**: per-agent context-window meter on the chat header — live percentage with a tap-to-expand breakdown (system / tools / MCP / messages / cache split, free vs. used). Inline suggestion when usage gets high. Counts come straight from the Claude Code session JSONL, not estimated.
 - **System monitoring**: disk, memory, GPU, token usage. Per-agent **lifetime cost** (cumulative spend across resumes, deduped by message id; Opus / Sonnet / Haiku priced separately, with 5m/1h cache split).
 - **E-ink display mode**: Monitor → Display toggle that flattens glass effects, collapses colored badges to grayscale, and switches saturated bubbles to outlined style for readable contrast on e-paper screens (Bigme, BOOX, Kindle, reMarkable). Two-finger horizontal swipe page-scrolls the chat (left = page down, right = page up) so you can read long sessions without dragging the scrollbar on a slow refresh panel.
@@ -308,12 +310,6 @@ a one-shot webhook via `probe_create` and hands you the URL to wire into
 whatever monitors the condition (CI, cron, IoT, a long-running build).
 POSTing the URL injects an envelope-wrapped message into the chat, burns
 the token, and the chat wakes with a system bubble and a notification:
-
-![Probe fired](docs/probe-fired.png)
-
-Envelopes are hardened (size cap, control-char filter, no embedded
-envelope markers), default to 24 h expiry, and auto-expire when the agent
-transitions to STOPPED/ERROR.
 
 See **[docs/agent-mcp-tools.md](docs/agent-mcp-tools.md)** for the full
 tool list, safety model, and what's intentionally not exposed.

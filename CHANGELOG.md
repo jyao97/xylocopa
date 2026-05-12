@@ -9,6 +9,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.14] - 2026-05-12
+
+Frontend polish release: markdown tables get a fullscreen preview, mobile-landscape regression on the code-copy + table-expand buttons is fixed, and native text selection inside expanded inbox cards now survives clicks.
+
+### Frontend
+
+- **Markdown tables: expand-to-lightbox button.** A small `Maximize2` chip top-right of every rendered table (mirroring the code-block copy button) opens a centered lightbox showing the full table at larger padding / text-sm via `createPortal`. Backdrop click and Escape both dismiss. Styled with app theme tokens (`bg-surface` / `bg-page` / `border-divider` / `text-label`) rather than the media-viewer's white-on-black, so it reads as an app modal in both light and dark themes. (30ecd6a)
+
+- **Code-copy and table-expand buttons now show on touch devices in landscape.** The Tailwind `sm:opacity-0 sm:group-hover:opacity-100` pattern keyed visibility off viewport width (≥640px = hover-to-show). Phones in landscape passed that threshold and fell into the desktop branch, but touchscreens don't fire `:hover`, so the buttons stayed at opacity 0. Switched to `[@media(hover:hover)]:` so the hover-to-show behavior only applies to mouse-capable devices; touch devices (in either orientation, regardless of width) always show the button. (bd052f8)
+
+- **Expanded inbox card: native text selection preserved.** Title and description `onClick` handlers called `placeCaretAtPoint` unconditionally, which collapsed any selection produced by drag, double-click (word), or triple-click (line). Now early-return when `e.detail > 1` or `getSelection().isCollapsed === false`, so native selection survives. Collapsed-state CSS `user-select: none` is intentional and unchanged. (665271e)
+
+## [0.10.13] - 2026-05-12
+
+Hook→sync flush race fix. The fixed 150ms post-hook sleep that preceded every `wake_sync` was racing with CC's JSONL flush — when the buffer flushed slower than 150ms, the wake saw "file unchanged", bailed, and the next attempt was up to 5 minutes away (POLL_INTERVAL). Result: visible message lag on a small but real fraction of hooks. Replaced with a two-phase wait that holds out for the actual content to land.
+
+### Message sync
+
+- **Two-phase JSONL flush wait.** `_await_jsonl_flush` now runs Phase 1 (fixed 150ms sleep, then size check vs the file size at hook arrival) and, only if file didn't grow, falls through to Phase 2 (watchdog listener for the next modify event, up to ~9.85s remaining budget). Total timeout 10s. Replaces the old `await asyncio.sleep(JSONL_FLUSH_DELAY)` pattern at all 8 hook sites (`session_end`, `user_prompt`, `stop`, `post_compact`, `tool_activity` PreToolUse + PreCompact, `session_start` /clear + managed).
+
+- **Baseline is hook-arrival file size, not `last_offset`.** Unrelated housekeeping writes between the last sync and the current hook (e.g. earlier PreToolUse attachment entries — these alone account for ~36% of all JSONL entries) would inflate a `last_offset`-based check, causing a false-positive "flush observed" that misses the actual content the hook is signaling. Comparing against the size snapshot at function entry restricts the check to writes that happened *after* the hook fired.
+
+- **Phase-outcome logging.** Each `_await_jsonl_flush` invocation now logs which phase caught the flush, elapsed time, and bytes grown. Phase 2 timeouts log at WARNING so slow CC flushes are surfaced.
+
+### Observed impact
+
+Compared 2572 hooks across 7 days of pre-fix logs vs 44 post-fix hooks:
+
+| | OLD code (7 days) | NEW code (44 samples) |
+|---|---:|---:|
+| Hooks delayed >1s | 2.64% | 0% |
+| Hooks delayed >5s | 2.29% | 0% |
+| Hooks delayed >30s | 0.39% | 0% |
+| Hooks delayed >2min | 0.12% | 0% |
+| p99 hook→sync delay | 16,651ms | 593ms |
+| max observed | 271,594ms (4.5min) | 593ms |
+
+Visible-lag and stuck-until-manual-refresh message syncs are essentially gone in observed samples. Post-fix p99 sits at ~0.6s; remaining tail above that would require a CC flush >10s, which has not been observed.
+
+## [0.10.12] - 2026-05-12
+
+Interactive-card pipeline cleanup. Three coupled changes turn the permission / AskUserQuestion / ExitPlanMode handling into a flatter design where JSONL is the single source of truth for what Claude actually received, the unworkable `Notification(permission_prompt)` → ghost-card path is removed, and UI-vs-JSONL disagreements surface as a side-channel SystemBubble rather than silently overwriting card metadata.
+
+### Interactive cards
+
+- **Ghost permission cards removed.** xylocopa previously subscribed to the CC `Notification(permission_prompt)` hook in an attempt to catch native permission prompts that bubble up from subagents running under `--dangerously-skip-permissions`. The Notification payload doesn't carry `tool_name` or `request_id`, so the rescue produced unanswerable cards labelled `tool_name="unknown"` and never actually surfaced live subagent permissions. Database scan shows 5 such cards in the prior 6 weeks, none corresponding to an active subagent permission request. The subscription, handler, and subprocess-filter exception are gone; the real permission gateway (PreToolUse + PermissionManager) is untouched.
+
+- **JSONL is authoritative for interactive answers.** The merge step that previously kept a DB-side answer when JSONL recorded a dismiss (`User declined` / `Tool use rejected` / `The user doesn't want to proceed`) is removed. When JSONL has a non-null answer it now always wins; the DB still contributes `selected_index` / `selected_indices` since CC's tool_result doesn't carry numeric indices.
+
+- **Multi-question AskUserQuestion fallback dismisses the picker.** When `PermissionManager` has no live hook request (e.g. orchestrator restarted between question and answer), the tmux-keys fallback used to replay `Down × N + Enter` for each question, but multi-question pickers need per-question navigation that can't be reconstructed from the final question's request — the previous code corrupted earlier answers and CC wrote `User declined`. Single-Q fallback is unchanged. Multi-Q fallback now sends `Escape` to dismiss the picker and returns 503 so the user can re-answer in TUI. ExitPlanMode is untouched — its single Enter is reliable.
+
+- **UI / JSONL answer mismatch surfaces as a SystemBubble.** A read-only sweep at the end of each sync compares each interactive item's JSONL answer against the DB's stored answer. When JSONL is a dismiss-pattern and the DB has a real UI selection, a SystemBubble is emitted: `Selection didn't reach Claude (got "...")`. The card's metadata is not mutated — the card continues to render the user's selection, the sys bubble below records what Claude actually received. Dedup is per `tool_use_id`.
+
+### Backend
+
+- tmux launch path now does a preflight check and logs `resume_agent` exceptions explicitly.
+
+## [0.10.11] - 2026-05-11
+
+Cert management on `/cert-guide` is now idempotent and the PWA service worker no longer caches `index.html`, eliminating the failure modes that surface as "Load failed" / "Reconnecting to server..." after a cert regeneration. Existing PWAs auto-clear their caches on first load (CV `v3` → `v4`); no manual action required for the upgrade itself.
+
+### ⚠️ If anything looks off after upgrade
+
+Clear your browser's site data for the host once (Settings → Privacy → site data → Remove). **Your login state and preferences are preserved** — the cleanup only touches the Service Worker registration and the Cache API (HTTP response cache). `localStorage` (auth token, route memory, theme), `sessionStorage`, and `indexedDB` are untouched.
+
+This is the same one-shot cleanup the new CV `v3` → `v4` check performs automatically; doing it manually is only needed if the auto-trigger didn't fire (e.g. the tab never reloaded after the SW upgrade).
+
+### Certificate flow
+
+- `/cert-guide` has a new "Step 1: Regenerate Certificate" section. The user confirms the IP the browser is currently using (auto-filled from `window.location.hostname`) and clicks Regenerate. The backend signs a fresh leaf with mkcert directly.
+- Regeneration is idempotent: if the current cert's SAN matches the requested set exactly, the regeneration is skipped (`{skipped: true}`). The UI shows a green "Already in cert" badge and the button switches to a disabled "No regen needed" state in that case.
+- Empty-body `POST /api/cert/regenerate` now returns 400 instead of falling back to `hostname -I` auto-detection (which silently missed tailnet-shared IPs and locked those clients out).
+- Added `GET /api/cert/info` returning just the current SAN (IPs + DNS) — used by cert-guide to drive the coverage badge.
+- Removed `tools/ensure-cert.sh` and its `openssl` fallback (the fallback would silently rotate the CA, a worse failure mode than failing loudly on missing `mkcert`).
+
+### Service worker
+
+- `registerType` switched from `'prompt'` to `'autoUpdate'`. Paired with `skipWaiting: true` and the newly-added `clientsClaim: true`, this resolves the previous contradictory configuration where new SWs activated immediately but never claimed existing tabs.
+- Dropped `html` from precache `globPatterns` and set `navigateFallback: null`. Navigation requests now flow through a `NetworkOnly` runtime route, so TLS / cert failures surface as the browser's own warning page instead of being masked by SW-served stale HTML.
+- Bumped cache version `CV` from `v3` to `v4` — old installs auto-unregister all SWs, clear all caches, and reload once on next load.
+- Added self-heal script in `index.html` (capture-phase listener for `/assets/*.{js,css,mjs}` load failures → SW unregister + cache clear + reload, session-storage gated to prevent loops).
+
+### cert-guide layout
+
+- Switched the page container from `flex items-center justify-center overflow-y-auto` (well-known flexbox-scroll bug that clipped tall content) to top-aligned scroll with a fixed backdrop.
+- Added `paddingTop: max(2rem, env(safe-area-inset-top))` and matching bottom padding — iOS Dynamic Island / notch and home indicator no longer overlap content.
+
+### Frontend (unrelated to cert/SW)
+
+- Glass surfaces default to opaque (drop `backdrop-filter`); `.glass-bar-nav` retains the semi-transparent treatment.
+- Scroll-to-bottom FAB rendered opaque.
+- formatters: `.tex` and `.bib` files recognized as agent attachments.
+
+### Documentation
+
+- Probe feature documented in README; "What's New" link added to top navigation.
+
+### Upgrade notes
+
+PWA caches are invalidated automatically on first load after the upgrade. No manual action is required for the codebase upgrade itself.
+
+If your self-signed cert was regenerated during the upgrade window and the mkcert CA root is not installed on your client device, you may need to re-accept the cert once via Safari's URL bar warning page. This is unrelated to the release.
+
+## [0.10.10] - 2026-05-10
+
+A focused release covering the new probe → chat wake-up flow, interactive-card surface alignment (preview, push body, unread accounting), and a handful of polish fixes for defer expiry, insights caching, and the git tab.
+
+### Features
+
+- **Probes** wake a target chat when an external webhook fires. Probes share `source=web` and are identified by `metadata.probe_id`. They auto-expire when the agent transitions to STOPPED/ERROR, drop their dedicated notify channel in favor of the standard chat path, and the envelope contract has been hardened against a sync whitelist regression. Pre-sent dedup now includes `source=probe` so duplicate webhook fires no longer race the dispatcher. (0e48b67, c858555, 0f1d7f3, 7b11937, 81734b1, cd826ac)
+
+### Interactive cards
+
+- AskUserQuestion / ExitPlanMode / Permission cards now bump `unread_count` to mirror stop-hook behavior — previously these blocking cards left the agent at zero unread despite waiting on user input. Native-permission unread bump is scoped inside the try block so a DB write failure no longer fires a stray push without a persisted card. (c938774, de33a6a)
+- Last-message preview no longer falls through to "No messages yet" when the latest turn is an interactive card with empty content — synthetic preview now extracts the question / plan text from metadata. (675e4c8)
+- Preview tag and push body unified across all three card types as `[interactive cards] {content}` so the inbox row, push notification, and chat list stay aligned. (4e9db7b)
+- Removed the 10-min stale-EXECUTING fallback that flipped agents to IDLE while a long AskUserQuestion or ExitPlanMode was still pending — JSONL is now the sole source of truth for IDLE / EXECUTING. (e3b46c8)
+
+### Defer
+
+- `deferred_to` clears on expiry via the dispatcher tick instead of requiring a manual sweep at message dispatch time. (f9587ae)
+- Defer-sweep coalesces N `task_update` broadcasts into a single `tasks_invalidated` event, cutting the WebSocket fan-out when many tasks expire in the same tick. (f14149d)
+
+### Frontend polish
+
+- Insights: persist `briefCache`, history cache, and pending suggestions to remove the entry flicker and ProgressSuggestionsCard delay. (d499209, 6f9a97c)
+- SendLaterPicker: default to today + current time on open; minute step now ±1; value cells are directly editable. (2dd8ffc, 3b4e414)
+- `notify_at` icon unified to `lucide:Bell` across all surfaces. (b5a0fc0)
+- Git tab: auto-refresh on tab activate plus an explicit manual refresh button. (5fa5c64)
+- Refresh icon spin direction now matches the arrow direction. (f092c27)
+- E-ink mode: restore saturated highlight on popover primary buttons that lost it in a prior pass. (5fc5fd3)
+
 ## [0.10.9] - 2026-05-08
 
 ### Fixed

@@ -196,12 +196,6 @@ _DEFAULT_AGENT_HOOKS_JSON = """\
                 "headers": {"X-Agent-Id": "$XY_AGENT_ID"},
                 "allowedEnvVars": ["XY_AGENT_ID", "AHIVE_AGENT_ID"]}]}
   ],
-  "Notification": [
-    {"matcher": "permission_prompt",
-     "hooks": [{"type": "http", "url": "{{BASE_URL}}/agent-tool-activity",
-                "headers": {"X-Agent-Id": "$XY_AGENT_ID"},
-                "allowedEnvVars": ["XY_AGENT_ID", "AHIVE_AGENT_ID"]}]}
-  ],
   "PreCompact": [
     {"hooks": [{"type": "http", "url": "{{BASE_URL}}/agent-tool-activity",
                 "headers": {"X-Agent-Id": "$XY_AGENT_ID"},

@@ -433,14 +433,10 @@ async def hook_agent_tool_activity(request: Request):
             return {}
 
     # Guard: ignore hooks from subprocess sessions.
-    # Exception: permission_prompt notifications pass through so native
-    # Claude Code permission prompts surface in the web UI as interactive cards.
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
     hook_event = body.get("hook_event_name", "")
     if _is_subprocess_session(agent_id, hook_sid, request):
-        if not (hook_event == "Notification"
-                and body.get("notification_type") == "permission_prompt"):
-            return {}
+        return {}
 
     from websocket import emit_tool_activity, _tool_input_summary, _tool_output_summary
 
@@ -667,18 +663,6 @@ async def hook_agent_tool_activity(request: Request):
                         )
                 finally:
                     _db.close()
-    # --- Permission prompt ---
-    elif hook_event == "Notification":
-        ntype = body.get("notification_type", "")
-        if ntype == "permission_prompt":
-            tool_name = body.get("tool_name", "unknown")
-            phase = "permission"
-            kind = "permission"
-            tool_input = body.get("tool_input")
-            summary = _tool_input_summary(tool_name, tool_input) if tool_input else ""
-            await emit_tool_activity(agent_id, tool_name, phase, tool_input=tool_input)
-        else:
-            return {}
     # --- Context compaction ---
     elif hook_event == "PreCompact":
         tool_name = "Compact"
@@ -772,68 +756,6 @@ async def hook_agent_tool_activity(request: Request):
         _sc.mark_delivered(agent_id, "/compact")
     else:
         return {}
-
-    # --- Persist tool activity as Message → display file pipeline ---
-    # Skip subagent bubbles during compact — they're internal implementation
-    # detail of the compaction process, not user-visible tool activity.
-    _in_compact = False
-    if ad:
-        _ctx = ad._sync_contexts.get(agent_id)
-        if _ctx and _ctx.compact_notified:
-            _in_compact = True
-    if tool_name and phase and not (kind == "subagent" and _in_compact):
-        # Tool activity messages are created by the sync engine from JSONL
-        # (same tool-{tool_use_id} UUID).  Hooks must NOT write them to DB
-        # to avoid UNIQUE constraint collisions on jsonl_uuid.
-        #
-        # Permission cards are hook-only (no jsonl_uuid, not in JSONL) —
-        # these still need a DB write.
-        if phase in ("start", "permission") and kind == "permission":
-            from database import SessionLocal as _SL2
-            from uuid import uuid4
-            _db2 = _SL2()
-            try:
-                _perm_id = f"perm-{uuid4().hex[:12]}"
-                _perm_question = summary or f"{tool_name} requires permission"
-                _perm_meta = {
-                    "interactive": [{
-                        "type": "permission_prompt",
-                        "tool_use_id": _perm_id,
-                        "tool_name": tool_name,
-                        "questions": [{
-                            "header": "Permission",
-                            "question": _perm_question,
-                            "options": [
-                                {"label": "Yes", "description": "Allow this operation"},
-                                {"label": "Yes, and always allow", "description": "Don't ask again for this scope"},
-                                {"label": "No", "description": "Block this operation"},
-                            ],
-                        }],
-                        "answer": None,
-                    }],
-                }
-                _perm_msg = Message(
-                    agent_id=agent_id,
-                    role=MessageRole.AGENT,
-                    kind=None,
-                    content="",
-                    source="hook",
-                    status=MessageStatus.COMPLETED,
-                    meta_json=json.dumps(_perm_meta),
-                    tool_use_id=_perm_id,
-                    jsonl_uuid=_perm_id,
-                )
-                _db2.add(_perm_msg)
-                _db2.commit()
-                from display_writer import flush_agent as _flush_ta
-                _flush_ta(agent_id)
-            finally:
-                _db2.close()
-            # Bump unread + push notification for permission card
-            if ad:
-                ad._bump_unread_and_notify_interactive(
-                    agent_id, f"[interactive cards] {_perm_question}",
-                )
 
     # Wake the JSONL sync loop so new message content is picked up
     # immediately instead of waiting for the next poll cycle.

@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
-import { Copy, Check } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Copy, Check, Maximize2, X } from "lucide-react";
 import katex from "katex";
 import { serverNow } from "./serverTime";
 import { uploadUrl, fileUrl, fileUrlToThumbUrl, API_FILES_PREFIX, RE_UPLOADS_PATH, RE_PROJECTS_PATH, PROJECTS_DIR_SEGMENT } from "./urls";
@@ -27,6 +28,99 @@ function CodeBlock({ code }) {
       >
         {copied ? <Check size={13} strokeWidth={2.5} className="text-emerald-500" /> : <Copy size={13} />}
       </button>
+    </div>
+  );
+}
+
+/** Shared table markup used by both inline and lightbox views. */
+function TableContent({ header, bodyCells, dense }) {
+  const cellPad = dense ? "px-3 py-1.5" : "px-4 py-2";
+  const textSize = dense ? "text-xs" : "text-sm";
+  return (
+    <table className={`min-w-full ${textSize} text-body`}>
+      <thead>
+        <tr className="bg-inset">
+          {header.map((h, j) => (
+            <th key={j} className={`${cellPad} text-left font-semibold text-heading whitespace-nowrap border-b border-divider`}>
+              {renderInline(h)}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {bodyCells.map((row, ri) => (
+          <tr key={ri} className={ri % 2 ? "bg-inset/50" : ""}>
+            {row.map((cell, ci) => (
+              <td key={ci} className={`${cellPad} whitespace-pre-wrap border-b border-divider last:border-b-0`}>
+                {renderInline(cell)}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Fullscreen modal showing a markdown table at full size. */
+function TableLightbox({ header, bodyCells, onClose }) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 w-9 h-9 flex items-center justify-center rounded-lg bg-surface border border-divider text-label hover:bg-input transition-colors shadow-md"
+        style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
+        title="Close (Esc)"
+      >
+        <X size={18} />
+      </button>
+      <div
+        className="max-w-full max-h-full overflow-auto bg-page rounded-xl border border-divider shadow-2xl bubble-scroll"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TableContent header={header} bodyCells={bodyCells} dense={false} />
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/** Inline markdown table with an "expand to lightbox" button. */
+function TableBlock({ header, bodyCells }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="group/table relative my-2">
+      <div className="overflow-auto max-h-80 rounded-lg border border-divider bubble-scroll">
+        <TableContent header={header} bodyCells={bodyCells} dense={true} />
+      </div>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+        className="absolute top-2 right-2 p-1 rounded bg-surface border border-divider text-dim opacity-100 sm:opacity-0 sm:group-hover/table:opacity-100 hover:text-body active:scale-95 transition-all cursor-pointer shadow-sm"
+        title="Expand table"
+      >
+        <Maximize2 size={13} />
+      </button>
+      {expanded && (
+        <TableLightbox header={header} bodyCells={bodyCells} onClose={() => setExpanded(false)} />
+      )}
     </div>
   );
 }
@@ -194,32 +288,9 @@ export function renderMarkdown(text, project) {
         // Skip separator row (|---|---|)
         const isSep = (row) => /^[\s|:-]+$/.test(row);
         const bodyStart = isSep(tableRows[1]) ? 2 : 1;
-        const bodyRows = tableRows.slice(bodyStart).filter((r) => !isSep(r));
+        const bodyCells = tableRows.slice(bodyStart).filter((r) => !isSep(r)).map(parseRow);
         elements.push(
-          <div key={elements.length} className="my-2 overflow-auto max-h-80 rounded-lg border border-divider bubble-scroll">
-            <table className="min-w-full text-xs text-body">
-              <thead>
-                <tr className="bg-inset">
-                  {header.map((h, j) => (
-                    <th key={j} className="px-3 py-1.5 text-left font-semibold text-heading whitespace-nowrap border-b border-divider">
-                      {renderInline(h)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {bodyRows.map((row, ri) => (
-                  <tr key={ri} className={ri % 2 ? "bg-inset/50" : ""}>
-                    {parseRow(row).map((cell, ci) => (
-                      <td key={ci} className="px-3 py-1.5 whitespace-pre-wrap border-b border-divider last:border-b-0">
-                        {renderInline(cell)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TableBlock key={elements.length} header={header} bodyCells={bodyCells} />
         );
         continue;
       }

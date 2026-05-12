@@ -1,7 +1,7 @@
 {
   "name": "xylocopa-frontend",
   "private": true,
-  "version": "0.10.11",
+  "version": "0.10.12",
   "description": "Xylocopa frontend — multi-agent orchestration dashboard",
   "type": "module",
   "scripts": {

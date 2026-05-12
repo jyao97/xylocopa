@@ -73,19 +73,32 @@ def _is_subprocess_session(agent_id: str, hook_session_id: str, request: Request
 
 
 async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
-    """Wait for the agent's JSONL to flush new content past ``last_offset``.
+    """Wait for CC to flush new JSONL content after the hook fired.
 
-    Replaces the fixed ``asyncio.sleep(JSONL_FLUSH_DELAY)`` pattern: watches
-    for the actual disk-modify event instead of betting on a static 150ms
-    delay. When CC's internal buffer flushes slower than the static delay,
-    the next wake_sync would see "file unchanged" and bail, leaving the
-    agent stuck until POLL_INTERVAL (5min) elapsed.
+    Two-phase strategy:
+
+    1. **Fixed 150ms sleep** (JSONL_FLUSH_DELAY) — covers the common case
+       where CC flushes within this window. After the sleep, compare file
+       size to the *baseline at function entry* (which is "size at hook
+       arrival" for typical caller use). If file grew, the flush we wanted
+       has landed; return True immediately.
+
+    2. **Watchdog fallback** — if file didn't grow during Phase 1, install
+       a watchdog listener and wait for the next modify event, up to the
+       remaining budget. This catches the case where CC's buffer takes
+       longer than 150ms to flush.
+
+    Why baseline is "size at function entry" and NOT ctx.last_offset:
+    unrelated housekeeping writes (e.g. earlier PreToolUse attachments)
+    that happened between the last sync and the current hook would inflate
+    a last_offset-based check, causing a false-positive "flush observed"
+    that misses the actual content we're waiting for.
 
     Also briefly polls for the sync context to be installed — at
     SessionStart, the launch task races with this hook to register ctx.
 
-    Returns True if flush observed (or already happened), False on timeout
-    or if no sync context could be resolved.
+    Returns True if flush observed (in either phase), False on timeout or
+    if no sync context could be resolved.
     """
     if not ad:
         return False
@@ -101,10 +114,25 @@ async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
             return False
     if not ctx.jsonl_path:
         return False
+
+    try:
+        baseline = os.path.getsize(ctx.jsonl_path)
+    except OSError:
+        return False
+
+    # Phase 1: fixed 150ms sleep, then size check vs hook-arrival baseline.
+    from config import JSONL_FLUSH_DELAY
+    await asyncio.sleep(JSONL_FLUSH_DELAY)
+    try:
+        if os.path.getsize(ctx.jsonl_path) > baseline:
+            return True
+    except OSError:
+        return False
+
+    # Phase 2: watchdog for the remaining budget.
+    remaining = max(0.05, timeout - JSONL_FLUSH_DELAY)
     from agent_dispatcher import wait_for_jsonl_flush
-    return await wait_for_jsonl_flush(
-        ctx.jsonl_path, timeout=timeout, min_size=ctx.last_offset,
-    )
+    return await wait_for_jsonl_flush(ctx.jsonl_path, timeout=remaining)
 
 
 # ---- Claude Code Hooks Endpoints ----

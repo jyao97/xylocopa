@@ -169,6 +169,14 @@ _HOOK_SIGNAL_DIR = os.path.join(tempfile.gettempdir(), "xy-hooks")
 
 
 
+# Claude Code's SessionEnd `reason` values that mean "session is rotating —
+# a new SessionStart will follow shortly, keep the agent slot alive".  Anything
+# else (prompt_input_exit, logout, other, bypass_permissions_disabled, …) is
+# terminal: the underlying CLI process is gone for good and the agent should
+# transition to STOPPED so /api/messages stops accepting work for it.
+_SESSION_END_ROTATION_REASONS = frozenset({"clear", "resume"})
+
+
 @router.post("/api/hooks/agent-session-end")
 async def hook_agent_session_end(request: Request):
     """Receive SessionEnd hook — deterministic signal that a CLI session ended.
@@ -176,6 +184,10 @@ async def hook_agent_session_end(request: Request):
     Replaces JSONL tail scanning (_session_has_ended polling) as the primary
     mechanism for detecting session completion.  The sync loop's polling-based
     check remains as a fallback for abnormal exits that don't fire hooks.
+
+    Branches on the hook payload's `reason` field:
+      - clear / resume     → session rotating, expect new SessionStart.
+      - everything else    → terminal exit (e.g. /exit, logout), stop the agent.
     """
     agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
@@ -200,9 +212,12 @@ async def hook_agent_session_end(request: Request):
         logger.warning("hook_agent_session_end: no agent_dispatcher on app.state for agent %s", agent_id[:8])
         return {}
 
-    # Signal that a rotation is expected — SessionStart should accept the next session.
+    reason = (body.get("reason") if isinstance(body, dict) else None) or "other"
+    is_rotation = reason in _SESSION_END_ROTATION_REASONS
+
     ctx = ad._sync_contexts.get(agent_id)
-    if ctx:
+    if ctx and is_rotation:
+        # Rotation: SessionStart should accept the next session in this slot.
         ctx.awaiting_rotation = True
 
     # Mark any EXECUTING long-running command (/loop, /goal) as completed —
@@ -211,16 +226,44 @@ async def hook_agent_session_end(request: Request):
     import slash_commands as _sc
     _sc.mark_long_running_completed(agent_id)
 
-    # Drain old session's pending JSONL turns into DB before rotation.
-    # Without this, any turn produced in the hook-silent window since the
-    # last sync (e.g. final assistant turn before /clear) would never be
-    # imported — the new session writes a fresh JSONL file and the old
-    # one is no longer watched. Mirrors the PreCompact drain pattern.
+    # Drain old session's pending JSONL turns into DB before rotation (or
+    # before STOPPED takes effect, so the final turns make it in).  Without
+    # this, any turn produced in the hook-silent window since the last sync
+    # (e.g. final assistant turn before /clear) would never be imported.
     if ctx:
         await _await_jsonl_flush(ad, agent_id)
         await ad._drain_session_sync(agent_id)
 
-    logger.info("hook_agent_session_end: agent=%s", agent_id[:8])
+    # Terminal exit (/exit, logout, etc.) → STOP the agent.  Subsequent
+    # /api/messages POSTs will be rejected with "Agent is stopped" at
+    # agents.py's existing gate.
+    if not is_rotation:
+        from database import SessionLocal
+        from models import Agent as _Agent
+        _db = SessionLocal()
+        try:
+            _agent = _db.get(_Agent, agent_id)
+            if _agent:
+                ad.stop_agent_cleanup(
+                    _db, _agent,
+                    reason=f"session ended ({reason})",
+                    kill_tmux=True,
+                    emit=True,
+                    add_message=True,
+                    fail_executing=False,
+                    cancel_tasks=True,
+                )
+                _db.commit()
+                # stop_agent_cleanup writes the "session ended" system
+                # message to DB but doesn't flush display — do it here so
+                # the bubble appears in chat without a manual page refresh.
+                from display_writer import flush_agent
+                flush_agent(agent_id)
+        finally:
+            _db.close()
+
+    logger.info("hook_agent_session_end: agent=%s reason=%s rotation=%s",
+                agent_id[:8], reason, is_rotation)
     return {}
 
 

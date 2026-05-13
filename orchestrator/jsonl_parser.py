@@ -524,12 +524,12 @@ def parse_session_turns_from_lines(
             if isinstance(content, str) and content.strip():
                 stripped = content.strip()
                 # Slash-command wrapper → emit a delivery-signal turn with
-                # canonical "/<cmd> <args>" content. The sync engine matches
-                # it against the dispatched web/task row but never creates a
-                # new CLI row when no match exists (kind="slash_signal" gates
-                # the create-fallthrough), so chat stays clean and CLI-typed
-                # /cmd invocations remain invisible to the web UI — same as
-                # before this fix.
+                # canonical "/<cmd> <args>" content. The sync engine first
+                # tries to match it against a dispatched web/task row
+                # (ContentMatcher promotes the existing SENT row); on miss
+                # it falls through to create a CLI-source bubble, so
+                # /cmd typed directly in tmux (or replayed from an adopted
+                # session) shows up in the web UI like any other turn.
                 _parsed = _parse_command_wrapper(stripped)
                 if _parsed:
                     _cmd, _args = _parsed

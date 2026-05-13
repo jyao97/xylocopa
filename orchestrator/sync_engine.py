@@ -328,18 +328,15 @@ def _promote_or_create_user_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, 
                 ))
             return None  # updated — no insert needed
 
-    # Slash-command signal: the wrapper is purely a delivery confirmation
-    # for a dispatched web/task row.  If nothing matched, there is no real
-    # user input to record — CLI-typed /cmd invocations stay invisible to
-    # the web UI (parity with pre-fix behaviour).
-    if kind == "slash_signal":
-        logger.debug(
-            "Agent %s: slash_signal %r had no DB candidate — skipping",
-            ctx.agent_id[:8], content,
-        )
-        return None
-
     # 3. No promotable sent row — genuine CLI-typed input
+    # (includes slash_signal: a /cmd typed directly in the tmux terminal
+    # — or replayed from an externally-adopted session — has no dispatched
+    # SENT row to promote, so we record it as a CLI-source bubble. Web-UI
+    # dispatched slash commands hit the ContentMatcher branch above and
+    # never reach here, so there's no duplicate-bubble risk in the common
+    # case. If ContentMatcher does miss for a real web dispatch the user
+    # will see one extra cli-source row, which is louder than the previous
+    # silent-drop behaviour — by design: silent drops mask real bugs.)
     _ts = _parse_jsonl_ts(jsonl_ts) or _utcnow()
     return Message(
         agent_id=ctx.agent_id,

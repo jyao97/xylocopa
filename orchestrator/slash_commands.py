@@ -143,12 +143,17 @@ COMMANDS: dict[str, CommandConfig] = {
 # ---------------------------------------------------------------------------
 # Known-problematic slash commands
 # ---------------------------------------------------------------------------
-# These are side-channel built-ins that don't write to the session JSONL and
-# don't trigger UserPromptSubmit / Stop. Sending them via the orchestrator
-# would leave the message stuck as PENDING forever. They must be invoked
-# directly in the terminal — not through the web UI.
+# Two flavours, both unsafe from /api/messages:
+#   1. Side-channel built-ins that don't write JSONL or fire USP/Stop —
+#      message stays PENDING forever (e.g. /help, /config, /status).
+#   2. Session-destroying commands that kill the agent before the lifecycle
+#      can complete — message stays SENT forever and the agent is gone
+#      (/exit, /quit). The user typing these in the actual tmux terminal
+#      is fine; sending them from the chat input is not.
+# All must be invoked directly in the terminal, not through the web UI.
 KNOWN_PROBLEMATIC: frozenset[str] = frozenset({
     "/agents", "/auth", "/btw", "/config", "/context", "/doctor",
+    "/exit", "/quit",  # session-destroying — kills agent, SENT row stuck
     "/help", "/ide", "/install", "/login", "/logout", "/model",
     "/permissions", "/plugin", "/resume", "/status",
 })

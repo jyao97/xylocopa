@@ -60,15 +60,32 @@ _POSTAMBLE_RE = re.compile(
     re.DOTALL,
 )
 
-# Slash-command JSONL wrapper Claude Code emits when a `/cmd args` prompt
-# is accepted; reduced to "/cmd args" so ContentMatcher's exact strategy
-# matches it against the web row's literal user typing.
-_CMD_WRAPPER_RE = re.compile(
-    r"^<command-message>.*?</command-message>\s*"
-    r"<command-name>(?P<name>.*?)</command-name>"
-    r"(?:\s*<command-args>(?P<args>.*?)</command-args>)?",
-    re.DOTALL,
-)
+# Slash-command JSONL wrapper Claude Code emits when a `/cmd args` prompt is
+# accepted; reduced to "/cmd args" so ContentMatcher's exact strategy matches
+# it against the web row's literal user typing.
+#
+# Tag order has varied across CC versions: older releases emit
+# <command-message> first, v2.1.140+ emits <command-name> first. We accept
+# any order — three independent tag matches; require both name and message
+# to be present (a stray <command-name>-only fragment must still be dropped
+# so it falls to the skip-list below).
+_CMD_NAME_TAG_RE = re.compile(r"<command-name>(.*?)</command-name>", re.DOTALL)
+_CMD_MSG_TAG_RE = re.compile(r"<command-message>(.*?)</command-message>", re.DOTALL)
+_CMD_ARGS_TAG_RE = re.compile(r"<command-args>(.*?)</command-args>", re.DOTALL)
+
+
+def _parse_command_wrapper(stripped: str) -> tuple[str, str] | None:
+    """Return ``(cmd_name, args)`` if ``stripped`` is a wrapped slash-command
+    echo, else None. Order-agnostic; requires both name and message tags."""
+    if not (stripped.startswith("<command-name>")
+            or stripped.startswith("<command-message>")):
+        return None
+    m_name = _CMD_NAME_TAG_RE.search(stripped)
+    m_msg = _CMD_MSG_TAG_RE.search(stripped)
+    if not m_name or not m_msg:
+        return None
+    m_args = _CMD_ARGS_TAG_RE.search(stripped)
+    return m_name.group(1).strip(), (m_args.group(1).strip() if m_args else "")
 
 
 # ---------------------------------------------------------------------------
@@ -513,9 +530,9 @@ def parse_session_turns_from_lines(
                 # the create-fallthrough), so chat stays clean and CLI-typed
                 # /cmd invocations remain invisible to the web UI — same as
                 # before this fix.
-                _m = _CMD_WRAPPER_RE.match(stripped)
-                if _m:
-                    _cmd, _args = _m.group("name").strip(), (_m.group("args") or "").strip()
+                _parsed = _parse_command_wrapper(stripped)
+                if _parsed:
+                    _cmd, _args = _parsed
                     flush_all()
                     turns.append(("user", f"{_cmd} {_args}".rstrip(), None, entry_uuid, "slash_signal", entry_ts))
                     continue

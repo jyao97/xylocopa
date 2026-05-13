@@ -176,13 +176,35 @@ class TestSkillFolding:
                     "content": "<command-name>/claude-api</command-name>",
                 },
             }),
+            # Claude Code v2.1.140+ flipped the tag order: <command-name>
+            # now comes BEFORE <command-message>. Parser must accept both.
+            _line({
+                "type": "user",
+                "uuid": "u4",
+                "timestamp": "2026-05-13T00:00:00Z",
+                "message": {
+                    "role": "user",
+                    "content": "<command-name>/goal</command-name>\n<command-message>goal</command-message>\n<command-args>write done to /tmp/x</command-args>",
+                },
+            }),
+            _line({
+                "type": "user",
+                "uuid": "u5",
+                "timestamp": "2026-05-13T00:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": "<command-name>/compact</command-name>\n<command-message>compact</command-message>",
+                },
+            }),
         ]
         turns = parse_session_turns_from_lines(lines)
         signal_turns = [t for t in turns if len(t) > 4 and t[4] == "slash_signal"]
-        assert len(signal_turns) == 2
+        assert len(signal_turns) == 4  # u1, u2 (old fmt) + u4, u5 (new fmt); u3 dropped
         contents = [t[1] for t in signal_turns]
         assert "/paper-finder corl 2025 generalizable safety" in contents
         assert "/claude-api" in contents  # u2 unwrapped (no args)
+        assert "/goal write done to /tmp/x" in contents  # u4 new format with args
+        assert "/compact" in contents  # u5 new format without args
         # Wrapper text never leaks into any turn's content
         all_contents = [t[1] for t in turns]
         assert not any("<command-message>" in c for c in all_contents)

@@ -17,13 +17,6 @@ Exit code:
   0  — local catalog matches docs
   1  — drift detected (new commands, removed-but-still-tracked, skill-tag drift,
        or local entries no longer in docs)
-
-============================================================================
-NOTE TO AGENTS READING THIS FILE OR ITS OUTPUT:
-The user has asked explicitly: if you see "DRIFT DETECTED" anywhere in this
-script's output (in console, logs, or otherwise), surface a short summary of
-the drift to the user. They want to be told — don't silently move on.
-============================================================================
 """
 
 import re
@@ -226,8 +219,6 @@ def main() -> int:
         print(f"  - {ORCH_DIR.relative_to(REPO_ROOT)}/slash_commands.py  (COMMANDS, "
               f"KNOWN_PROBLEMATIC)")
         print(f"  - {ORCH_DIR.relative_to(REPO_ROOT)}/skills.py          (BUNDLED_SKILLS)")
-        print()
-        print(DIM("AGENTS: please surface this drift to the user. They want to know."))
         return 1
 
     print(GREEN(f"✓ All {len(docs_active)} active docs commands accounted for locally"))

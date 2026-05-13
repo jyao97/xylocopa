@@ -33,15 +33,20 @@ class CommandConfig:
     description: str           # Brief human-readable description
 
 
+# COMMANDS only lists slash commands whose lifecycle differs from the
+# default USP→Stop path.  Model-invoking commands (/init, /review, /commit,
+# /security-review, /insights, /simplify, /debug, /batch, /claude-api, and
+# anything new Claude Code ships) are handled by the default path and need
+# NO entry here — Stop hook's mark_completed picks them up via the
+# polarity-True default in completes_on_stop().
+#
+# To add a new command:
+#   - Default lifecycle (model-invoking, completed on Stop)?  Do nothing.
+#     Optionally add to skills.BUNDLED_SKILLS for the picker UI.
+#   - UI-only (no hook fires, can't be tracked)?  Add to KNOWN_PROBLEMATIC.
+#   - Special lifecycle (new hook, long-running, session-changing)?  Add an
+#     entry here.
 COMMANDS: dict[str, CommandConfig] = {
-    # --- Dedicated lifecycle commands ---
-    "/compact": CommandConfig(
-        delivered_by="PreCompact",
-        completed_by="PostCompact",
-        changes_session=True,
-        args="optional",
-        description="Compact conversation context",
-    ),
     "/clear": CommandConfig(
         delivered_by="SessionStart",
         completed_by="SessionStart",  # atomic — delivered and completed in same hook
@@ -49,80 +54,13 @@ COMMANDS: dict[str, CommandConfig] = {
         args=None,
         description="Clear conversation and start new session",
     ),
-
-    # --- Model-invoking commands (USP + Stop) ---
-    "/init": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args=None,
-        description="Initialize project with CLAUDE.md",
-    ),
-    "/review": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args=None,
-        description="Review code changes (deprecated)",
-    ),
-    "/pr-comments": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
+    "/compact": CommandConfig(
+        delivered_by="PreCompact",
+        completed_by="PostCompact",
+        changes_session=True,
         args="optional",
-        description="Address PR review comments",
+        description="Compact conversation context",
     ),
-    "/simplify": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args="optional",
-        description="Simplify code",
-    ),
-    "/debug": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args="optional",
-        description="Debug an issue",
-    ),
-    "/batch": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args="required",
-        description="Run batch operations",
-    ),
-    "/claude-api": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args=None,
-        description="Interact with Claude API directly",
-    ),
-    "/commit": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args=None,
-        description="Create a git commit",
-    ),
-    "/security-review": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args=None,
-        description="Run a security review",
-    ),
-    "/insights": CommandConfig(
-        delivered_by="USP",
-        completed_by="Stop",
-        changes_session=False,
-        args=None,
-        description="Generate codebase insights",
-    ),
-
-    # --- Long-running commands (NOT completed by Stop) ---
     "/loop": CommandConfig(
         delivered_by="USP",
         completed_by="SessionEnd|CronDelete",  # NOT Stop — Stop fires after each iteration
@@ -226,17 +164,21 @@ def rejection_message(content: str) -> str:
 def completes_on_stop(content: str) -> bool:
     """Return True if this command should be marked completed when Stop fires.
 
-    Returns False for:
-    - /loop (completed by SessionEnd or CronDelete, not Stop)
-    - /goal (completed by SessionEnd or CronDelete, not Stop)
-    - /compact (completed by PostCompact, not Stop)
-    - /clear (completed atomically by SessionStart, not Stop)
-    - Non-slash or unrecognized commands
+    Default is True: any slash command not listed in COMMANDS as a
+    lifecycle exception is assumed to follow the standard USP→Stop path.
+    This is the safe polarity — the alternative ("unknown ⇒ skip Stop")
+    silently leaves model-invoking commands stuck EXECUTING when Claude
+    Code ships a new slash command before xylocopa learns about it.
+
+    Returns False only for the named exceptions in COMMANDS:
+    - /loop, /goal     — completed by SessionEnd or CronDelete
+    - /compact         — completed by PostCompact
+    - /clear           — completed atomically by SessionStart
     """
     cmd, _ = parse(content)
     cfg = COMMANDS.get(cmd)
     if not cfg:
-        return False
+        return True
     return cfg.completed_by == "Stop"
 
 

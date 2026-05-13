@@ -40,13 +40,29 @@ logger = logging.getLogger(__name__)
 # Source: Claude Code "Slash Commands" reference, entries marked [Skill].
 # ---------------------------------------------------------------------------
 
+# Built-in slash commands shown in the picker.  Two categories live here:
+#  (1) bundled CLI skills with no on-disk SKILL.md (e.g. /debug, /simplify)
+#  (2) model-invoking slash commands that follow the default USP→Stop
+#      lifecycle and therefore have no slash_commands.COMMANDS entry
+#      (e.g. /init, /commit) — listed here so the picker can advertise
+#      them.  The picker is decorative; removing an entry here does not
+#      prevent the command from working, it just hides it from the menu.
 BUNDLED_SKILLS: list[dict] = [
-    {"name": "batch", "description": "Run multiple agent tasks in batch"},
-    {"name": "claude-api", "description": "Interact with Claude API directly"},
-    {"name": "debug", "description": "Debug an issue"},
+    {"name": "batch",                    "description": "Run multiple agent tasks in batch"},
+    {"name": "claude-api",               "description": "Interact with Claude API directly"},
+    {"name": "commit",                   "description": "Create a git commit"},
+    {"name": "debug",                    "description": "Debug an issue"},
     {"name": "fewer-permission-prompts", "description": "Reduce permission prompt frequency"},
-    {"name": "loop", "description": "Run a repeating loop task"},
-    {"name": "simplify", "description": "Simplify code"},
+    {"name": "init",                     "description": "Initialize project with CLAUDE.md"},
+    {"name": "insights",                 "description": "Generate codebase insights"},
+    # /loop is also a COMMANDS lifecycle exception; listed here too so the
+    # source-precedence rule (command > bundled) has a real collision case
+    # exercised in tests, and so the picker still surfaces it if COMMANDS
+    # somehow drops it in the future.
+    {"name": "loop",                     "description": "Run a repeating loop task"},
+    {"name": "review",                   "description": "Review code changes (deprecated)"},
+    {"name": "security-review",          "description": "Run a security review"},
+    {"name": "simplify",                 "description": "Simplify code"},
 ]
 
 

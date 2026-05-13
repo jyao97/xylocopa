@@ -8,7 +8,8 @@ Each command declares its own lifecycle:
 - description   — brief human-readable description
 
 When Claude Code adds new slash commands, add an entry to COMMANDS below.
-Empirically verified against Claude Code v2.1.76 (2026-03-15).
+Ground-truth reference: https://code.claude.com/docs/en/commands
+Empirically verified against Claude Code v2.1.140 (2026-05-13).
 """
 
 import asyncio
@@ -129,6 +130,13 @@ COMMANDS: dict[str, CommandConfig] = {
         args="required",
         description="Run a repeating loop task",
     ),
+    "/goal": CommandConfig(
+        delivered_by="USP",
+        completed_by="SessionEnd|CronDelete",  # NOT Stop — Stop fires after each round; Haiku judges goal
+        changes_session=False,
+        args="optional",  # `/goal` with no arg shows current/last goal; `/goal clear` cancels
+        description="Run until a goal condition is met",
+    ),
 }
 
 
@@ -215,6 +223,7 @@ def completes_on_stop(content: str) -> bool:
 
     Returns False for:
     - /loop (completed by SessionEnd or CronDelete, not Stop)
+    - /goal (completed by SessionEnd or CronDelete, not Stop)
     - /compact (completed by PostCompact, not Stop)
     - /clear (completed atomically by SessionStart, not Stop)
     - Non-slash or unrecognized commands
@@ -294,7 +303,7 @@ def mark_completed(agent_id: str) -> str | None:
     """Mark the oldest EXECUTING slash command as completed + delivered.
 
     Called by the Stop hook as a catch-all for commands whose completed_by
-    is "Stop".  Skips /loop commands (completed by SessionEnd/CronDelete)
+    is "Stop".  Skips /loop and /goal (completed by SessionEnd/CronDelete)
     and any command whose completed_by is not "Stop".
 
     Returns the message ID if found, None otherwise.
@@ -317,7 +326,7 @@ def mark_completed(agent_id: str) -> str | None:
         if not msg or not is_slash_command(msg.content or ""):
             return None
 
-        # Skip commands that are not completed by Stop (e.g. /loop, /compact, /clear)
+        # Skip commands that are not completed by Stop (e.g. /loop, /goal, /compact, /clear)
         if not completes_on_stop(msg.content):
             cmd, _ = parse(msg.content)
             logger.info(
@@ -414,33 +423,52 @@ def mark_delivered_and_completed(agent_id: str, content: str) -> str | None:
         db.close()
 
 
-def mark_loop_completed(agent_id: str) -> str | None:
-    """Mark an EXECUTING /loop command as completed.
+def mark_long_running_completed(agent_id: str) -> str | None:
+    """Mark an EXECUTING long-running slash command (/loop, /goal) as completed.
 
     Called from SessionEnd hook or when CronDelete is detected in JSONL.
-    This is the only way /loop commands get completed — the Stop hook
-    explicitly skips them because Stop fires after each loop iteration.
+    This is the only way long-running commands get completed — the Stop hook
+    explicitly skips them because Stop fires after each iteration/round,
+    but SessionEnd is terminal.
+
+    The prefix set is derived from COMMANDS: any command whose completed_by
+    contains "SessionEnd" is treated as long-running. To add a new one,
+    just add it to COMMANDS — no change needed here.
 
     Returns the message ID if found, None otherwise.
     """
+    from sqlalchemy import or_
     from database import SessionLocal
     from models import Message, MessageRole, MessageStatus
 
+    long_running_prefixes = [
+        cmd for cmd, cfg in COMMANDS.items()
+        if "SessionEnd" in cfg.completed_by
+    ]
+    if not long_running_prefixes:
+        return None
+
     db = SessionLocal()
     try:
+        prefix_filter = or_(
+            *[Message.content.startswith(p) for p in long_running_prefixes]
+        )
         msg = (
             db.query(Message)
             .filter(
                 Message.agent_id == agent_id,
                 Message.role == MessageRole.USER,
                 Message.status == MessageStatus.EXECUTING,
-                Message.content.startswith("/loop"),
+                prefix_filter,
             )
             .order_by(Message.created_at.desc())
             .first()
         )
         if not msg:
-            logger.debug("mark_loop_completed: no EXECUTING /loop for %s", agent_id[:8])
+            logger.debug(
+                "mark_long_running_completed: no EXECUTING long-running cmd for %s",
+                agent_id[:8],
+            )
             return None
 
         now = _utcnow()
@@ -460,7 +488,8 @@ def mark_loop_completed(agent_id: str) -> str | None:
             from websocket import emit_message_delivered
             asyncio.ensure_future(emit_message_delivered(agent_id, msg.id))
 
-        logger.info("slash_commands: /loop completed for %s (msg=%s)", agent_id[:8], msg.id)
+        cmd, _ = parse(msg.content)
+        logger.info("slash_commands: %s completed for %s (msg=%s)", cmd, agent_id[:8], msg.id)
         return msg.id
     finally:
         db.close()

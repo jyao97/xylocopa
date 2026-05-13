@@ -205,10 +205,11 @@ async def hook_agent_session_end(request: Request):
     if ctx:
         ctx.awaiting_rotation = True
 
-    # Mark any EXECUTING /loop command as completed — Stop hook skips /loop
-    # because Stop fires after each iteration, but SessionEnd is terminal.
+    # Mark any EXECUTING long-running command (/loop, /goal) as completed —
+    # Stop hook skips these because Stop fires after each iteration/round,
+    # but SessionEnd is terminal.
     import slash_commands as _sc
-    _sc.mark_loop_completed(agent_id)
+    _sc.mark_long_running_completed(agent_id)
 
     # Drain old session's pending JSONL turns into DB before rotation.
     # Without this, any turn produced in the hook-silent window since the

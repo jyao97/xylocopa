@@ -423,7 +423,7 @@ async def emit_message_executed(agent_id: str, message_id: str):
     """Signal: a sent/delivered message was executed (completed).
 
     Used for slash commands whose completion is marked by a hook
-    (/compact PostCompact, /clear SessionStart source=clear, /loop SessionEnd).
+    (/compact PostCompact, /clear SessionStart source=clear, /loop and /goal SessionEnd).
     """
     await ws_manager.broadcast("message_executed", {
         "agent_id": agent_id,

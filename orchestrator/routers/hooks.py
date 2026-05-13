@@ -188,6 +188,25 @@ async def hook_agent_session_end(request: Request):
     Branches on the hook payload's `reason` field:
       - clear / resume     → session rotating, expect new SessionStart.
       - everything else    → terminal exit (e.g. /exit, logout), stop the agent.
+
+    Agent-id resolution contract (both paths gate on xylo-tracked agents
+    only — destructive actions below NEVER fire for un-registered sessions):
+
+      1. X-Agent-Id header (preferred). Populated from $XY_AGENT_ID env var,
+         which xylocopa injects via `tmux new-session -e XY_AGENT_ID=...`
+         when launching native agents. A CC process not started by xylocopa
+         lacks this env var → header is empty → falls through to (2).
+
+      2. _resolve_agent_id_from_body fallback. Looks up the hook's
+         session_id in the agents table, filtered by `cli_sync=True` —
+         i.e. only matches CLI sessions xylocopa has explicitly adopted /
+         is actively syncing. Brand-new claude sessions that xylocopa has
+         never seen do not match and the handler early-returns.
+
+    Net effect: if you `cd` into a xylocopa project and run `claude`
+    manually (no xylocopa env injection, no adopted record), this hook
+    fires (settings.local.json carries the URL) but neither path resolves
+    an agent_id → early return with a warning. No agent state is touched.
     """
     agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:

@@ -83,17 +83,41 @@ COMMANDS: dict[str, CommandConfig] = {
 # ---------------------------------------------------------------------------
 # Two flavours, both unsafe from /api/messages:
 #   1. Side-channel built-ins that don't write JSONL or fire USP/Stop —
-#      message stays PENDING forever (e.g. /help, /config, /status).
-#   2. Session-destroying commands that kill the agent before the lifecycle
-#      can complete — message stays SENT forever and the agent is gone
-#      (/exit, /quit). The user typing these in the actual tmux terminal
-#      is fine; sending them from the chat input is not.
-# All must be invoked directly in the terminal, not through the web UI.
+#      message stays PENDING forever (e.g. /help, /config, /usage).
+#   2. Session-destroying / session-mutating commands that kill or rewrite
+#      the agent before the lifecycle can complete (/exit, /quit, /stop,
+#      /tui, /rewind, /teleport).  Typing these directly in the tmux
+#      terminal is fine; sending them from the chat input is not.
+#
+# Asymmetric cost rule for new additions: if the docs description is not
+# clearly model-invoking ("Claude analyzes...", "generates a...", etc.),
+# default to listing here.  Mis-blocking a model-invoking command shows
+# a visible rejection; mis-allowing a UI-only one strands the message in
+# PENDING forever, which is worse.  Trim back if a real use-case appears.
+#
+# Verified against Claude Code v2.1.140 (2026-05-13) via
+# tools/sync_slash_commands.py.
 KNOWN_PROBLEMATIC: frozenset[str] = frozenset({
+    # Originally-tracked
     "/agents", "/auth", "/btw", "/config", "/context", "/doctor",
     "/exit", "/quit",  # session-destroying — kills agent, SENT row stuck
     "/help", "/ide", "/install", "/login", "/logout", "/model",
     "/permissions", "/plugin", "/resume", "/status",
+    # v2.1.140 catalog sweep — UI panels / config / wizards / handoffs
+    "/add-dir", "/branch", "/chrome", "/color", "/copy", "/cost",
+    "/desktop", "/diff", "/effort", "/export", "/extra-usage",
+    "/fast", "/feedback", "/focus", "/heapdump", "/hooks",
+    "/install-github-app", "/install-slack-app", "/keybindings",
+    "/mcp", "/memory", "/mobile", "/passes", "/powerup",
+    "/privacy-settings", "/radio", "/release-notes", "/reload-plugins",
+    "/remote-control", "/remote-env", "/rewind", "/sandbox",
+    "/scroll-speed", "/setup-bedrock", "/setup-vertex", "/skills",
+    "/stats", "/statusline",  # /statusline: mixed mode (auto vs describe);
+                              # block conservatively — can lift if a user
+                              # reports needing it from web
+    "/stickers", "/stop", "/tasks", "/teleport",
+    "/terminal-setup", "/theme", "/tui", "/upgrade", "/usage",
+    "/voice", "/web-setup",
 })
 
 

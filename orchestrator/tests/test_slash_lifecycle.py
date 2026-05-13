@@ -126,6 +126,25 @@ class TestIsAllowedAfterShrink:
         assert is_allowed("/help") is False
         assert is_allowed("/config") is False
 
+    def test_v2_140_catalog_sweep_rejected(self):
+        """Spot-check that the v2.1.140 catalog sweep covers the obvious
+        UI-only commands a user might try to send from the web UI."""
+        for cmd in ("/usage", "/cost", "/theme", "/rewind", "/stop",
+                    "/skills", "/memory", "/mcp", "/tui", "/diff"):
+            assert is_allowed(cmd) is False, (
+                f"{cmd} should be rejected — it's UI-only and would PEND forever"
+            )
+
+    def test_known_model_invoking_still_default_allowed(self):
+        """Commands that Claude Code dispatches to the model (USP→Stop)
+        must NOT be in KNOWN_PROBLEMATIC; they pass via the default path."""
+        for cmd in ("/schedule foo", "/autofix-pr", "/recap",
+                    "/rename", "/ultraplan x", "/ultrareview",
+                    "/team-onboarding", "/background", "/plan x"):
+            assert is_allowed(cmd) is True, (
+                f"{cmd} should be allowed via default-allow path"
+            )
+
     def test_non_slash_always_allowed(self):
         assert is_allowed("regular message") is True
         assert is_allowed("") is True

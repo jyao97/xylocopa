@@ -523,24 +523,34 @@ def parse_session_turns_from_lines(
             # Real user message = string content (not tool_result list)
             if isinstance(content, str) and content.strip():
                 stripped = content.strip()
-                # Slash-command wrapper → emit a delivery-signal turn with
-                # canonical "/<cmd> <args>" content. The sync engine first
-                # tries to match it against a dispatched web/task row
-                # (ContentMatcher promotes the existing SENT row); on miss
-                # it falls through to create a CLI-source bubble, so
-                # /cmd typed directly in tmux (or replayed from an adopted
-                # session) shows up in the web UI like any other turn.
-                _parsed = _parse_command_wrapper(stripped)
-                if _parsed:
-                    _cmd, _args = _parsed
-                    flush_all()
-                    turns.append(("user", f"{_cmd} {_args}".rstrip(), None, entry_uuid, "slash_signal", entry_ts))
+                # Slash-command wrapper.  The <command-name>/<command-message>
+                # prefixes are owned exclusively by _parse_command_wrapper —
+                # they must NOT fall through to the system-injection skip-list
+                # below, because that would silently drop any wrapper shape
+                # we fail to recognize (e.g. when CC ships a new tag order
+                # or renames a tag).  Parse failure inside the wrapper
+                # namespace is logged so drift is observable instead of
+                # vanishing into the skip path.
+                if (stripped.startswith("<command-name>")
+                        or stripped.startswith("<command-message>")):
+                    _parsed = _parse_command_wrapper(stripped)
+                    if _parsed:
+                        _cmd, _args = _parsed
+                        flush_all()
+                        turns.append(("user", f"{_cmd} {_args}".rstrip(), None, entry_uuid, "slash_signal", entry_ts))
+                    else:
+                        logger.warning(
+                            "jsonl_parser: unrecognized <command-*> wrapper shape, "
+                            "dropping turn (uuid=%s shape=%r)",
+                            entry_uuid, stripped[:200],
+                        )
                     continue
-                # Skip system-injected messages that aren't real user input
+                # System-injected messages — not real user input, drop silently
+                # (by design; these are CC's local-command output / system
+                # reminders / task notifications, none of which belong in the
+                # conversation transcript).
                 if (
                     stripped.startswith("<local-command-caveat>")
-                    or stripped.startswith("<command-name>")
-                    or stripped.startswith("<command-message>")
                     or stripped.startswith("<local-command-stdout>")
                     or stripped.startswith("<system-reminder>")
                     or stripped.startswith("<task-notification>")

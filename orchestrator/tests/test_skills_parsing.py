@@ -210,6 +210,108 @@ class TestSkillFolding:
         assert not any("<command-message>" in c for c in all_contents)
         assert not any("<command-name>" in c for c in all_contents)
 
+    def test_unrecognized_command_wrapper_logs_and_drops(self, caplog):
+        """A ``<command-*>``-prefixed turn that *fails* to parse must NOT
+        silently disappear via the skip-list — it should log a warning so
+        wrapper-format drift (e.g. CC renaming a tag) is observable.
+
+        The parser owns the ``<command-*>`` namespace exclusively; if it
+        can't extract a ``(cmd, args)`` pair, drop the turn AND log.  This
+        guards against the prior bug where parser failure fell through to
+        the system-injection skip-list and was indistinguishable from a
+        legitimate ``<system-reminder>`` drop."""
+        import logging
+        lines = [
+            # Malformed: <command-name> only — parser returns None
+            _line({
+                "type": "user",
+                "uuid": "u-malformed-1",
+                "timestamp": "2026-05-13T00:00:00Z",
+                "message": {
+                    "role": "user",
+                    "content": "<command-name>/mystery</command-name>",
+                },
+            }),
+            # Hypothetical future-CC wrapper variant we don't recognize
+            _line({
+                "type": "user",
+                "uuid": "u-malformed-2",
+                "timestamp": "2026-05-13T00:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": "<command-message>mystery</command-message>\n<command-renamed-tag>future</command-renamed-tag>",
+                },
+            }),
+            # Sanity: a *legitimately parseable* wrapper to confirm
+            # parsing still works alongside the malformed cases.
+            _line({
+                "type": "user",
+                "uuid": "u-ok",
+                "timestamp": "2026-05-13T00:00:02Z",
+                "message": {
+                    "role": "user",
+                    "content": "<command-name>/goal</command-name>\n<command-message>goal</command-message>\n<command-args>x</command-args>",
+                },
+            }),
+        ]
+        with caplog.at_level(logging.WARNING, logger="orchestrator.jsonl_parser"):
+            turns = parse_session_turns_from_lines(lines)
+        # Only the well-formed wrapper emits a turn
+        signal_turns = [t for t in turns if len(t) > 4 and t[4] == "slash_signal"]
+        assert len(signal_turns) == 1
+        assert signal_turns[0][1] == "/goal x"
+        # The two malformed wrappers must both have logged a warning
+        warning_msgs = [r.getMessage() for r in caplog.records
+                        if r.levelno == logging.WARNING]
+        unrecognized = [m for m in warning_msgs if "unrecognized <command-*>" in m]
+        assert len(unrecognized) == 2, (
+            f"expected 2 unrecognized-wrapper warnings, got "
+            f"{len(unrecognized)}: {warning_msgs}"
+        )
+
+    def test_system_injection_prefixes_still_silent(self, caplog):
+        """The decoupling must NOT make system-injection prefixes
+        (``<system-reminder>``, ``<local-command-caveat>``, etc.) start
+        logging — they're known-and-expected drops, not drift signals."""
+        import logging
+        lines = [
+            _line({
+                "type": "user",
+                "uuid": "u-sys-1",
+                "timestamp": "2026-05-13T00:00:00Z",
+                "message": {"role": "user", "content": "<system-reminder>x</system-reminder>"},
+            }),
+            _line({
+                "type": "user",
+                "uuid": "u-sys-2",
+                "timestamp": "2026-05-13T00:00:01Z",
+                "message": {"role": "user", "content": "<local-command-caveat>x</local-command-caveat>"},
+            }),
+            _line({
+                "type": "user",
+                "uuid": "u-sys-3",
+                "timestamp": "2026-05-13T00:00:02Z",
+                "message": {"role": "user", "content": "<local-command-stdout>x</local-command-stdout>"},
+            }),
+            _line({
+                "type": "user",
+                "uuid": "u-sys-4",
+                "timestamp": "2026-05-13T00:00:03Z",
+                "message": {"role": "user", "content": "<task-notification>x</task-notification>"},
+            }),
+        ]
+        with caplog.at_level(logging.WARNING, logger="orchestrator.jsonl_parser"):
+            turns = parse_session_turns_from_lines(lines)
+        # None emit user turns
+        user_turns = [t for t in turns if t[0] == "user"]
+        assert user_turns == []
+        # None log warnings (they're intentional drops, not drift)
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings == [], (
+            f"system-injection prefixes should drop silently, got warnings: "
+            f"{[r.getMessage() for r in warnings]}"
+        )
+
     def test_ismeta_user_entries_dropped(self):
         """isMeta:true user entries (skill bodies, system reminders) are filtered out."""
         lines = [

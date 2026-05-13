@@ -9,14 +9,32 @@ Local data scanned:
   - orchestrator/slash_commands.py  (COMMANDS, KNOWN_PROBLEMATIC)
   - orchestrator/skills.py          (BUNDLED_SKILLS)
 
+Semantics this tool aligns with (post polarity-flip):
+  - COMMANDS lists *only* lifecycle exceptions (commands whose completion
+    is not Stop, like /loop, /compact).  Most docs commands have no
+    business being in here.
+  - KNOWN_PROBLEMATIC must cover every UI-only docs command — otherwise
+    sending it from web PENDs forever.  This is the catalog that has to
+    be kept in sync with docs.
+  - BUNDLED_SKILLS is a picker-UI list, not strict [Skill]-tag membership.
+    Entries that aren't [Skill]-tagged in docs are intentional and are NOT
+    flagged.
+
+Drift the tool reports (exit 1):
+  - Docs marked a command as removed but local still tracks it.
+  - Docs has a command whose description looks UI-only and local does NOT
+    block it in KNOWN_PROBLEMATIC (will PEND forever).
+  - Local COMMANDS contains a command not in docs at all.
+
+Informational only (exit 0):
+  - Docs has a model-invoking command not listed locally — covered by the
+    default-allow path.
+  - Docs has a [Skill]-tagged command not in BUNDLED_SKILLS — the picker
+    could surface it, but skipping it is harmless.
+
 Usage:
   python tools/sync_slash_commands.py            # color stdout, default
   python tools/sync_slash_commands.py --plain    # no ANSI (CI-friendly)
-
-Exit code:
-  0  — local catalog matches docs
-  1  — drift detected (new commands, removed-but-still-tracked, skill-tag drift,
-       or local entries no longer in docs)
 """
 
 import re
@@ -173,32 +191,70 @@ def main() -> int:
             print(f"  {RED(cmd)}  removed in v{ver}  →  drop from {'/'.join(where)}")
         print()
 
-    # 2. BUNDLED_SKILLS membership drift
+    # 2. BUNDLED_SKILLS — informational only.  BUNDLED_SKILLS is a picker
+    # list; it may legitimately contain non-[Skill] entries (model-invoking
+    # commands added for picker UX) and miss [Skill]-tagged ones (the
+    # default-allow path covers them).  Show but do not flag as drift.
     docs_skill_names = {c.lstrip("/") for c in docs_skills}
     add_skill = sorted(docs_skill_names - local["bundled_skills"])
-    drop_skill = sorted(local["bundled_skills"] - docs_skill_names)
-    if add_skill or drop_skill:
-        drift = True
-        print(BOLD(YELLOW("== BUNDLED_SKILLS drift ==")))
+    if add_skill:
+        print(BOLD(DIM("== BUNDLED_SKILLS picker hints (informational) ==")))
         for n in add_skill:
-            print(f"  {GREEN('+ ' + n)}  marked [Skill] in docs, missing in BUNDLED_SKILLS")
-        for n in drop_skill:
-            print(f"  {RED('- ' + n)}  in BUNDLED_SKILLS but no [Skill] tag in docs")
+            print(f"  {DIM('+ ' + n)}  [Skill]-tagged in docs; could add to picker")
         print()
 
-    # 3. New commands not seen locally
+    # 3. New commands not seen locally — split into "drift" (UI-only must
+    # be in KNOWN_PROBLEMATIC or it PENDs) vs "informational" (model-
+    # invoking is covered by the default-allow path).
     new_cmds = sorted(c for c in docs_active if c not in local_known)
-    if new_cmds:
+    new_blocking = []   # drift: needs to go to KNOWN_PROBLEMATIC
+    new_default = []    # informational: covered by default-allow
+    new_unclear = []    # needs human judgment
+    for cmd in new_cmds:
+        info = docs_active[cmd]
+        cls = heuristic_class(info["description"], info["is_skill"])
+        if "KNOWN_PROBLEMATIC" in cls:
+            new_blocking.append((cmd, info, cls))
+        elif "COMMANDS" in cls or "BUNDLED_SKILLS" in cls:
+            new_default.append((cmd, info, cls))
+        else:
+            new_unclear.append((cmd, info, cls))
+
+    if new_blocking:
         drift = True
-        print(BOLD(GREEN(f"== New commands not in local catalog ({len(new_cmds)}) ==")))
-        for cmd in new_cmds:
-            info = docs_active[cmd]
+        print(BOLD(RED(f"== Likely-UI-only commands missing from KNOWN_PROBLEMATIC "
+                       f"({len(new_blocking)}) ==")))
+        print(DIM("These will PEND forever if a user sends them from web.  Add to "
+                  "KNOWN_PROBLEMATIC unless you verify they fire USP/Stop."))
+        for cmd, info, cls in new_blocking:
             args = f" {info['args_form']}" if info["args_form"] else ""
             desc = info["description"]
             desc_short = desc[:140] + ("…" if len(desc) > 140 else "")
-            print(f"  {GREEN(cmd + args)}")
+            print(f"  {RED(cmd + args)}")
             print(f"    {DIM(desc_short)}")
-            print(f"    {YELLOW('→ ' + heuristic_class(desc, info['is_skill']))}")
+        print()
+
+    if new_unclear:
+        drift = True
+        print(BOLD(YELLOW(f"== Unclear classification — needs review "
+                          f"({len(new_unclear)}) ==")))
+        print(DIM("Heuristic can't tell whether these fire USP/Stop.  Empirically "
+                  "test by sending from a non-prod agent: if it PENDs, add to "
+                  "KNOWN_PROBLEMATIC; if it completes, leave on default-allow."))
+        for cmd, info, _cls in new_unclear:
+            args = f" {info['args_form']}" if info["args_form"] else ""
+            desc = info["description"]
+            desc_short = desc[:140] + ("…" if len(desc) > 140 else "")
+            print(f"  {YELLOW(cmd + args)}")
+            print(f"    {DIM(desc_short)}")
+        print()
+
+    if new_default:
+        print(BOLD(DIM(f"== Likely model-invoking — covered by default-allow "
+                       f"({len(new_default)}, informational) ==")))
+        for cmd, info, _cls in new_default:
+            args = f" {info['args_form']}" if info["args_form"] else ""
+            print(f"  {DIM(cmd + args)}")
         print()
 
     # 4. Local COMMANDS entries not present in docs at all
@@ -214,14 +270,15 @@ def main() -> int:
 
     # Summary
     if drift:
-        print(BOLD(RED("DRIFT DETECTED")))
+        print(BOLD(RED("DRIFT REQUIRES ACTION")))
         print("Update one or more of:")
         print(f"  - {ORCH_DIR.relative_to(REPO_ROOT)}/slash_commands.py  (COMMANDS, "
               f"KNOWN_PROBLEMATIC)")
         print(f"  - {ORCH_DIR.relative_to(REPO_ROOT)}/skills.py          (BUNDLED_SKILLS)")
         return 1
 
-    print(GREEN(f"✓ All {len(docs_active)} active docs commands accounted for locally"))
+    print(GREEN(f"✓ Catalog in sync — UI-only commands blocked, "
+                f"model-invoking ones covered by default-allow"))
     return 0
 
 

@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.15] - 2026-05-14
+
+Memory-leak hunt release. Two OOMs on May 13 grew orchestrator RSS to 47.8 GB before the kernel killed the process — which took every tmux'd xylo session down with it. This release plugs five leak vectors found via a parallel multi-agent code audit, adds a `max_memory_restart` safety net so the next leak triggers a pm2 graceful-restart at 8 GB instead of a kernel global-OOM, and ships diagnostic infrastructure (size-bounded forensic log channels, a live `/api/debug/mem-introspect` endpoint, a header-pill memory-pressure indicator) so the next leak leaves a usable trail.
+
+### Memory leak fixes
+
+- **`_promote_ack_pending` / `_promote_ack_by_agent` never cleaned in `stop_agent_cleanup` / `error_agent_cleanup`.** The GHOST_DELIVERED instrumentation dict (added 2026-04-30) records ~500B–1KB per promoted message and was explicitly designed to "leave it in the dict so a late hook can still ack it" — but stopping or erroring an agent didn't drop those records. Across many sent messages plus agent churn this accumulated unboundedly. `stop_agent_cleanup` and `error_agent_cleanup` now pop from both dicts, and `_record_promote_for_ack` caps the per-agent queue at 256 entries so even long-running agents that never stop can't grow it forever. While in there, also fixed missing cleanup of `_generation_ids` and `_known_subagents`. (822edfa, b96870b)
+
+- **`cc_session_reconcile.reconcile_all` shared one SQLAlchemy session across 500+ agents without flushing the identity map.** Each agent's `reconcile_agent` loads CCSession ORM rows into the shared session; at the 80k-JSONL scale the identity map accumulated tens of thousands of ORM objects pinned until the final commit. Now flushes pending writes and runs `db.expunge_all()` after each agent so memory tracks one agent at a time. Reconcile time grew from a few seconds to ~9 minutes for the 92k-JSONL scan, but RSS stays bounded. (822edfa)
+
+- **`claude -p` insight/summary subprocesses had no concurrency cap.** Six call sites in `routers/{agents,projects,tasks}.py` spawned `threading.Thread(daemon=True).start()` per request. When many agents stopped at once each call buffered `proc.communicate()` stdout in memory, and concurrent runs stacked GBs — the ~10 GB sibling python process seen alongside the killed orchestrator at both OOMs. Replaced all six sites with `INSIGHT_EXECUTOR = ThreadPoolExecutor(max_workers=2)` so at most two claude subprocesses run concurrently and the rest queue. (822edfa)
+
+- **`display_writer._pre_sent_index` not cleared when an agent was deleted.** Per-agent pre-sent message state stayed in the module dict indefinitely for deleted/permanently-removed agents. `delete_agent()` now pops the entry and discards the agent_id from `_pre_sent_index_ready`. (b96870b)
+
+### Safety net
+
+- **pm2 `max_memory_restart: '8G'`.** Steady-state RSS is ~200 MB so 8 GB is well above any normal spike. If a future leak passes that threshold pm2 graceful-restarts the backend instead of letting it grow until the kernel global-OOMs the whole user.slice (which previously took every tmux session down with it). Needs `pm-logrotate` module — installed and configured (50 MB × 4 retained = 200 MB per pm2 log stream). (5d66db3)
+
+- **Leak-alert probe wakes the diagnostic chat at 5 GB.** RSS_WATCH posts to `XY_RSS_LEAK_PROBE_URL` (in `.env`, gitignored) once when RSS first crosses 5 GB so the diagnostic chat gets woken in real time, ~3 GB of headroom before pm2's restart kicks in. Single-fire by design; renew via the `probe_create` MCP tool. (c248047)
+
+### Diagnostic infrastructure
+
+- **`/api/debug/mem-introspect` endpoint.** Returns `/proc/self/status` (VmRSS/Peak/Anon/File/Threads), `gc.get_count/stats/total_objects`, top 20 object types by count, and sizes of every named in-memory cache we own (`_promote_ack_pending`, `_pre_sent_index`, `_translate_cache`, `_INSIGHT_RUNS`, etc.). `?collect=1` runs `gc.collect()` + `libc.malloc_trim(0)` first so the breakdown reflects retained memory not pending-sweep. Auth-exempt for shell access during an incident. (3b33133)
+
+- **Four forensic log channels (internal-only, never reach the UI).** All write to `orchestrator.log` so size-bounded log rotation contains them:
+  - `RSS_WATCH baseline` every 5 min logs the full memory shape (`rss/vm/peak/anon/file MB`) so the next leak leaves a curve to look back at — not just threshold crossings. Plus `RSS_WATCH: crossed N MB` on first cross of each threshold (200/500/1k/2k/5k/10k/20k MB) and `RSS_WATCH: jumped N MB in last minute` if growth exceeds 200 MB/min. (6949c9f)
+  - `cc_session reconcile … took=Xs rss=A→BMB delta=+CMB` every reconcile cycle. (65823d8)
+  - `claude_subproc <label> rc=X took=Ys stdout=NB stderr=MB` for every `claude -p` subprocess (claudemd_refresh / progress_summary / agent_insight / retry_summary). (65823d8)
+  - `HOOK_HTTP_IN body=NKB` on every hook, plus a loud `HOOK_BIG_BODY` warning if any single hook posts >1 MB. (65823d8)
+
+### UI surface
+
+- **Header pill turns amber/red on memory pressure.** Previously only reflected `/api/health`, so it stayed green right up until pm2 killed the backend. Now also reads `sysStats.xylocopa.mem_mb` (orchestrator backend + child subprocess RSS, polled every 60s by `MonitorContext`): `>1 GB` → amber `Mem 1.2 GB`, `>5 GB` → red pulsing `Mem 6.4 GB`. Tooltip shows the exact number. Both `PageHeader` and the in-chat pill in `AgentChatPage` updated. (597677d)
+
+### Log size + tail-read
+
+- **Size-bounded log rotation.** `log_config` switched from `TimedRotatingFileHandler` (daily, 7 backups, no size cap — chatty days hit 50 MB+) to `RotatingFileHandler` (50 MB × 4 backups = ~200 MB per stream). `pm2-logrotate` module installed with the same shape so `backend-pm2.log` / `backend-pm2-error.log` can no longer balloon to 450 MB. One-time cleanup of stale logs (`kb-debug.log`, `server.log`, pre-rotation pm2 backups): `logs/` went from 1.2 GB to 139 MB. (19e12a2)
+
+- **`get_recent_logs()` tail-reads.** Was `f.readlines()` of the whole orchestrator.log on every `/api/logs` poll — 50 MB allocated per request. Now seeks to the last 2 MB and decodes only that window. (19e12a2)
+
 ## [0.10.14] - 2026-05-12
 
 Frontend polish release: markdown tables get a fullscreen preview, mobile-landscape regression on the code-copy + table-expand buttons is fixed, and native text selection inside expanded inbox cards now survives clicks.

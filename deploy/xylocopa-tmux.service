@@ -1,0 +1,48 @@
+[Unit]
+Description=Xylocopa tmux server (user cgroup, OOM-isolated)
+Documentation=https://github.com/anthropics/xylocopa
+After=default.target
+
+# Why this exists
+# ----------------
+# Xylocopa runs every agent inside a tmux pane. By default pm2 starts the
+# orchestrator under system systemd (pm2-<user>.service in system.slice).
+# Any process the orchestrator forks — including the tmux server — inherits
+# that cgroup. When an agent's workload triggers an OOM kill, systemd's
+# default OOMPolicy=stop tears down the entire pm2-<user>.service unit,
+# taking tmux and every agent pane down with it.
+#
+# This user-systemd unit pre-starts the tmux server inside user@.service's
+# cgroup before pm2 boots. Orchestrator's preflight then finds the server
+# already running and attaches to it. An OOM kill in pm2's cgroup no longer
+# touches tmux — only the offending process dies, and agents survive.
+#
+# Install (one-time, no sudo):
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/xylocopa-tmux.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now xylocopa-tmux.service
+#
+# Verify tmux landed in the right cgroup:
+#   for pid in $(pgrep -u $UID -x -f "tmux: server"); do cat /proc/$pid/cgroup; done
+# Expected: user.slice/user-1000.slice/user@1000.service/.../xylocopa-tmux.service
+#
+# If the host doesn't have user systemd (rare on modern desktop Linux,
+# common on minimal containers), skip this step — orchestrator will fall
+# back to plain `tmux start-server` and log a warning about cgroup
+# placement.
+
+[Service]
+Type=forking
+GuessMainPID=yes
+KillMode=process
+# A placeholder session keeps the server alive when no agents are active.
+# Agents are spawned by orchestrator as additional sessions on the same
+# default socket (/tmp/tmux-$UID/default); they share this server.
+ExecStart=/usr/bin/tmux new-session -d -s _xylocopa_keepalive
+ExecStop=/usr/bin/tmux kill-server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

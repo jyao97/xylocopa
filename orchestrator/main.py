@@ -161,6 +161,36 @@ def _migrate_pre_sent_legacy():
         db.close()
 
 
+def _detect_tmux_cgroup() -> str | None:
+    """Return the cgroup path of this user's tmux server, or None if unknown.
+
+    Walks /proc looking for a process with comm == "tmux: server" owned by
+    the current uid. Returns the first match's cgroup v2 path. Used at
+    startup to warn if tmux is in pm2's cgroup (where an agent OOM would
+    take it down with the whole unit).
+    """
+    try:
+        uid = os.getuid()
+        for pid_name in os.listdir("/proc"):
+            if not pid_name.isdigit():
+                continue
+            try:
+                with open(f"/proc/{pid_name}/comm") as f:
+                    if f.read().strip() != "tmux: server":
+                        continue
+                if os.stat(f"/proc/{pid_name}").st_uid != uid:
+                    continue
+                with open(f"/proc/{pid_name}/cgroup") as f:
+                    line = f.read().strip()
+                # cgroup v2 line is "0::/path"; strip the "0::" prefix.
+                return line.split("::", 1)[1] if "::" in line else line
+            except (OSError, ValueError):
+                continue
+    except OSError:
+        pass
+    return None
+
+
 # ---- Lifespan ----
 
 @asynccontextmanager
@@ -190,13 +220,29 @@ async def lifespan(app: FastAPI):
     # invocation has materialized /tmp/tmux-<uid>/, and the first
     # `tmux new-session -d` from the orchestrator can race-fail. Preflight
     # `tmux start-server` is a no-op if already running.
+    #
+    # Diagnostic: also report which cgroup the tmux server ended up in.
+    # If it's the same pm2-*.service cgroup as the orchestrator, an OOM
+    # kill in any agent will take tmux down with it (systemd's default
+    # OOMPolicy=stop tears down the whole unit). Operators can install
+    # deploy/xylocopa-tmux.service into user systemd to pre-start tmux
+    # in user@.service cgroup instead.
     try:
         import subprocess as _sp_init
         r = _sp_init.run(
             ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
         )
         if r.returncode == 0:
-            logger.info("tmux preflight: server ready")
+            tmux_cgroup = _detect_tmux_cgroup()
+            if tmux_cgroup and "/pm2-" in tmux_cgroup:
+                logger.warning(
+                    "tmux preflight: server ready, but in pm2 cgroup (%s) — "
+                    "an agent OOM will tear it down as collateral. "
+                    "Install deploy/xylocopa-tmux.service into user systemd to fix.",
+                    tmux_cgroup,
+                )
+            else:
+                logger.info("tmux preflight: server ready (cgroup=%s)", tmux_cgroup or "unknown")
         else:
             logger.warning(
                 "tmux preflight: start-server rc=%d stderr=%s",

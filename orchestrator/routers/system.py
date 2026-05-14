@@ -1172,6 +1172,137 @@ async def sync_status(request: Request):
     }
 
 
+@router.get("/api/debug/mem-introspect")
+async def mem_introspect(request: Request, collect: int = 0):
+    """Break down where this process's RSS is going.
+
+    Counts live Python objects by type, sizes named in-memory caches we
+    know about, and reports gc + /proc stats. If `collect=1`, runs
+    gc.collect() and malloc_trim(0) first so the breakdown reflects
+    "what's actually retained" instead of "what hasn't been swept yet".
+    """
+    import gc
+    import sys
+    from collections import Counter
+
+    if collect:
+        gc.collect()
+        try:
+            import ctypes
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
+
+    # 1. /proc/self/status — authoritative RSS
+    proc_status = {}
+    try:
+        with open(f"/proc/{os.getpid()}/status") as f:
+            for line in f:
+                if line.startswith(("VmPeak:", "VmSize:", "VmRSS:",
+                                    "VmData:", "VmStk:", "VmExe:",
+                                    "RssAnon:", "RssFile:", "RssShmem:",
+                                    "Threads:")):
+                    k, v = line.split(":", 1)
+                    proc_status[k.strip()] = v.strip()
+    except OSError:
+        pass
+
+    # 2. gc stats
+    gc_stats = {
+        "counts": gc.get_count(),
+        "stats": gc.get_stats(),
+        "total_objects": len(gc.get_objects()),
+    }
+
+    # 3. Top object types by instance count + by aggregate size for the
+    # top types. This is the "what's eating RAM" answer.
+    type_counter: Counter = Counter()
+    for obj in gc.get_objects():
+        type_counter[type(obj).__name__] += 1
+    top_types = type_counter.most_common(20)
+
+    # 4. Named caches we own — these are the candidate leak sources we
+    # identified during the audit. Each entry: (label, size, details).
+    caches: list[dict] = []
+
+    def _record(label: str, obj):
+        try:
+            if isinstance(obj, dict):
+                caches.append({"name": label, "kind": "dict", "len": len(obj),
+                               "bytes": sys.getsizeof(obj)})
+            elif isinstance(obj, (set, list)):
+                caches.append({"name": label, "kind": type(obj).__name__,
+                               "len": len(obj), "bytes": sys.getsizeof(obj)})
+        except Exception:
+            pass
+
+    try:
+        ad = request.app.state.agent_dispatcher
+        for attr in ("_sync_tasks", "_sync_wake", "_sync_manual_wake",
+                     "_sync_locks", "_sync_contexts", "_generation_ids",
+                     "_generating_agents", "_promote_ack_pending",
+                     "_promote_ack_by_agent", "_launch_tasks",
+                     "_launching_panes", "_launch_session_futures",
+                     "_stale_session_retries", "_idle_no_pane_retries",
+                     "_known_subagents"):
+            v = getattr(ad, attr, None)
+            if v is not None:
+                _record(f"AgentDispatcher.{attr}", v)
+    except Exception:
+        pass
+
+    try:
+        import display_writer as _dw
+        _record("display_writer._pre_sent_index", _dw._pre_sent_index)
+        _record("display_writer._pre_sent_index_ready", _dw._pre_sent_index_ready)
+    except Exception:
+        pass
+
+    try:
+        import session_cache as _sc
+        _record("session_cache._encoded_name_cache", _sc._encoded_name_cache)
+    except Exception:
+        pass
+
+    try:
+        import skills as _sk
+        _record("skills._cache", _sk._cache)
+    except Exception:
+        pass
+
+    try:
+        from agent_dispatcher import _translate_cache
+        _record("agent_dispatcher._translate_cache", _translate_cache)
+    except Exception:
+        pass
+
+    try:
+        from routers.projects import _INSIGHT_RUNS, _claudemd_jobs, _progress_jobs
+        _record("routers.projects._INSIGHT_RUNS", _INSIGHT_RUNS)
+        _record("routers.projects._claudemd_jobs", _claudemd_jobs)
+        _record("routers.projects._progress_jobs", _progress_jobs)
+    except Exception:
+        pass
+
+    try:
+        from routers.system import _reload_ts_by_ip, _reload_storm_last_warned
+        _record("routers.system._reload_ts_by_ip", _reload_ts_by_ip)
+        _record("routers.system._reload_storm_last_warned", _reload_storm_last_warned)
+    except Exception:
+        pass
+
+    caches.sort(key=lambda c: -c["len"])
+
+    return {
+        "rss_mb": int(proc_status.get("VmRSS", "0 kB").split()[0]) // 1024 if proc_status.get("VmRSS") else None,
+        "proc_status": proc_status,
+        "gc": gc_stats,
+        "top_types": [{"type": t, "count": c} for t, c in top_types],
+        "named_caches": caches,
+        "collected": bool(collect),
+    }
+
+
 @router.get("/api/debug/clear-cache", response_class=HTMLResponse)
 async def clear_client_cache():
     """Serve a page that clears browser-side caches and redirects back.

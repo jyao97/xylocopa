@@ -637,7 +637,7 @@ const MoonIcon = (
 export default function PageHeader({ title, theme, onToggleTheme, actions, selectAction, showTaskRing, showTimeRing, showQueueButton, hideMonitor, children }) {
   const navigate = useNavigate();
   const health = useHealthStatus();
-  const { taskStats } = useMonitor();
+  const { taskStats, sysStats } = useMonitor();
   const [restarting, setRestarting] = useState(false);
   const [showStatsPopover, setShowStatsPopover] = useState(false);
   const [showQueuePopover, setShowQueuePopover] = useState(false);
@@ -687,13 +687,45 @@ export default function PageHeader({ title, theme, onToggleTheme, actions, selec
   }, []);
 
   const isHealthy = isSystemHealthy(health);
-  const chipCls = health === null
-    ? "bg-gray-500/15 text-gray-400"
-    : isHealthy
-      ? "bg-green-500/15 text-green-500"
-      : "bg-red-500/15 text-red-400";
-  const dotColor = health === null ? "bg-gray-400" : isHealthy ? "bg-green-500" : "bg-red-500";
-  const chipLabel = health === null ? "..." : isHealthy ? "OK" : "Error";
+  // Memory pressure — orchestrator + children RSS in MB. Steady state is
+  // ~200MB; thresholds below trip the pill amber/red so the OOM cascade
+  // we saw in early May (47GB before kernel kill) leaves a UI signal long
+  // before pm2's 8GB max_memory_restart fires.
+  const memMb = sysStats?.xylocopa?.mem_mb;
+  const memHigh = typeof memMb === "number" && memMb > 5000;   // 5 GB — almost certainly leaking
+  const memWarn = typeof memMb === "number" && memMb > 1000;   // 1 GB — suspicious
+  const memLabel = typeof memMb === "number"
+    ? memMb >= 1024 ? `${(memMb / 1024).toFixed(1)} GB` : `${Math.round(memMb)} MB`
+    : null;
+
+  let chipCls, dotColor, chipLabel, chipTitle;
+  if (health === null) {
+    chipCls = "bg-gray-500/15 text-gray-400";
+    dotColor = "bg-gray-400";
+    chipLabel = "...";
+    chipTitle = "Checking system health...";
+  } else if (!isHealthy) {
+    chipCls = "bg-red-500/15 text-red-400";
+    dotColor = "bg-red-500";
+    chipLabel = "Error";
+    chipTitle = "System issue detected";
+  } else if (memHigh) {
+    chipCls = "bg-red-500/15 text-red-400";
+    dotColor = "bg-red-500";
+    chipLabel = `Mem ${memLabel}`;
+    chipTitle = `High memory: orchestrator using ${memLabel} (steady state ~200 MB). Likely leak — check logs.`;
+  } else if (memWarn) {
+    chipCls = "bg-amber-500/15 text-amber-500";
+    dotColor = "bg-amber-500";
+    chipLabel = `Mem ${memLabel}`;
+    chipTitle = `Elevated memory: orchestrator using ${memLabel} (steady state ~200 MB).`;
+  } else {
+    chipCls = "bg-green-500/15 text-green-500";
+    dotColor = "bg-green-500";
+    chipLabel = "OK";
+    chipTitle = "System healthy";
+  }
+  const chipPulse = (!isHealthy && health !== null) || memHigh;
 
   // Weekly task stats — Apple Watch ring (only shown when parent passes showTaskRing)
   const wTotal = taskStats?.weekly_total ?? 0;
@@ -766,10 +798,10 @@ export default function PageHeader({ title, theme, onToggleTheme, actions, selec
           <button
             type="button"
             onClick={() => navigate("/monitor")}
-            title={health === null ? "Checking system health..." : isHealthy ? "System healthy" : "System issue detected"}
+            title={chipTitle}
             className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-colors hover:opacity-80 ${chipCls}`}
           >
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} ${!isHealthy && health !== null ? "animate-pulse" : ""}`} />
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} ${chipPulse ? "animate-pulse" : ""}`} />
             {chipLabel}
           </button>
         )}

@@ -86,6 +86,7 @@ import useVoiceRecorder from "../hooks/useVoiceRecorder";
 import useWebSocket, { useWsEvent, isAgentMuted, setAgentMuted, clearAgentNotified, registerViewing, unregisterViewing, touchAgentInteraction } from "../hooks/useWebSocket";
 import useHealthStatus from "../hooks/useHealthStatus";
 import useContextUsage from "../hooks/useContextUsage";
+import { useMonitor } from "../contexts/MonitorContext";
 import usePageVisible from "../hooks/usePageVisible";
 import { useToast } from "../contexts/ToastContext";
 import ChatSkeleton from "../components/skeletons/ChatSkeleton";
@@ -2742,6 +2743,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   const messagesEndRef = useRef(null);
   const einkModeRef = useRef(false);
   const health = useHealthStatus();
+  const { sysStats } = useMonitor();
   // Gate non-critical fetches (context-usage, suggestions) until after the
   // initial display load completes — keeps them off the critical path so
   // they don't compete with /display/sent for backend workers.
@@ -4143,13 +4145,42 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   }
 
   const isHealthy = isSystemHealthy(health);
-  const healthChipCls = health === null
-    ? "bg-gray-500/15 text-gray-400"
-    : isHealthy
-      ? "bg-green-500/15 text-green-500"
-      : "bg-red-500/15 text-red-400";
-  const healthDotColor = health === null ? "bg-gray-400" : isHealthy ? "bg-green-500" : "bg-red-500";
-  const healthLabel = health === null ? "..." : isHealthy ? "OK" : "Error";
+  // Memory pressure flag — orchestrator + children RSS. Same thresholds as
+  // PageHeader so the pill behaviour is consistent across the app.
+  const _memMb = sysStats?.xylocopa?.mem_mb;
+  const _memHigh = typeof _memMb === "number" && _memMb > 5000;
+  const _memWarn = typeof _memMb === "number" && _memMb > 1000;
+  const _memLabel = typeof _memMb === "number"
+    ? _memMb >= 1024 ? `${(_memMb / 1024).toFixed(1)} GB` : `${Math.round(_memMb)} MB`
+    : null;
+  let healthChipCls, healthDotColor, healthLabel, healthTitle;
+  if (health === null) {
+    healthChipCls = "bg-gray-500/15 text-gray-400";
+    healthDotColor = "bg-gray-400";
+    healthLabel = "...";
+    healthTitle = "Checking...";
+  } else if (!isHealthy) {
+    healthChipCls = "bg-red-500/15 text-red-400";
+    healthDotColor = "bg-red-500";
+    healthLabel = "Error";
+    healthTitle = "System issue";
+  } else if (_memHigh) {
+    healthChipCls = "bg-red-500/15 text-red-400";
+    healthDotColor = "bg-red-500";
+    healthLabel = `Mem ${_memLabel}`;
+    healthTitle = `High memory: ${_memLabel} (steady ~200 MB)`;
+  } else if (_memWarn) {
+    healthChipCls = "bg-amber-500/15 text-amber-500";
+    healthDotColor = "bg-amber-500";
+    healthLabel = `Mem ${_memLabel}`;
+    healthTitle = `Elevated memory: ${_memLabel}`;
+  } else {
+    healthChipCls = "bg-green-500/15 text-green-500";
+    healthDotColor = "bg-green-500";
+    healthLabel = "OK";
+    healthTitle = "System healthy";
+  }
+  const _healthPulse = (!isHealthy && health !== null) || _memHigh;
 
   // Status is authoritative from backend — read directly
   const statusDot = AGENT_STATUS_COLORS[agent.status] || "bg-gray-500";
@@ -4311,10 +4342,10 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                 <button
                   type="button"
                   onClick={() => navigate("/monitor")}
-                  title={health === null ? "Checking..." : isHealthy ? "System healthy" : "System issue"}
+                  title={healthTitle}
                   className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-colors hover:opacity-80 ${healthChipCls}`}
                 >
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${healthDotColor} ${!isHealthy && health !== null ? "animate-pulse" : ""}`} />
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${healthDotColor} ${_healthPulse ? "animate-pulse" : ""}`} />
                   {healthLabel}
                 </button>
 

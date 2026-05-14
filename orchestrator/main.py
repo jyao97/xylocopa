@@ -397,47 +397,69 @@ async def lifespan(app: FastAPI):
 
     ws_prune_task = asyncio.create_task(_ws_prune_loop())
 
-    # TEMP DEBUG: RSS sampler — logs WARNING when RSS climbs past
-    # successive thresholds (200MB / 500MB / 1GB / 2GB / 5GB / 10GB / 20GB)
-    # so the next OOM cascade leaves a timeline of which operations
-    # preceded each jump. Cheap (one /proc read per minute).
+    # RSS sampler — three log channels so the next leak leaves a usable
+    # forensic trail without spamming the steady-state log:
     #
-    # Also fires the leak-alert probe (XY_RSS_LEAK_PROBE_URL) ONCE when
-    # we first cross 5GB so the diagnostic chat gets woken in real time
-    # instead of having to notice after the fact. Probe is single-fire
-    # by design; renew after each fire via probe_create.
+    # 1. INFO every 5 min: baseline sample. Always fires. Gives us a
+    #    curve when looking back instead of just threshold crossings.
+    # 2. WARNING on threshold cross (200/500/1000/2000/5000/10000/20000 MB):
+    #    one-shot per process, marks the level was first hit.
+    # 3. WARNING on rapid growth (>200MB/min): smoke alarm. Lower than
+    #    before (was 300MB) so we catch a steady leak before it OOMs.
+    #
+    # Also fires the leak-alert probe (XY_RSS_LEAK_PROBE_URL) once when
+    # we first cross 5GB so the diagnostic chat gets woken in real time.
+    # Probe is single-fire by design; renew after each fire via probe_create.
     async def _rss_watch_loop():
         import httpx
+        import time as _time
         thresholds_mb = [200, 500, 1000, 2000, 5000, 10000, 20000]
         crossed: set[int] = set()
         prev_rss_mb = 0
+        # Baseline log every 5 min. Cheap (1 line + 1 /proc read per tick).
+        BASELINE_INTERVAL_S = 300
+        last_baseline_at = 0.0
         probe_url = os.environ.get("XY_RSS_LEAK_PROBE_URL", "").strip()
         probe_fired = False
         while True:
             await asyncio.sleep(60)
             try:
+                vm = {}
                 with open(f"/proc/{os.getpid()}/status") as f:
-                    rss_mb = next(
-                        int(line.split()[1]) // 1024
-                        for line in f if line.startswith("VmRSS:")
-                    )
-            except (OSError, StopIteration, ValueError):
+                    for line in f:
+                        for k in ("VmRSS:", "VmSize:", "VmPeak:", "RssAnon:", "RssFile:"):
+                            if line.startswith(k):
+                                vm[k[:-1]] = int(line.split()[1]) // 1024  # MB
+                                break
+                rss_mb = vm.get("VmRSS")
+                if rss_mb is None:
+                    continue
+            except OSError:
                 continue
+            now = _time.monotonic()
+            # 1. Baseline sample
+            if now - last_baseline_at >= BASELINE_INTERVAL_S:
+                last_baseline_at = now
+                logger.info(
+                    "RSS_WATCH baseline: rss=%dMB vm=%dMB peak=%dMB anon=%dMB file=%dMB",
+                    rss_mb, vm.get("VmSize", 0), vm.get("VmPeak", 0),
+                    vm.get("RssAnon", 0), vm.get("RssFile", 0),
+                )
+            # 2. Threshold crosses
             for t in thresholds_mb:
                 if rss_mb >= t and t not in crossed:
                     crossed.add(t)
-                    logger.warning("RSS_WATCH: crossed %d MB (now %d MB)", t, rss_mb)
-            # Also log a "growing fast" warning if RSS grew >300MB in the
-            # last minute — that's the leak smoke alarm.
-            if rss_mb - prev_rss_mb > 300 and prev_rss_mb > 0:
+                    logger.warning("RSS_WATCH: crossed %d MB (now %d MB, peak %d MB)",
+                                   t, rss_mb, vm.get("VmPeak", 0))
+            # 3. Rapid growth alarm
+            if rss_mb - prev_rss_mb > 200 and prev_rss_mb > 0:
                 logger.warning(
-                    "RSS_WATCH: jumped %d MB in last minute (%d → %d MB)",
-                    rss_mb - prev_rss_mb, prev_rss_mb, rss_mb,
+                    "RSS_WATCH: jumped %d MB in last minute (%d → %d MB, peak %d MB)",
+                    rss_mb - prev_rss_mb, prev_rss_mb, rss_mb, vm.get("VmPeak", 0),
                 )
             prev_rss_mb = rss_mb
-            # Fire the wake probe once when we cross 5GB. 5GB is the
-            # "almost certainly leaking" line; pm2 force-restarts at 8GB
-            # so this gives ~3GB headroom for a live investigation.
+            # Fire the wake probe once when we cross 5GB. pm2 force-restarts
+            # at 8GB so this gives ~3GB headroom for a live investigation.
             if not probe_fired and probe_url and rss_mb >= 5000:
                 probe_fired = True
                 try:

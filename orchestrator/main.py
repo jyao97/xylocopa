@@ -401,10 +401,18 @@ async def lifespan(app: FastAPI):
     # successive thresholds (200MB / 500MB / 1GB / 2GB / 5GB / 10GB / 20GB)
     # so the next OOM cascade leaves a timeline of which operations
     # preceded each jump. Cheap (one /proc read per minute).
+    #
+    # Also fires the leak-alert probe (XY_RSS_LEAK_PROBE_URL) ONCE when
+    # we first cross 5GB so the diagnostic chat gets woken in real time
+    # instead of having to notice after the fact. Probe is single-fire
+    # by design; renew after each fire via probe_create.
     async def _rss_watch_loop():
+        import httpx
         thresholds_mb = [200, 500, 1000, 2000, 5000, 10000, 20000]
         crossed: set[int] = set()
         prev_rss_mb = 0
+        probe_url = os.environ.get("XY_RSS_LEAK_PROBE_URL", "").strip()
+        probe_fired = False
         while True:
             await asyncio.sleep(60)
             try:
@@ -427,6 +435,20 @@ async def lifespan(app: FastAPI):
                     rss_mb - prev_rss_mb, prev_rss_mb, rss_mb,
                 )
             prev_rss_mb = rss_mb
+            # Fire the wake probe once when we cross 5GB. 5GB is the
+            # "almost certainly leaking" line; pm2 force-restarts at 8GB
+            # so this gives ~3GB headroom for a live investigation.
+            if not probe_fired and probe_url and rss_mb >= 5000:
+                probe_fired = True
+                try:
+                    async with httpx.AsyncClient(timeout=5.0) as _hx:
+                        _r = await _hx.post(probe_url)
+                    logger.warning(
+                        "RSS_WATCH: probe fired at %d MB (status=%d)",
+                        rss_mb, _r.status_code,
+                    )
+                except Exception:
+                    logger.exception("RSS_WATCH: probe fire failed (non-fatal)")
 
     rss_watch_task = asyncio.create_task(_rss_watch_loop())
 

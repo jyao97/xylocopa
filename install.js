@@ -434,6 +434,46 @@ async function main() {
     console.log(`\n  ${DIM}If pm2 printed a sudo command above, copy and run it to complete setup.${R}`);
   }
 
+  // OOMPolicy hint — recommended one-time follow-up to `pm2 startup`.
+  //
+  // pm2's systemd unit defaults to OOMPolicy=stop, which means a single
+  // agent subprocess hitting OOM tears down the whole pm2 unit — killing
+  // the tmux server and every running agent as collateral. A drop-in
+  // override changes the policy to `continue`, so only the offending
+  // process dies and other agents survive.
+  //
+  // Same UX as `pm2 startup`: we just print the sudo command and let the
+  // user copy-paste it. install.js itself never invokes sudo.
+  try {
+    const pm2User = os.userInfo().username;
+    const pm2Unit = `pm2-${pm2User}.service`;
+    let oomPolicy = '';
+    try {
+      const out = execSync(
+        `systemctl show ${pm2Unit} -p OOMPolicy --value 2>/dev/null`,
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+      oomPolicy = (out || '').trim().toLowerCase();
+    } catch { /* not installed or systemd unavailable */ }
+    if (oomPolicy === 'stop') {
+      console.log();
+      warn(`pm2-${pm2User}.service has OOMPolicy=stop (the systemd default).`);
+      console.log(`     ${DIM}With this setting, if any agent subprocess hits OOM, systemd will`);
+      console.log(`     tear down the whole pm2 unit — killing the tmux server and every`);
+      console.log(`     running agent as collateral. The orchestrator will print the same`);
+      console.log(`     warning at startup.${R}`);
+      console.log();
+      console.log(`  ${DIM}To make subprocess OOM not affect tmux + other agents, run:${R}`);
+      console.log();
+      console.log(`    ${B}sudo install -d /etc/systemd/system/${pm2Unit}.d${R}`);
+      console.log(`    ${B}echo -e '[Service]\\nOOMPolicy=continue' | sudo tee /etc/systemd/system/${pm2Unit}.d/override.conf${R}`);
+      console.log(`    ${B}sudo systemctl daemon-reload${R}`);
+      console.log();
+      console.log(`  ${DIM}(One-time, ~no risk — only changes how systemd reacts to OOM,${R}`);
+      console.log(`  ${DIM} not what processes can do.)${R}`);
+    }
+  } catch { /* swallow — diagnostics, not critical */ }
+
   if (!startNow) {
     console.log(`
   To start later:

@@ -421,8 +421,38 @@ async function main() {
   // can SIGKILL wholesale under memory pressure — taking backend+frontend
   // with it. pm2 save persists the current process list so boot-time
   // resurrect brings everything back.
+  // Helper: print the OOMPolicy override commands. pm2's systemd unit
+  // defaults to OOMPolicy=stop — any agent subprocess OOM tears down the
+  // whole unit, killing tmux + every running agent. The override changes
+  // the policy to `continue` so only the offending process dies.
+  const printOOMPolicyHint = (mode /* 'paired' | 'standalone' */) => {
+    const pm2User = os.userInfo().username;
+    const pm2Unit = `pm2-${pm2User}.service`;
+    if (mode === 'paired') {
+      console.log();
+      console.log(`  ${DIM}Recommended follow-up: keep tmux + other agents alive when one${R}`);
+      console.log(`  ${DIM}subprocess hits OOM. After running the pm2 sudo command above,${R}`);
+      console.log(`  ${DIM}also run:${R}`);
+    } else {
+      console.log();
+      warn(`pm2-${pm2User}.service has OOMPolicy=stop (the systemd default).`);
+      console.log(`     ${DIM}A single agent subprocess OOM will tear down the whole pm2 unit —${R}`);
+      console.log(`     ${DIM}killing the tmux server and every running agent as collateral.${R}`);
+      console.log();
+      console.log(`  ${DIM}To make subprocess OOM not affect tmux + other agents, run:${R}`);
+    }
+    console.log();
+    console.log(`    ${B}sudo install -d /etc/systemd/system/${pm2Unit}.d${R}`);
+    console.log(`    ${B}echo -e '[Service]\\nOOMPolicy=continue' | sudo tee /etc/systemd/system/${pm2Unit}.d/override.conf${R}`);
+    console.log(`    ${B}sudo systemctl daemon-reload${R}`);
+    console.log();
+    console.log(`  ${DIM}(One-time, no risk — only changes how systemd reacts to OOM,${R}`);
+    console.log(`  ${DIM} not what processes can do.)${R}`);
+  };
+
   console.log();
-  if (await confirm('Enable auto-start on boot? (pm2 startup)')) {
+  const enableBoot = await confirm('Enable auto-start on boot? (pm2 startup)');
+  if (enableBoot) {
     if (startNow) {
       run('pm2 save', { allowFail: true });
     } else {
@@ -431,48 +461,28 @@ async function main() {
     }
     console.log();
     run('pm2 startup', { allowFail: true });
-    console.log(`\n  ${DIM}If pm2 printed a sudo command above, copy and run it to complete setup.${R}`);
-  }
-
-  // OOMPolicy hint — recommended one-time follow-up to `pm2 startup`.
-  //
-  // pm2's systemd unit defaults to OOMPolicy=stop, which means a single
-  // agent subprocess hitting OOM tears down the whole pm2 unit — killing
-  // the tmux server and every running agent as collateral. A drop-in
-  // override changes the policy to `continue`, so only the offending
-  // process dies and other agents survive.
-  //
-  // Same UX as `pm2 startup`: we just print the sudo command and let the
-  // user copy-paste it. install.js itself never invokes sudo.
-  try {
-    const pm2User = os.userInfo().username;
-    const pm2Unit = `pm2-${pm2User}.service`;
-    let oomPolicy = '';
+    console.log(`\n  ${DIM}If pm2 printed a sudo command above, copy and run it to register${R}`);
+    console.log(`  ${DIM}the unit.${R}`);
+    // Paired hint — pm2 startup just printed its sudo command; we add the
+    // OOMPolicy override next to it so the user runs both in one sitting.
+    // Unconditional: at this point the unit may not exist yet, so we can't
+    // detect via systemctl — but we know the user is about to create it.
+    printOOMPolicyHint('paired');
+  } else {
+    // Standalone hint — user skipped pm2 startup this run, but may have
+    // installed the unit on a previous run. Detect the missing override
+    // and prompt them now so they don't keep silently losing agents to
+    // OOM cascades.
     try {
       const out = execSync(
-        `systemctl show ${pm2Unit} -p OOMPolicy --value 2>/dev/null`,
+        `systemctl show pm2-${os.userInfo().username}.service -p OOMPolicy --value 2>/dev/null`,
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
       );
-      oomPolicy = (out || '').trim().toLowerCase();
-    } catch { /* not installed or systemd unavailable */ }
-    if (oomPolicy === 'stop') {
-      console.log();
-      warn(`pm2-${pm2User}.service has OOMPolicy=stop (the systemd default).`);
-      console.log(`     ${DIM}With this setting, if any agent subprocess hits OOM, systemd will`);
-      console.log(`     tear down the whole pm2 unit — killing the tmux server and every`);
-      console.log(`     running agent as collateral. The orchestrator will print the same`);
-      console.log(`     warning at startup.${R}`);
-      console.log();
-      console.log(`  ${DIM}To make subprocess OOM not affect tmux + other agents, run:${R}`);
-      console.log();
-      console.log(`    ${B}sudo install -d /etc/systemd/system/${pm2Unit}.d${R}`);
-      console.log(`    ${B}echo -e '[Service]\\nOOMPolicy=continue' | sudo tee /etc/systemd/system/${pm2Unit}.d/override.conf${R}`);
-      console.log(`    ${B}sudo systemctl daemon-reload${R}`);
-      console.log();
-      console.log(`  ${DIM}(One-time, ~no risk — only changes how systemd reacts to OOM,${R}`);
-      console.log(`  ${DIM} not what processes can do.)${R}`);
-    }
-  } catch { /* swallow — diagnostics, not critical */ }
+      if ((out || '').trim().toLowerCase() === 'stop') {
+        printOOMPolicyHint('standalone');
+      }
+    } catch { /* not installed or systemd unavailable — silent */ }
+  }
 
   if (!startNow) {
     console.log(`

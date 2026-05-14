@@ -1282,12 +1282,14 @@ def _get_unlinked_dir() -> str:
     return _UNLINKED_DIR
 
 
-def _clean_stale_unlinked(max_age: int = 3600, rejected_max_age: int = 86400):
-    """Remove unlinked session entries whose JSONL hasn't been updated in max_age seconds.
+def _clean_stale_unlinked(max_age: int = 3600):
+    """Remove unlinked session entries that are no longer actionable.
 
-    Preserves entries whose tmux pane still has a running process.
-    Rejected entries (no pane/transcript) are aged out separately by
-    rejected_max_age — they're a UI breadcrumb, not a live session.
+    Live tmux entries: kept while transcript is fresh OR the tmux pane has
+    a running pid. Rejected entries: kept while a claude process for the
+    session_id is still running; dropped on the first poll after that
+    process exits (with a 10s grace window for freshly-written entries
+    in case claude is still in the process of starting up).
     """
     udir = _get_unlinked_dir()
     now = _time.time()
@@ -1301,8 +1303,15 @@ def _clean_stale_unlinked(max_age: int = 3600, rejected_max_age: int = 86400):
                 with open(fpath) as f:
                     info = json.load(f)
                 if info.get("rejected"):
+                    sid = (info.get("session_id") or "").strip()
+                    if sid:
+                        from agent_dispatcher import _find_claude_pid_for_session
+                        if _find_claude_pid_for_session(sid):
+                            continue  # claude still alive — keep entry
+                    # Just-written entries get a brief grace window in
+                    # case claude hasn't finished spawning yet.
                     age = now - float(info.get("timestamp") or 0)
-                    if age < rejected_max_age:
+                    if 0 < age < 10:
                         continue
                     os.unlink(fpath)
                     removed += 1

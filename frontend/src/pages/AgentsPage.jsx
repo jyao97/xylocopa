@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Bell, BellOff, Link2, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { Bell, BellOff, Link2, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, convertAndAdoptUnlinkedSession, unstarSession, clog } from "../lib/api";
 import { relativeTime } from "../lib/formatters";
@@ -744,14 +744,9 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
               onClick={() => setUnlinkedOpen((v) => !v)}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-hover transition-colors"
             >
-              <Link2 className="w-4 h-4 text-violet-500 dark:text-violet-400 shrink-0" />
-              <span className="text-sm font-medium text-violet-600 dark:text-violet-300 flex-1">
+              <Link2 className="w-4 h-4 text-dim shrink-0" />
+              <span className="text-sm font-medium text-heading flex-1">
                 {total} session{total !== 1 ? "s" : ""} detected
-                {rejected.length > 0 && adoptable.length > 0 && (
-                  <span className="ml-1 text-xs text-faint font-normal">
-                    ({adoptable.length} adoptable, {rejected.length} not adoptable)
-                  </span>
-                )}
               </span>
               {unlinkedOpen
                 ? <ChevronUp className="w-4 h-4 text-faint" />
@@ -769,9 +764,11 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                           <span className="text-sm font-medium text-heading truncate">
                             {s.tmux_session || s.project_name || "unknown"}
                           </span>
-                          <span className="text-xs text-faint shrink-0">
-                            {s.project_name}
-                          </span>
+                          {s.project_name && (
+                            <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 truncate">
+                              {s.project_name}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-dim truncate mt-0.5">
                           {s.session_id ? `${s.session_id.slice(0, 12)}… · ` : ""}pane {s.tmux_pane || "?"}
@@ -781,9 +778,9 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                         type="button"
                         onClick={() => handleAdopt(s)}
                         disabled={adoptingId === fk}
-                        className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                        className="shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/25 transition-colors disabled:opacity-50"
                       >
-                        {adoptingId === fk ? "Linking…" : "Confirm"}
+                        {adoptingId === fk ? "Linking…" : "Adopt"}
                       </button>
                     </div>
                   );
@@ -791,36 +788,32 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                 {rejected.map((s) => {
                   const fk = (s.file || "").replace(/\.json$/, "") || s.session_id;
                   const reasonText = s.reason === "missing_tmux_pane"
-                    ? "Running outside tmux — convert to a tmux pane to adopt"
+                    ? "Running outside tmux — convert to adopt"
                     : (s.reason || "Cannot adopt");
                   return (
-                    <div key={fk} className="px-4 py-2.5 flex items-start gap-3 bg-amber-500/5">
-                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div key={fk} className="px-4 py-2.5 flex items-center gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-heading truncate">
                             {s.project_name || "unknown"}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400 font-semibold shrink-0">
-                            not adoptable
+                          <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-amber-500/15 text-amber-500 dark:text-amber-400 shrink-0">
+                            not in tmux
                           </span>
                         </div>
-                        <p className="text-xs text-dim mt-0.5">{reasonText}</p>
-                        {s.session_id && (
-                          <p className="text-xs text-faint mt-0.5 font-mono truncate">
-                            {s.session_id.slice(0, 12)}… · {s.cwd}
-                          </p>
-                        )}
+                        <p className="text-xs text-dim truncate mt-0.5">
+                          {s.session_id ? `${s.session_id.slice(0, 12)}… · ` : ""}{reasonText}
+                        </p>
                       </div>
                       {s.reason === "missing_tmux_pane" && (
                         <button
                           type="button"
                           onClick={() => handleConvertAndAdopt(s)}
                           disabled={adoptingId === fk}
-                          className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
-                          title="Will SIGTERM your terminal claude and resume it inside tmux"
+                          className="shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-500 dark:text-amber-400 hover:bg-amber-500/25 transition-colors disabled:opacity-50"
+                          title="SIGTERM your terminal claude and resume inside tmux"
                         >
-                          {adoptingId === fk ? "Converting…" : "Move to tmux"}
+                          {adoptingId === fk ? "Moving…" : "Move to tmux"}
                         </button>
                       )}
                     </div>

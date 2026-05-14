@@ -23,31 +23,46 @@ router = APIRouter(tags=["hooks"])
 
 # ---- Helpers ----
 
-def _resolve_agent_id_from_body(body: dict) -> str:
-    """Resolve agent_id from hook body when X-Agent-Id header is empty.
+def _resolve_agent_for_hook(request: Request, body: dict) -> str:
+    """Authoritative agent resolution for hook handlers.
 
-    For adopted CLI sessions (cli_sync=True) that lack XY_AGENT_ID in
-    their environment, look up the session_id in the agents table to find
-    the owning agent.  This allows Stop/PreToolUse/PostToolUse hooks to
-    wake the sync engine for these sessions.
+    Lookup order (header value is intentionally ignored):
+      1. Tmux pane → DB. Pane IDs are owned by the orchestrator's tmux
+         server and recorded at agent launch — immune to env-var leakage.
+      2. session_id → DB (cli_sync=True only). Covers adopted CLI agents
+         that may not have a pane on record yet during the adopt window.
+
+    Why not trust X-Agent-Id: it is populated from $XY_AGENT_ID, which
+    leaks through env inheritance into unrelated panes (e.g. a user's
+    `tmux new -s cc`). Honouring the leaked value misroutes the hook to
+    a stale agent and silently breaks unmanaged adopt detection.
+
+    Returns the agent_id or "" when no authoritative match exists.
     """
-    sid = body.get("session_id", "").strip()
-    if not sid:
-        return ""
+    tmux_pane = (request.headers.get("X-Tmux-Pane") or "").strip()
+    sid = ""
+    if isinstance(body, dict):
+        sid = (body.get("session_id") or "").strip()
     from database import SessionLocal
     db = SessionLocal()
     try:
-        agent = db.query(Agent).filter(
-            Agent.session_id == sid,
-            Agent.cli_sync == True,
-            Agent.status.notin_([AgentStatus.STOPPED, AgentStatus.ERROR]),
-        ).first()
-        if agent:
-            logger.debug("_resolve_agent_id_from_body: session %s → adopted agent %s", sid[:12], agent.id[:8])
-            return agent.id
+        if tmux_pane:
+            agent = db.query(Agent).filter(
+                Agent.tmux_pane == tmux_pane,
+                Agent.status.notin_([AgentStatus.STOPPED, AgentStatus.ERROR]),
+            ).first()
+            if agent:
+                return agent.id
+        if sid:
+            agent = db.query(Agent).filter(
+                Agent.session_id == sid,
+                Agent.cli_sync == True,
+                Agent.status.notin_([AgentStatus.STOPPED, AgentStatus.ERROR]),
+            ).first()
+            if agent:
+                return agent.id
     finally:
         db.close()
-    logger.debug("_resolve_agent_id_from_body: session %s has no adopted agent", sid[:12])
     return ""
 
 
@@ -232,35 +247,22 @@ async def hook_agent_session_end(request: Request):
       - clear / resume     → session rotating, expect new SessionStart.
       - everything else    → terminal exit (e.g. /exit, logout), stop the agent.
 
-    Agent-id resolution contract (both paths gate on xylo-tracked agents
-    only — destructive actions below NEVER fire for un-registered sessions):
-
-      1. X-Agent-Id header (preferred). Populated from $XY_AGENT_ID env var,
-         which xylocopa injects via `tmux new-session -e XY_AGENT_ID=...`
-         when launching native agents. A CC process not started by xylocopa
-         lacks this env var → header is empty → falls through to (2).
-
-      2. _resolve_agent_id_from_body fallback. Looks up the hook's
-         session_id in the agents table, filtered by `cli_sync=True` —
-         i.e. only matches CLI sessions xylocopa has explicitly adopted /
-         is actively syncing. Brand-new claude sessions that xylocopa has
-         never seen do not match and the handler early-returns.
-
-    Net effect: if you `cd` into a xylocopa project and run `claude`
-    manually (no xylocopa env injection, no adopted record), this hook
-    fires (settings.local.json carries the URL) but neither path resolves
-    an agent_id → early return with a warning. No agent state is touched.
+    Agent-id resolution goes through _resolve_agent_for_hook — pane → DB
+    is authoritative, session_id → DB (cli_sync only) is the fallback. The
+    X-Agent-Id header is intentionally ignored (env-leak-immune). Brand-new
+    claude sessions xylocopa has never seen do not match either path, so
+    the handler early-returns and no destructive action fires.
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_session_end: no X-Agent-Id and no session match")
-            return {}
+        logger.warning("hook_agent_session_end: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions (Agent tool inherits XY_AGENT_ID)
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -364,16 +366,16 @@ async def hook_agent_user_prompt(request: Request):
     mid-turn restart can't leave a row that confuses the subsequent
     sync-time promotion. Single-writer → no promote-vs-flush race.
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_user_prompt: no X-Agent-Id and no session match (headers: %s)", dict(request.headers))
-            return {}
+        logger.warning("hook_agent_user_prompt: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions (Agent tool inherits XY_AGENT_ID)
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -449,16 +451,16 @@ async def hook_agent_stop(request: Request):
     Stop fires per conversation turn, not just at task completion, so this
     endpoint deliberately does NOT transition task state.
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_stop: no X-Agent-Id and no session match")
-            return {}
+        logger.warning("hook_agent_stop: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions (Agent tool inherits XY_AGENT_ID)
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -525,16 +527,16 @@ async def hook_agent_post_compact(request: Request):
          here) keeps the decision self-contained and immune to the ctx
          rotation that happens between PreCompact and PostCompact.
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_post_compact: no agent_id")
-            return {}
+        logger.warning("hook_agent_post_compact: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -640,16 +642,16 @@ async def hook_agent_tool_activity(request: Request):
     replacing the unreliable JSONL-polling approach that loses tool info
     after the idle threshold (~6s).
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_tool_activity: no X-Agent-Id and no session match")
-            return {}
+        logger.warning("hook_agent_tool_activity: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions.
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -1067,16 +1069,16 @@ async def hook_agent_permission(request: Request):
     Auto-allows safe read-only tools (Read, Glob, Grep, etc.) and any tool
     the user has previously marked "always allow" for this agent session.
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_permission: no X-Agent-Id and no session match")
-            return {}
+        logger.warning("hook_agent_permission: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -1331,16 +1333,16 @@ async def hook_agent_permission_request(request: Request):
     For skip_permissions agents, this hook never fires (they use
     --dangerously-skip-permissions which bypasses all CC permission checks).
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         body = {}
+    agent_id = _resolve_agent_for_hook(request, body)
     if not agent_id:
-        agent_id = _resolve_agent_id_from_body(body)
-        if not agent_id:
-            logger.warning("hook_agent_permission_request: no agent_id")
-            return {}
+        logger.warning("hook_agent_permission_request: no agent match (pane=%s sid=%s)",
+                       request.headers.get("X-Tmux-Pane", ""),
+                       (body.get("session_id") if isinstance(body, dict) else "") or "")
+        return {}
 
     # Guard: ignore hooks from subprocess sessions
     hook_sid = body.get("session_id", "") if isinstance(body, dict) else ""
@@ -1373,20 +1375,18 @@ async def get_pending_permissions(agent_id: str, request: Request):
 async def hook_agent_session_start(request: Request):
     """Receive SessionStart hook from Claude Code agents.
 
-    Managed agents (X-Agent-Id present): writes a signal file for
-    _detect_successor() to track session rotation.
+    Managed agents (pane resolves to a known agent in DB): writes a
+    signal file for _detect_successor() to track session rotation.
 
-    Unmanaged sessions (no X-Agent-Id): creates an unlinked session entry
-    so the user can confirm (adopt) it in the UI.  This is push-based
-    detection that complements the polling-based tmux scan fallback.
+    Unmanaged sessions (pane not in DB): creates an unlinked session entry
+    so the user can confirm (adopt) it in the UI.
     """
-    agent_id = request.headers.get("X-Agent-Id", "").strip()
-
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
-        logger.debug("SessionStart hook: failed to parse body (agent_id=%s)", agent_id[:8] if agent_id else "(none)")
+        logger.debug("SessionStart hook: failed to parse body")
         return {}
+    agent_id = _resolve_agent_for_hook(request, body)
 
     # Claude Code sends session info — extract session_id
     session_id = ""

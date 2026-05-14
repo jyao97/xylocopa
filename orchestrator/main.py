@@ -223,33 +223,10 @@ async def lifespan(app: FastAPI):
     # a one-time drop-in override (see install.js prompt).
     try:
         import subprocess as _sp_init
-        # Start tmux server with a clean env — strip agent-identity vars
-        # so the server's startup env (and therefore the global env every
-        # user-created session inherits) doesn't carry a stale XY_AGENT_ID
-        # leaked from whoever spawned pm2 (or whoever ran `pm2 reload`).
-        # Without this, user-launched `tmux new -s cc` panes inherit the
-        # agent id and SessionStart hook misroutes them as managed
-        # rotations instead of creating an unlinked entry for adopt.
-        _STRIP = {"XY_AGENT_ID", "AHIVE_AGENT_ID",
-                  "XYLOCOPA_MANAGED", "AGENTHIVE_MANAGED"}
-        _clean_env = {k: v for k, v in os.environ.items() if k not in _STRIP}
         r = _sp_init.run(
-            ["tmux", "start-server"], capture_output=True, text=True,
-            timeout=5, env=_clean_env,
+            ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
         )
         if r.returncode == 0:
-            # Scrub the running tmux server's GLOBAL environment in case it
-            # was started earlier (by a polluted pm2 reload) before this
-            # cleanup existed. Idempotent — `set-environment -ug NAME` is
-            # a no-op when NAME is already unset.
-            for _var in _STRIP:
-                try:
-                    _sp_init.run(
-                        ["tmux", "set-environment", "-ug", _var],
-                        capture_output=True, timeout=3,
-                    )
-                except (OSError, _sp_init.TimeoutExpired):
-                    pass
             oom_policy = _detect_pm2_oom_policy()
             if oom_policy == "stop":
                 import pwd as _pwd

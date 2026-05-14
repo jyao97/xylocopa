@@ -364,6 +364,7 @@ Here is recent agent activity in this project (last 50 messages):
     try:
         # Run from /tmp to avoid loading project hooks (PreToolUse permission
         # hook returns {} for non-agent subprocesses, causing empty output).
+        _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", prompt, "--output-format", "text",
              "--no-session-persistence"],
@@ -371,6 +372,8 @@ Here is recent agent activity in this project (last 50 messages):
             cwd="/tmp",
             env=subprocess_clean_env(),
         )
+        _log_claude_subproc("claudemd_refresh", project_name, result.returncode,
+                            result.stdout, result.stderr, _time.monotonic() - _t0)
 
         if result.returncode != 0:
             logger.warning("claude -p failed for %s: %s", project_name, result.stderr[:500])
@@ -441,6 +444,25 @@ _INSIGHT_RUNS_LOCK = threading.Lock()
 # MB of stdout via proc.communicate(), so unbounded spawning during mass agent
 # stop is a major OOM vector.
 INSIGHT_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="insight")
+
+
+def _log_claude_subproc(label: str, key: str, rc: int, stdout: str | bytes,
+                        stderr: str | bytes, elapsed_s: float) -> None:
+    """Log subprocess stdout/stderr sizes from a claude -p invocation.
+
+    Helps spot the leak vector where a single agent's insight run buffers
+    100 MB+ of stdout via proc.communicate(). Internal-only, INFO level —
+    not exposed to user.
+    """
+    try:
+        out_len = len(stdout) if stdout is not None else 0
+        err_len = len(stderr) if stderr is not None else 0
+        logger.info(
+            "claude_subproc %s %s rc=%d took=%.1fs stdout=%dB stderr=%dB",
+            label, key, rc, elapsed_s, out_len, err_len,
+        )
+    except Exception:
+        pass
 
 
 def cancel_insight_run(agent_id: str) -> bool:
@@ -546,6 +568,7 @@ Here are today's conversations (with timestamps):
     try:
         # Run from /tmp to avoid loading project hooks (PreToolUse permission
         # hook returns {} for non-agent subprocesses, causing empty output).
+        _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
              "--no-session-persistence"],
@@ -554,6 +577,8 @@ Here are today's conversations (with timestamps):
             cwd="/tmp",
             env=subprocess_clean_env(),
         )
+        _log_claude_subproc("progress_summary", project_name, result.returncode,
+                            result.stdout, result.stderr, _time.monotonic() - _t0)
 
         if result.returncode != 0:
             logger.warning("progress summary failed for %s: %s", project_name, result.stderr[:500])
@@ -725,16 +750,22 @@ Agent: {agent_name} | Task: {task_title}
                     else:
                         entry['proc'] = proc
 
+            _t0 = _time.monotonic()
             try:
                 stdout, stderr = proc.communicate(input=prompt, timeout=300)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 stdout, stderr = proc.communicate()
+                _log_claude_subproc("agent_insight_TIMEOUT", agent_id,
+                                    proc.returncode or -1, stdout, stderr,
+                                    _time.monotonic() - _t0)
                 if _is_insight_cancelled(agent_id):
                     return
                 logger.warning("Agent summary timed out for %s", agent_id)
                 _set_insight_status(agent_id, "failed", project_name)
                 return
+            _log_claude_subproc("agent_insight", agent_id, proc.returncode,
+                                stdout, stderr, _time.monotonic() - _t0)
 
             if _is_insight_cancelled(agent_id):
                 return
@@ -878,6 +909,7 @@ Task: {task_title}{reason_line}
     try:
         # Run from /tmp to avoid loading project hooks (PreToolUse permission
         # hook returns {} for non-agent subprocesses, causing empty output).
+        _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
              "--no-session-persistence"],
@@ -886,6 +918,8 @@ Task: {task_title}{reason_line}
             cwd="/tmp",
             env=subprocess_clean_env(),
         )
+        _log_claude_subproc("retry_summary", task_id, result.returncode,
+                            result.stdout, result.stderr, _time.monotonic() - _t0)
 
         if result.returncode != 0:
             logger.warning("Retry summary failed for task %s (rc=%d): %s",

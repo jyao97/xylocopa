@@ -498,15 +498,32 @@ async def lifespan(app: FastAPI):
     # totals; never touches metadata.
     async def _cc_session_reconcile_loop():
         from cc_session_reconcile import reconcile_all
+        import time as _t
+
+        def _rss_mb() -> int:
+            try:
+                with open(f"/proc/{os.getpid()}/status") as _f:
+                    for _l in _f:
+                        if _l.startswith("VmRSS:"):
+                            return int(_l.split()[1]) // 1024
+            except OSError:
+                pass
+            return 0
+
         # Initial sweep — runs in a thread so we don't stall the loop on
         # slow disk scans.
         try:
+            _rss_before = _rss_mb()
+            _t0 = _t.monotonic()
             totals = await asyncio.to_thread(reconcile_all)
             logger.info(
-                "cc_session reconcile (startup): agents=%d disc=%d ins=%d upd=%d skp=%d",
+                "cc_session reconcile (startup): agents=%d disc=%d ins=%d upd=%d skp=%d "
+                "took=%.1fs rss=%d→%dMB delta=%+dMB",
                 totals.get("agents", 0), totals.get("discovered", 0),
                 totals.get("inserted", 0), totals.get("updated", 0),
                 totals.get("skipped", 0),
+                _t.monotonic() - _t0, _rss_before, _rss_mb(),
+                _rss_mb() - _rss_before,
             )
         except Exception:
             logger.exception("cc_session reconcile startup sweep failed (non-fatal)")
@@ -516,13 +533,18 @@ async def lifespan(app: FastAPI):
         while True:
             await asyncio.sleep(1800)
             try:
+                _rss_before = _rss_mb()
+                _t0 = _t.monotonic()
                 totals = await asyncio.to_thread(reconcile_all)
-                if totals.get("inserted") or totals.get("updated"):
-                    logger.info(
-                        "cc_session reconcile: ins=%d upd=%d (disc=%d)",
-                        totals["inserted"], totals["updated"],
-                        totals.get("discovered", 0),
-                    )
+                _rss_after = _rss_mb()
+                # Always log RSS delta for forensic trail, even when no writes.
+                logger.info(
+                    "cc_session reconcile: ins=%d upd=%d (disc=%d) took=%.1fs rss=%d→%dMB delta=%+dMB",
+                    totals.get("inserted", 0), totals.get("updated", 0),
+                    totals.get("discovered", 0),
+                    _t.monotonic() - _t0, _rss_before, _rss_after,
+                    _rss_after - _rss_before,
+                )
             except Exception:
                 logger.exception("cc_session reconcile loop failed (non-fatal)")
 
@@ -630,10 +652,28 @@ async def hook_request_logger(request: Request, call_next):
     if request.url.path.startswith("/api/hooks/"):
         agent_id = request.headers.get("X-Agent-Id", "<none>")
         hook_name = request.url.path.split("/api/hooks/")[-1]
+        # Body size from Content-Length so we don't have to read the stream
+        # (reading would interfere with route body parsing). Internal log,
+        # INFO level — not exposed to user.
+        _cl = request.headers.get("content-length")
+        try:
+            _body_kb = (int(_cl) / 1024) if _cl else 0
+        except (TypeError, ValueError):
+            _body_kb = 0
         logger.info(
-            "HOOK_HTTP_IN: %s agent=%s method=%s",
-            hook_name, agent_id[:12] if agent_id != "<none>" else "<none>", request.method,
+            "HOOK_HTTP_IN: %s agent=%s method=%s body=%.1fKB",
+            hook_name, agent_id[:12] if agent_id != "<none>" else "<none>",
+            request.method, _body_kb,
         )
+        # Loud warning if a hook body is unusually large (>1MB).
+        # Recent OOM patterns suggested some hooks were sending full
+        # transcripts; this surfaces that immediately.
+        if _body_kb > 1024:
+            logger.warning(
+                "HOOK_BIG_BODY: %s agent=%s body=%.1fMB — check for accidentally-large hook payload",
+                hook_name, agent_id[:12] if agent_id != "<none>" else "<none>",
+                _body_kb / 1024,
+            )
     response = await call_next(request)
     if request.url.path.startswith("/api/hooks/") and response.status_code >= 400:
         agent_id = request.headers.get("X-Agent-Id", "<none>")

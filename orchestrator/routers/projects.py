@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import threading
 import time as _time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import yaml
@@ -433,6 +434,13 @@ _PROGRESS_CACHE_TTL = 600  # 10 minutes
 # terminates the subprocess so resume mid-generation cleans up cleanly.
 _INSIGHT_RUNS: dict[str, dict] = {}
 _INSIGHT_RUNS_LOCK = threading.Lock()
+
+# Shared pool for ALL claude-CLI subprocess spawns (insight extraction, retry
+# summaries, CLAUDE.md refresh, PROGRESS summarization). max_workers caps the
+# number of concurrent `claude -p` subprocesses; each can buffer hundreds of
+# MB of stdout via proc.communicate(), so unbounded spawning during mass agent
+# stop is a major OOM vector.
+INSIGHT_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="insight")
 
 
 def cancel_insight_run(agent_id: str) -> bool:
@@ -2228,15 +2236,13 @@ async def refresh_claudemd(name: str, db: Session = Depends(get_db)):
             except OSError as e:
                 logger.warning("Failed to read build file %s: %s", fpath, e)
 
-    # Mark as running and spawn background thread
+    # Mark as running and submit to bounded pool (caps concurrent claude -p)
     _claudemd_job_set(name, status="running")
-    thread = threading.Thread(
-        target=_refresh_claudemd_background,
-        args=(name, project_path, recent_agent_activity, current_claudemd,
-              progress_md, build_files_content),
-        daemon=True,
+    INSIGHT_EXECUTOR.submit(
+        _refresh_claudemd_background,
+        name, project_path, recent_agent_activity, current_claudemd,
+        progress_md, build_files_content,
     )
-    thread.start()
 
     return {"status": "started"}
 
@@ -2352,12 +2358,9 @@ async def summarize_progress(name: str, db: Session = Depends(get_db)):
         return {"status": "started"}
 
     _progress_job_set(name, status="running")
-    thread = threading.Thread(
-        target=_summarize_progress_background,
-        args=(name, project_path, session_context),
-        daemon=True,
+    INSIGHT_EXECUTOR.submit(
+        _summarize_progress_background, name, project_path, session_context,
     )
-    thread.start()
     return {"status": "started"}
 
 

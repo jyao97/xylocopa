@@ -2030,23 +2030,21 @@ async def stop_agent(agent_id: str, request: Request,
             agent.id, "STOPPED", agent.project,
             insight_status="generating",
         ))
-        thread = threading.Thread(
-            target=_run_agent_summary_background,
-            args=(agent.id, agent.name, _task_title, agent.project, _project_path),
-            daemon=True,
+        from routers.projects import INSIGHT_EXECUTOR
+        INSIGHT_EXECUTOR.submit(
+            _run_agent_summary_background,
+            agent.id, agent.name, _task_title, agent.project, _project_path,
         )
-        thread.start()
         logger.info("Spawned background summary for agent %s", agent.id)
 
     # Spawn retry summary for incomplete tasks (always, no toggle needed)
     if not task_complete and _retry_task_id and _project_path:
-        thread = threading.Thread(
-            target=_generate_retry_summary_background,
-            args=(agent.id, _retry_task_id, _retry_task_title,
-                  _retry_project_name, _project_path, incomplete_reason),
-            daemon=True,
+        from routers.projects import INSIGHT_EXECUTOR
+        INSIGHT_EXECUTOR.submit(
+            _generate_retry_summary_background,
+            agent.id, _retry_task_id, _retry_task_title,
+            _retry_project_name, _project_path, incomplete_reason,
         )
-        thread.start()
         logger.info("Spawned retry summary for task %s", _retry_task_id)
 
     return agent
@@ -2224,12 +2222,11 @@ async def regenerate_agent_insights(agent_id: str, db: Session = Depends(get_db)
         insight_status="generating",
     ))
 
-    thread = threading.Thread(
-        target=_run_agent_summary_background,
-        args=(agent.id, agent.name, _task_title, agent.project, _project_path),
-        daemon=True,
+    from routers.projects import INSIGHT_EXECUTOR
+    INSIGHT_EXECUTOR.submit(
+        _run_agent_summary_background,
+        agent.id, agent.name, _task_title, agent.project, _project_path,
     )
-    thread.start()
     logger.info("Regenerating insights for agent %s", agent.id)
     return {"success": True}
 

@@ -2370,6 +2370,11 @@ Here are the day's conversations (with timestamps):
             self._stale_session_retries.pop(agent.id, None)
             self._idle_no_pane_retries.pop(agent.id, None)
             self._known_subagents.pop(agent.id, None)
+            self._generation_ids.pop(agent.id, None)
+            # GHOST_DELIVERED instrumentation: clear ack-tracking entries
+            # for this agent so they don't accumulate forever after stop.
+            for _short in self._promote_ack_by_agent.pop(agent.id, []):
+                self._promote_ack_pending.pop(_short, None)
             # Clean up hook signal files (both new and legacy paths)
             from route_helpers import unlink_session_signals
             unlink_session_signals(agent.id)
@@ -2464,6 +2469,10 @@ Here are the day's conversations (with timestamps):
             self._cancel_launch_task(agent.id)
             self._stale_session_retries.pop(agent.id, None)
             self._idle_no_pane_retries.pop(agent.id, None)
+            self._known_subagents.pop(agent.id, None)
+            self._generation_ids.pop(agent.id, None)
+            for _short in self._promote_ack_by_agent.pop(agent.id, []):
+                self._promote_ack_pending.pop(_short, None)
 
         if emit:
             from websocket import emit_agent_update

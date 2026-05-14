@@ -997,16 +997,14 @@ async def regenerate_task_summary(task_id: str, db: Session = Depends(get_db)):
         task.id, task.status.value, task.project_name or "", title=task.title,
     ))
 
-    # Spawn background thread
-    from routers.projects import _generate_retry_summary_background
-    thread = threading.Thread(
-        target=_generate_retry_summary_background,
-        args=(prev_agent.id, task.id, task.title or "Unknown task",
-              task.project_name or "", project_path,
-              task.retry_context),
-        daemon=True,
+    # Submit to bounded pool (caps concurrent claude -p subprocesses)
+    from routers.projects import _generate_retry_summary_background, INSIGHT_EXECUTOR
+    INSIGHT_EXECUTOR.submit(
+        _generate_retry_summary_background,
+        prev_agent.id, task.id, task.title or "Unknown task",
+        task.project_name or "", project_path,
+        task.retry_context,
     )
-    thread.start()
     logger.info("Manual retry summary spawned for task %s (agent %s)", task_id, prev_agent.id)
 
     return TaskOut.model_validate(task)

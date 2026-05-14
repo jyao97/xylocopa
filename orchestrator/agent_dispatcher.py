@@ -221,52 +221,104 @@ def _write_rejected_unlinked_entry(
         logger.warning("_write_rejected_unlinked_entry: failed to write %s: %s", entry_path, e)
 
 
-def _find_claude_pid_for_session(session_id: str) -> int | None:
-    """Find a running claude PID attached to *session_id*.
+def _project_path_for_sid(session_id: str) -> str | None:
+    """Locate the registered project that owns *session_id*'s JSONL.
 
-    Walks /proc looking for processes with comm=='claude' owned by the
-    current uid. Matches by either:
-      1. session_id present in cmdline (covers `--resume <sid>` and
-         `--session-id <sid>` invocations).
-      2. /proc/PID/fd/* points at the session's .jsonl (covers fresh
-         `claude` invocations where the sid was assigned at startup).
+    Walks active projects and checks whether
+    ``<project_session_dir>/<sid>.jsonl`` (or any worktree's session dir)
+    exists.  Returns the project's path (not realpath — caller decides) or
+    None when no registered project owns this sid on disk.
 
-    Returns the first matching pid, or None.
+    Used as the cwd-first signal for sid → live PID resolution.  The JSONL
+    file is authoritative for "which project this session belongs to"
+    because Claude CLI writes it under an encoded cwd-derived directory.
     """
-    target_suffix = f"/{session_id}.jsonl"
+    from routers.projects import active_projects
+    db = SessionLocal()
     try:
-        uid = os.getuid()
-        for pid_name in os.listdir("/proc"):
-            if not pid_name.isdigit():
-                continue
-            pid = int(pid_name)
-            try:
-                if os.stat(f"/proc/{pid}").st_uid != uid:
+        projects = active_projects(db)
+    finally:
+        db.close()
+
+    for proj in projects:
+        real_project = os.path.realpath(proj.path)
+        # Top-level project session dir
+        if os.path.isfile(os.path.join(
+                session_source_dir(real_project), f"{session_id}.jsonl")):
+            return proj.path
+        # Worktree session dirs
+        wt_base = os.path.join(real_project, ".claude", "worktrees")
+        if not os.path.isdir(wt_base):
+            continue
+        try:
+            for wt_name in os.listdir(wt_base):
+                wt_path = os.path.join(wt_base, wt_name)
+                if not os.path.isdir(wt_path):
                     continue
-                with open(f"/proc/{pid}/comm") as f:
-                    if f.read().strip() != "claude":
-                        continue
-                # Strategy 1: cmdline
-                with open(f"/proc/{pid}/cmdline", "rb") as f:
-                    cmdline = f.read().replace(b"\0", b" ").decode("utf-8", errors="replace")
+                if os.path.isfile(os.path.join(
+                        session_source_dir(wt_path), f"{session_id}.jsonl")):
+                    return proj.path
+        except OSError:
+            continue
+    return None
+
+
+def _find_claude_pid_for_session(session_id: str) -> int | None:
+    """Find a live claude PID for *session_id*.
+
+    Resolution order (single deterministic chain, no fd introspection):
+      1. cmdline contains the sid — works for ``claude --resume <sid>``
+         and ``claude --session-id <sid>`` (orchestrator-managed agents
+         and most user invocations).
+      2. cwd-in-project — locate the project owning this sid via its
+         JSONL on disk, then find a non-orchestrator claude whose
+         ``/proc/<pid>/cwd`` lives inside that project tree.  Only
+         returned when there is a single candidate (ambiguity logged).
+
+    Returns the first matching pid, or None.  ``claude`` does not keep
+    its session JSONL open as a long-lived fd — it open/writes/closes
+    per turn — so any fd-based scan is unreliable and not attempted.
+    """
+    # Strategy 1: sid in cmdline (highest confidence)
+    try:
+        for pid in _platform.find_pids_by_name("claude"):
+            try:
+                cmdline = "\0".join(_platform.get_process_cmdline(pid))
                 if session_id in cmdline:
                     return pid
-                # Strategy 2: open file handles
-                fd_dir = f"/proc/{pid}/fd"
-                try:
-                    for fd_name in os.listdir(fd_dir):
-                        try:
-                            target = os.readlink(os.path.join(fd_dir, fd_name))
-                        except OSError:
-                            continue
-                        if target.endswith(target_suffix):
-                            return pid
-                except OSError:
-                    continue
             except (OSError, ValueError):
                 continue
-    except OSError:
-        pass
+    except (OSError, ValueError) as e:
+        logger.debug("_find_claude_pid_for_session: cmdline scan failed: %s", e)
+
+    # Strategy 2: cwd-in-project (covers plain `claude` invocations)
+    proj_path = _project_path_for_sid(session_id)
+    if not proj_path:
+        return None
+    real_project = os.path.realpath(proj_path)
+    candidates: list[int] = []
+    try:
+        for pid in _platform.find_pids_by_name("claude"):
+            if _is_orchestrator_process(pid):
+                continue
+            try:
+                cwd = _platform.get_process_cwd(pid)
+            except OSError:
+                continue
+            if cwd == real_project or cwd.startswith(real_project + "/"):
+                candidates.append(pid)
+    except (OSError, ValueError) as e:
+        logger.debug("_find_claude_pid_for_session: cwd scan failed: %s", e)
+        return None
+
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        logger.warning(
+            "_find_claude_pid_for_session: %d claude PIDs in project %s for "
+            "sid %s — ambiguous, returning None",
+            len(candidates), proj_path, session_id[:12],
+        )
     return None
 
 
@@ -1208,24 +1260,6 @@ def _get_session_cwd(jsonl_path: str) -> str | None:
     return None
 
 
-def _detect_pid_session_jsonl(claude_pid: int) -> str | None:
-    """Find the session JSONL that a Claude process currently has open.
-
-    Scans open file handles for ``.jsonl`` files under the Claude
-    projects directory.  Returns the session ID (filename without
-    extension) if found.
-    """
-    try:
-        for target in _platform.get_open_files(claude_pid):
-            if target.endswith(".jsonl") and "/.claude/projects/" in target:
-                sid = os.path.basename(target).replace(".jsonl", "")
-                if len(sid) >= 32 and "-" in sid:
-                    return sid
-    except Exception as e:
-        logger.debug("_detect_pid_session_jsonl: open files scan failed for PID %d: %s", claude_pid, e)
-    return None
-
-
 def _dedup_sig(text: str) -> str:
     """Normalize content for dedup comparison (backward-compat fallback).
 
@@ -1460,12 +1494,9 @@ def _detect_tmux_pane_for_session(session_id: str, project_path: str) -> str | N
         return user_candidates[0][0]
 
     if len(user_candidates) > 1:
-        # ---- Tier 3: match via direct OS file-handle check ----
-        for pane_id, info in user_candidates:
-            if _detect_pid_session_jsonl(info["pid"]) == session_id:
-                return pane_id
-
-        # Tier 4: fallback to debug-log PID (legacy Claude Code)
+        # ---- Tier 3: fallback to debug-log PID (legacy Claude Code) ----
+        # Note: a previous fd-scan tier was removed — claude does not keep
+        # its session JSONL fd open, so the scan always returned None.
         session_pid = _get_session_pid(session_id)
         if session_pid:
             for pane_id, info in user_candidates:

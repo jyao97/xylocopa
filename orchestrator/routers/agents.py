@@ -1720,10 +1720,10 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
     """
     from agent_dispatcher import (
         _build_tmux_claude_map,
-        _detect_pid_session_jsonl,
         _write_rejected_unlinked_entry,
         _write_unlinked_entry,
     )
+    from plat import platform as _platform
     from routers.projects import active_projects
     from route_helpers import session_signal_path
 
@@ -1788,10 +1788,14 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
                 pass
             continue
 
-        # Liveness: pane must still be running a (non-orchestrator) claude
-        # whose currently-open JSONL matches the stashed session_id.
-        # Filters out: user killed claude before refresh; another /clear
-        # rotated the sid past what the stash captured.
+        # Liveness: pane must still be running a non-orchestrator claude
+        # whose cwd matches the stashed cwd.  The stashed event itself is
+        # the authoritative sid for this pane (stash files are pane-keyed
+        # and overwrite, so the latest hook event is what's on disk).  We
+        # only verify the pane still has a live claude in the same dir;
+        # any sid-from-PID introspection is unreliable (claude doesn't
+        # keep its JSONL fd open) and was the cause of every stashed
+        # entry being silently dropped on replay.
         info = pane_map.get(pane)
         if not info or info["is_orchestrator"]:
             try:
@@ -1800,7 +1804,11 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
                 pass
             skipped += 1
             continue
-        if _detect_pid_session_jsonl(info["pid"]) != sid:
+        try:
+            live_cwd = _platform.get_process_cwd(info["pid"])
+        except OSError:
+            live_cwd = ""
+        if not live_cwd or os.path.realpath(live_cwd) != os.path.realpath(cwd):
             try:
                 os.unlink(fpath)
             except OSError:

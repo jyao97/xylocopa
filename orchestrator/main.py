@@ -190,11 +190,34 @@ async def lifespan(app: FastAPI):
     # invocation has materialized /tmp/tmux-<uid>/, and the first
     # `tmux new-session -d` from the orchestrator can race-fail. Preflight
     # `tmux start-server` is a no-op if already running.
+    #
+    # We launch tmux inside a transient systemd-user scope so the server
+    # lives in `user@.service/.../xylocopa-tmux.scope` instead of inheriting
+    # the orchestrator's `pm2-*.service` cgroup. Scopes don't react to OOM
+    # kills with cgroup-wide teardown the way services do — so an OOM in
+    # any agent's workload kills only the offender, leaving tmux + all
+    # other agent panes intact. Falls back to plain `tmux start-server`
+    # if systemd-run is unavailable (non-systemd hosts, no user manager).
     try:
         import subprocess as _sp_init
+        env = {**os.environ}
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
         r = _sp_init.run(
-            ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
+            [
+                "systemd-run", "--user", "--scope", "--quiet",
+                "--unit=xylocopa-tmux", "--collect",
+                "tmux", "start-server",
+            ],
+            capture_output=True, text=True, timeout=5, env=env,
         )
+        if r.returncode != 0:
+            logger.info(
+                "tmux preflight: systemd-run unavailable (rc=%d), falling back to plain start-server",
+                r.returncode,
+            )
+            r = _sp_init.run(
+                ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
+            )
         if r.returncode == 0:
             logger.info("tmux preflight: server ready")
         else:

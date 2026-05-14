@@ -1154,9 +1154,15 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
         # Notify for unanswered interactive items
         _notify_interactive(ad, agent, new_turns)
 
-        # Generate video thumbnails for new assistant turns
+        # Generate video thumbnails for new assistant turns. Pre-filter
+        # with a cheap substring check so we only spawn a worker thread
+        # when the content actually mentions a video extension —
+        # otherwise every assistant turn would queue a no-op task whose
+        # closure pinned the full content string in memory until the
+        # default thread pool drained (a slow leak under load).
+        from thumbnails import content_likely_has_video
         for _r, _c, *_ in new_turns:
-            if _r == "assistant" and _c:
+            if _r == "assistant" and _c and content_likely_has_video(_c):
                 asyncio.ensure_future(asyncio.to_thread(
                     generate_thumbnails_for_message, _c, ctx.project_path,
                 ))

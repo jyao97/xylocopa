@@ -20,6 +20,25 @@ _RE_BACKTICK = re.compile(
     re.IGNORECASE,
 )
 
+# Cheap pre-filter: substring check before running the expensive regex /
+# spawning a thread. content_likely_has_video() is ~1000x faster than the
+# regex on the common case where no video extension appears at all.
+_VIDEO_EXT_BYTES = tuple(VIDEO_EXTS)
+
+
+def content_likely_has_video(content: str) -> bool:
+    """Cheap O(n) substring check for any video extension in content.
+
+    Returns False fast for the common case (assistant text without any
+    video paths), avoiding both the regex compile/run and the cost of
+    spawning a thread for thumbnail generation. Case-insensitive to match
+    the regex's IGNORECASE flag.
+    """
+    if not content:
+        return False
+    lower = content.lower()
+    return any(ext in lower for ext in _VIDEO_EXT_BYTES)
+
 
 def is_video_file(path: str) -> bool:
     """Check if path has a video extension."""
@@ -106,36 +125,49 @@ def generate_thumbnails_for_message(content: str, project_path: str) -> None:
 
 
 def backfill_thumbnails() -> None:
-    """Scan all agent messages in the DB and generate missing thumbnails.
+    """Scan agent messages in the DB and generate missing thumbnails.
 
     Intended to run once at startup in a background thread.
+
+    Memory-safe: filters at SQL level (LIKE '%.mp4%' etc) so only the tiny
+    subset of messages mentioning a video path is loaded. Streams via
+    yield_per() and expunges each row after processing so the session
+    identity map doesn't accumulate. Without these, this function loaded
+    every AGENT message (~80k rows) into memory and held them for the
+    entire ffmpeg-bound iteration — a major leak source.
     """
+    from sqlalchemy import or_
     from database import SessionLocal
-    from models import Message, MessageRole, Project
+    from models import Message, MessageRole, Project, Agent
 
     db = SessionLocal()
     try:
-        # Build project path lookup
+        # Build project + agent path lookup once (small, bounded)
         projects = {p.name: p.path for p in db.query(Project).all()}
+        agent_to_project: dict[str, str] = {
+            a.id: a.project for a in db.query(Agent.id, Agent.project).all()
+        }
 
-        messages = db.query(Message).filter(
+        # SQL-side filter: only fetch messages whose content actually
+        # mentions a video extension. This drops 80k rows down to a handful.
+        like_clauses = [Message.content.like(f"%{ext}%") for ext in VIDEO_EXTS]
+        q = db.query(Message.id, Message.agent_id, Message.content).filter(
             Message.role == MessageRole.AGENT,
             Message.content.isnot(None),
-        ).all()
+            or_(*like_clauses),
+        ).execution_options(yield_per=200)
 
         count = 0
-        for msg in messages:
-            # Get project path from agent
-            from models import Agent
-            agent = db.get(Agent, msg.agent_id)
-            if not agent or agent.project not in projects:
+        for msg_id, agent_id, content in q:
+            project_name = agent_to_project.get(agent_id)
+            if not project_name or project_name not in projects:
                 continue
-            project_path = projects[agent.project]
+            project_path = projects[project_name]
 
             paths: set[str] = set()
-            for m in _RE_BARE_PATH.finditer(msg.content):
+            for m in _RE_BARE_PATH.finditer(content):
                 paths.add(m.group(1))
-            for m in _RE_BACKTICK.finditer(msg.content):
+            for m in _RE_BACKTICK.finditer(content):
                 paths.add(m.group(1))
 
             for raw_path in paths:

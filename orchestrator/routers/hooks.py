@@ -1621,15 +1621,57 @@ async def hook_agent_session_start(request: Request):
     cwd = request.headers.get("X-Session-Cwd", "").strip()
     tmux_pane = request.headers.get("X-Tmux-Pane", "").strip()
 
-    if not cwd or not tmux_pane:
-        logger.info("SessionStart hook: unmanaged session %s missing cwd=%r pane=%r — skipping",
-                     session_id[:12], bool(cwd), bool(tmux_pane))
+    if not cwd:
+        logger.info("SessionStart hook: unmanaged session %s missing cwd — skipping",
+                     session_id[:12])
         return {}
 
-    # If pane already owned by active agent → rotation signal
+    # Match CWD to a project + check session not already owned BEFORE the
+    # pane check, so we can emit a visible "rejected" marker when the user
+    # is in a project dir but ran claude outside tmux (instead of silently
+    # dropping). Adopt itself still requires a pane.
     from database import SessionLocal as _SL
     _db = _SL()
     try:
+        cwd_real = os.path.realpath(cwd)
+        from routers.projects import active_projects
+        projects = active_projects(_db)
+        matched_proj = None
+        for p in projects:
+            proj_real = os.path.realpath(p.path)
+            if cwd_real == proj_real or cwd_real.startswith(proj_real + "/"):
+                matched_proj = p
+                break
+        if not matched_proj:
+            logger.info("SessionStart hook: session %s cwd %s doesn't match any project",
+                        session_id[:12], cwd)
+            return {}
+
+        existing = _db.query(Agent).filter(Agent.session_id == session_id).first()
+        if existing:
+            logger.info("SessionStart hook: session %s already owned by agent %s",
+                        session_id[:12], existing.id[:8])
+            return {}
+
+        # cwd matches a project but claude isn't in tmux — record a
+        # rejected entry so the UI can tell the user we saw it but can't
+        # adopt it (the design requires claude to be in a tmux pane on
+        # this orchestrator's tmux server).
+        if not tmux_pane:
+            from agent_dispatcher import _write_rejected_unlinked_entry
+            _write_rejected_unlinked_entry(
+                session_id=session_id,
+                cwd=cwd_real,
+                project_name=matched_proj.name,
+                reason="missing_tmux_pane",
+            )
+            logger.info(
+                "SessionStart hook: session %s in project %s not in tmux — rejected entry recorded",
+                session_id[:12], matched_proj.name,
+            )
+            return {}
+
+        # If pane already owned by active agent → rotation signal
         pane_owner = _db.query(Agent).filter(
             Agent.tmux_pane == tmux_pane,
             Agent.status.notin_([AgentStatus.STOPPED, AgentStatus.ERROR]),
@@ -1647,30 +1689,6 @@ async def hook_agent_session_start(request: Request):
             return {}
     finally:
         _db.close()
-
-    # Match CWD to a registered project
-    _db2 = _SL()
-    try:
-        cwd_real = os.path.realpath(cwd)
-        from routers.projects import active_projects
-        projects = active_projects(_db2)
-        matched_proj = None
-        for p in projects:
-            proj_real = os.path.realpath(p.path)
-            if cwd_real == proj_real or cwd_real.startswith(proj_real + "/"):
-                matched_proj = p
-                break
-        if not matched_proj:
-            logger.info("SessionStart hook: session %s cwd %s doesn't match any project", session_id[:12], cwd)
-            return {}
-
-        # Guard: don't create entry if session already owned
-        existing = _db2.query(Agent).filter(Agent.session_id == session_id).first()
-        if existing:
-            logger.info("SessionStart hook: session %s already owned by agent %s", session_id[:12], existing.id[:8])
-            return {}
-    finally:
-        _db2.close()
 
     # Resolve tmux session name
     tmux_session_name = None

@@ -162,6 +162,39 @@ def _write_unlinked_entry(
         logger.warning("_write_unlinked_entry: failed to write %s: %s", entry_path, e)
 
 
+def _write_rejected_unlinked_entry(
+    session_id: str,
+    cwd: str,
+    project_name: str,
+    reason: str,
+):
+    """Persist a 'detected but not adoptable' marker for UI visibility.
+
+    Surfaces the case where a claude SessionStart fired with cwd inside a
+    registered project but the rest of the adopt preconditions weren't met
+    (e.g. claude not running in a tmux pane). Without this, the hook would
+    drop silently and the user has no signal that detection ran.
+    """
+    import time as _time
+    from config import BACKUP_DIR
+    udir = os.path.join(BACKUP_DIR, "unlinked-sessions")
+    os.makedirs(udir, exist_ok=True)
+    key = (session_id or "unknown").replace("/", "_")[:32] or "unknown"
+    entry_path = os.path.join(udir, f"rejected-{key}.json")
+    try:
+        with open(entry_path, "w") as f:
+            json.dump({
+                "session_id": session_id,
+                "cwd": cwd,
+                "project_name": project_name,
+                "reason": reason,
+                "rejected": True,
+                "timestamp": _time.time(),
+            }, f)
+    except OSError as e:
+        logger.warning("_write_rejected_unlinked_entry: failed to write %s: %s", entry_path, e)
+
+
 # Image metadata injected by Claude Code's Read tool — internal only, hide from UI
 
 

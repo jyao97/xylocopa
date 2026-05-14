@@ -1282,10 +1282,12 @@ def _get_unlinked_dir() -> str:
     return _UNLINKED_DIR
 
 
-def _clean_stale_unlinked(max_age: int = 3600):
+def _clean_stale_unlinked(max_age: int = 3600, rejected_max_age: int = 86400):
     """Remove unlinked session entries whose JSONL hasn't been updated in max_age seconds.
 
     Preserves entries whose tmux pane still has a running process.
+    Rejected entries (no pane/transcript) are aged out separately by
+    rejected_max_age — they're a UI breadcrumb, not a live session.
     """
     udir = _get_unlinked_dir()
     now = _time.time()
@@ -1298,6 +1300,13 @@ def _clean_stale_unlinked(max_age: int = 3600):
             try:
                 with open(fpath) as f:
                     info = json.load(f)
+                if info.get("rejected"):
+                    age = now - float(info.get("timestamp") or 0)
+                    if age < rejected_max_age:
+                        continue
+                    os.unlink(fpath)
+                    removed += 1
+                    continue
                 transcript = info.get("transcript_path", "")
                 if transcript and os.path.isfile(transcript):
                     mtime = os.path.getmtime(transcript)
@@ -1524,6 +1533,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
     from agent_dispatcher import (
         _build_tmux_claude_map,
         _detect_pid_session_jsonl,
+        _write_rejected_unlinked_entry,
         _write_unlinked_entry,
     )
     from routers.projects import active_projects
@@ -1531,7 +1541,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
 
     stash_dir = "/tmp/xy-pending-unlinked"
     if not os.path.isdir(stash_dir):
-        return {"ok": True, "replayed": 0, "rotated": 0, "skipped": 0}
+        return {"ok": True, "replayed": 0, "rotated": 0, "rejected": 0, "skipped": 0}
 
     projects = active_projects(db)
     project_reals = [(p, os.path.realpath(p.path)) for p in projects]
@@ -1539,7 +1549,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
     # pane is dead or whose session_id has rotated past the stashed value.
     pane_map = _build_tmux_claude_map()
 
-    replayed = rotated = skipped = 0
+    replayed = rotated = rejected = skipped = 0
     for fname in os.listdir(stash_dir):
         if not fname.endswith(".json"):
             continue
@@ -1557,7 +1567,33 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
         sid = (ev.get("session_id") or "").strip()
         cwd = (ev.get("cwd") or "").strip()
         pane = (ev.get("tmux_pane") or "").strip()
-        if not sid or not cwd or not pane:
+        if not sid or not cwd:
+            try:
+                os.unlink(fpath)
+            except OSError:
+                pass
+            continue
+
+        # Pane-less stash entry: surface as rejected if cwd is in a project.
+        # Mirrors the live hook path so non-tmux claude detections don't
+        # vanish when backend was offline at session start.
+        if not pane:
+            cwd_real = os.path.realpath(cwd)
+            matched = next(
+                (p for p, p_real in project_reals
+                 if cwd_real == p_real or cwd_real.startswith(p_real + "/")),
+                None,
+            )
+            if matched and not db.query(Agent).filter(Agent.session_id == sid).first():
+                _write_rejected_unlinked_entry(
+                    session_id=sid,
+                    cwd=cwd_real,
+                    project_name=matched.name,
+                    reason="missing_tmux_pane",
+                )
+                rejected += 1
+            else:
+                skipped += 1
             try:
                 os.unlink(fpath)
             except OSError:
@@ -1639,12 +1675,18 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
             pass
         replayed += 1
 
-    if replayed or rotated or skipped:
+    if replayed or rotated or rejected or skipped:
         logger.info(
-            "replay_pending_unlinked: replayed=%d rotated=%d skipped=%d",
-            replayed, rotated, skipped,
+            "replay_pending_unlinked: replayed=%d rotated=%d rejected=%d skipped=%d",
+            replayed, rotated, rejected, skipped,
         )
-    return {"ok": True, "replayed": replayed, "rotated": rotated, "skipped": skipped}
+    return {
+        "ok": True,
+        "replayed": replayed,
+        "rotated": rotated,
+        "rejected": rejected,
+        "skipped": skipped,
+    }
 
 
 @router.post("/api/unlinked-sessions/replay")

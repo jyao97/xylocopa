@@ -945,6 +945,11 @@ def delete_agent(agent_id: str):
         pass
     except OSError as e:
         logger.warning("Failed to delete display file %s: %s", path, e)
+    # Drop in-memory pre-sent index for this agent so the dict doesn't
+    # retain entries for deleted agents (was a slow leak vector).
+    with _pre_sent_lock:
+        _pre_sent_index.pop(agent_id, None)
+        _pre_sent_index_ready.discard(agent_id)
 
 
 def startup_rebuild_all():

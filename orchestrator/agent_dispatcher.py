@@ -2576,7 +2576,15 @@ Here are the day's conversations (with timestamps):
             "ack_received": False,
         }
         self._promote_ack_pending[short] = rec
-        self._promote_ack_by_agent.setdefault(agent_id, []).append(short)
+        _queue = self._promote_ack_by_agent.setdefault(agent_id, [])
+        _queue.append(short)
+        # Cap per-agent pending queue. Records that age out without ack are
+        # logged once by the deadline task; keeping them indefinitely was a
+        # slow leak (~500B each) for long-running agents that never stop.
+        # 256 is comfortably larger than any realistic in-flight depth.
+        while len(_queue) > 256:
+            _old = _queue.pop(0)
+            self._promote_ack_pending.pop(_old, None)
         asyncio.ensure_future(self._promote_ack_deadline(short))
 
     async def _promote_ack_deadline(self, msg_short: str) -> None:

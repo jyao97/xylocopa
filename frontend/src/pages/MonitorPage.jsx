@@ -495,7 +495,36 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                     />
                   );
                 })()}
+                {sysStats.chats && sysStats.chats.count > 0 && (
+                  <UsageBar
+                    label={`Managed chats (${sysStats.chats.count})`}
+                    pct={sysStats.memory ? Math.min(Math.round(sysStats.chats.total_mb / (sysStats.memory.total_gb * 1024) * 100), 100) : 0}
+                    detail={
+                      sysStats.chats.total_mb >= 1024
+                        ? `${(sysStats.chats.total_mb / 1024).toFixed(1)} GB total`
+                        : `${Math.round(sysStats.chats.total_mb)} MB total`
+                    }
+                  />
+                )}
               </div>
+              {/* Per-chat breakdown — only show when more than one chat */}
+              {sysStats.chats && sysStats.chats.count > 1 && (
+                <div className="rounded-xl bg-surface shadow-card p-4">
+                  <p className="text-xs text-label font-medium mb-2">Per-chat memory</p>
+                  <div className="space-y-1.5 text-xs">
+                    {sysStats.chats.items.map((c) => (
+                      <div key={c.pid} className="flex justify-between items-center">
+                        <span className="text-dim font-mono">{(c.session_id || '?').slice(0, 8)}</span>
+                        <span className="text-body tabular-nums">
+                          {c.mem_mb >= 1024
+                            ? `${(c.mem_mb / 1024).toFixed(1)} GB`
+                            : `${Math.round(c.mem_mb)} MB`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* GPUs */}
               {sysStats.gpus && sysStats.gpus.length > 0 && (

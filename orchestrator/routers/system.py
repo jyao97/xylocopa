@@ -552,7 +552,7 @@ async def auth_diag(request: Request):
 
 
 @router.get("/api/system/stats")
-async def system_stats():
+async def system_stats(request: Request):
     """System resource usage — CPU, memory, disk, and optional GPU."""
     import shutil
     import subprocess
@@ -604,6 +604,75 @@ async def system_stats():
 
     # Legacy alias for older frontends; remove once UI is fully migrated.
     stats["agenthive"] = stats["xylocopa"]
+
+    # xylo-managed chats — tmux'd `claude --session-id <sid>` processes
+    # and their MCP server children. These run under user.slice / the
+    # detached tmux server (NOT under orchestrator), so the "Xylocopa"
+    # widget can't see them via proc.children(). We discover them via
+    # psutil.process_iter() + cmdline match.
+    try:
+        import psutil
+        # Map every session_id the orchestrator currently knows about, so
+        # we only count CLI processes for xylo-managed sessions (not random
+        # claude invocations the user might have running in a separate
+        # terminal that we don't own).
+        from agent_dispatcher import _build_tmux_claude_map  # cheap, cached per tick
+        try:
+            ad = request.app.state.agent_dispatcher
+            tmux_map = ad._get_tmux_map() if ad else _build_tmux_claude_map()
+        except Exception:
+            tmux_map = _build_tmux_claude_map()
+        known_session_ids = {
+            info.get("session_id") for info in (tmux_map or {}).values()
+            if info.get("session_id")
+        }
+        # Build the chat-PID set from cmdline (matches `claude --session-id …`)
+        # and walk every descendant (MCP server, bash subshells, etc.).
+        chat_total_mb = 0.0
+        chat_count = 0
+        chats: list[dict] = []
+        for p in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                cl = p.info.get("cmdline") or []
+                if not cl or "claude" not in (p.info.get("name") or "").lower():
+                    continue
+                if "--session-id" not in " ".join(cl):
+                    continue
+                # Extract session_id from the cmdline
+                sid = None
+                for i, tok in enumerate(cl):
+                    if tok == "--session-id" and i + 1 < len(cl):
+                        sid = cl[i + 1]
+                        break
+                if known_session_ids and sid not in known_session_ids:
+                    continue
+                # Sum CLI RSS + all descendants (MCP server, bash, etc.)
+                rss = p.memory_info().rss
+                for c in p.children(recursive=True):
+                    try:
+                        rss += c.memory_info().rss
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                rss_mb = rss / (1024 * 1024)
+                chat_total_mb += rss_mb
+                chat_count += 1
+                chats.append({
+                    "pid": p.info["pid"],
+                    "session_id": sid,
+                    "mem_mb": round(rss_mb, 1),
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        stats["chats"] = {
+            "count": chat_count,
+            "total_mb": round(chat_total_mb, 1),
+            # Per-chat breakdown for the popover. Capped at 50 just so the
+            # response stays compact under unusual conditions.
+            "items": sorted(chats, key=lambda c: -c["mem_mb"])[:50],
+        }
+    except (ImportError, Exception):
+        logger.debug("system_stats: chat enumeration failed", exc_info=True)
+        stats["chats"] = None
 
     return stats
 

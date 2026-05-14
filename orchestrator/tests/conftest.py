@@ -84,8 +84,17 @@ def db_session(db_engine):
 
 
 @pytest.fixture()
-def client(db_engine):
-    """Create a test HTTP client with the DB dependency overridden."""
+async def client(db_engine):
+    """Create a test HTTP client with the DB dependency overridden.
+
+    Async fixture because the AsyncClient must be closed under the same
+    event loop that ran the test.  Without ``await c.aclose()``, the
+    client is finalized by the GC later — under a closed event loop —
+    which raises RuntimeError on connection cleanup and surfaces as
+    spurious failures in tests that run after the affected one
+    (observed: ``test_pre_sent_reader::test_pre_sent_endpoint_returns_
+    index_snapshot`` in the full-suite run only).
+    """
     from httpx import ASGITransport, AsyncClient
     from database import get_db
     from main import app
@@ -103,8 +112,11 @@ def client(db_engine):
 
     transport = ASGITransport(app=app)
     c = AsyncClient(transport=transport, base_url="http://test")
-    yield c
-    app.dependency_overrides.clear()
+    try:
+        yield c
+    finally:
+        await c.aclose()
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture()

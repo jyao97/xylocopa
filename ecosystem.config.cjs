@@ -60,6 +60,11 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       restart_delay: 3000,
+      // Safety net: if RSS grows past 8GB, pm2 graceful-restarts before
+      // the kernel OOM-kills the whole user.slice (which previously took
+      // down every tmux session on the host). Real steady-state is ~200MB,
+      // so 8GB is comfortably above any normal usage spike.
+      max_memory_restart: '8G',
       log_file: path.join(ROOT, 'logs', 'backend-pm2.log'),
       error_file: path.join(ROOT, 'logs', 'backend-pm2-error.log'),
       merge_logs: true,

@@ -397,6 +397,39 @@ async def lifespan(app: FastAPI):
 
     ws_prune_task = asyncio.create_task(_ws_prune_loop())
 
+    # TEMP DEBUG: RSS sampler — logs WARNING when RSS climbs past
+    # successive thresholds (200MB / 500MB / 1GB / 2GB / 5GB / 10GB / 20GB)
+    # so the next OOM cascade leaves a timeline of which operations
+    # preceded each jump. Cheap (one /proc read per minute).
+    async def _rss_watch_loop():
+        thresholds_mb = [200, 500, 1000, 2000, 5000, 10000, 20000]
+        crossed: set[int] = set()
+        prev_rss_mb = 0
+        while True:
+            await asyncio.sleep(60)
+            try:
+                with open(f"/proc/{os.getpid()}/status") as f:
+                    rss_mb = next(
+                        int(line.split()[1]) // 1024
+                        for line in f if line.startswith("VmRSS:")
+                    )
+            except (OSError, StopIteration, ValueError):
+                continue
+            for t in thresholds_mb:
+                if rss_mb >= t and t not in crossed:
+                    crossed.add(t)
+                    logger.warning("RSS_WATCH: crossed %d MB (now %d MB)", t, rss_mb)
+            # Also log a "growing fast" warning if RSS grew >300MB in the
+            # last minute — that's the leak smoke alarm.
+            if rss_mb - prev_rss_mb > 300 and prev_rss_mb > 0:
+                logger.warning(
+                    "RSS_WATCH: jumped %d MB in last minute (%d → %d MB)",
+                    rss_mb - prev_rss_mb, prev_rss_mb, rss_mb,
+                )
+            prev_rss_mb = rss_mb
+
+    rss_watch_task = asyncio.create_task(_rss_watch_loop())
+
     # Start session-viewing time-tracking loop
     from view_tracking import run_tick_loop as _view_tick
     view_track_task = asyncio.create_task(_view_tick())
@@ -454,7 +487,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    for task in (agent_dispatch_task, backup_task, session_cache_task, ws_prune_task, view_track_task, daily_heartbeat_task, cc_session_reconcile_task):
+    for task in (agent_dispatch_task, backup_task, session_cache_task, ws_prune_task, rss_watch_task, view_track_task, daily_heartbeat_task, cc_session_reconcile_task):
         if task:
             task.cancel()
             try:

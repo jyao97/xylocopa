@@ -605,74 +605,78 @@ async def system_stats(request: Request):
     # Legacy alias for older frontends; remove once UI is fully migrated.
     stats["agenthive"] = stats["xylocopa"]
 
-    # xylo-managed chats — tmux'd `claude --session-id <sid>` processes
-    # and their MCP server children. These run under user.slice / the
-    # detached tmux server (NOT under orchestrator), so the "Xylocopa"
-    # widget can't see them via proc.children(). We discover them via
-    # psutil.process_iter() + cmdline match.
+    # xylo-managed chats — RSS of every active xylo agent's claude CLI
+    # plus its descendants (MCP server, bash, etc.). These live under
+    # the detached tmux server (NOT orchestrator), so the "Xylocopa"
+    # widget can't see them via proc.children().
+    #
+    # Precise lookup (no process_iter scan): DB → active agents → each
+    # agent's tmux_pane → tmux's pane_pid → the claude child of that
+    # pane's bash. One DB query + one `tmux list-panes` shellout total.
     try:
         import psutil
-        # Map every session_id the orchestrator currently knows about, so
-        # we only count CLI processes for xylo-managed sessions (not random
-        # claude invocations the user might have running in a separate
-        # terminal that we don't own).
-        from agent_dispatcher import _build_tmux_claude_map  # cheap, cached per tick
+        from models import Agent, AgentStatus
+        # 1) active xylo agents with a tmux pane
+        _db = SessionLocal()
         try:
-            ad = request.app.state.agent_dispatcher
-            tmux_map = ad._get_tmux_map() if ad else _build_tmux_claude_map()
-        except Exception:
-            tmux_map = _build_tmux_claude_map()
-        known_session_ids = {
-            info.get("session_id") for info in (tmux_map or {}).values()
-            if info.get("session_id")
-        }
-        # Build the chat-PID set from cmdline (matches `claude --session-id …`)
-        # and walk every descendant (MCP server, bash subshells, etc.).
+            agents_with_panes = [
+                (a.id, a.tmux_pane) for a in _db.query(Agent)
+                .filter(
+                    Agent.status.in_([AgentStatus.IDLE, AgentStatus.EXECUTING, AgentStatus.STARTING]),
+                    Agent.tmux_pane.isnot(None),
+                ).all()
+            ]
+        finally:
+            _db.close()
+        # 2) tmux pane_id → pane_pid (the bash root inside the pane)
+        pane_pids: dict[str, int] = {}
+        try:
+            _r = subprocess.run(
+                ["tmux", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in _r.stdout.splitlines():
+                parts = line.split()
+                if len(parts) == 2 and parts[1].isdigit():
+                    pane_pids[parts[0]] = int(parts[1])
+        except (subprocess.SubprocessError, FileNotFoundError, OSError):
+            pass
+        # 3) for each (agent, pane), find the claude child of the bash
         chat_total_mb = 0.0
-        chat_count = 0
         chats: list[dict] = []
-        for p in psutil.process_iter(["pid", "name", "cmdline"]):
+        for agent_id, pane in agents_with_panes:
+            bash_pid = pane_pids.get(pane)
+            if not bash_pid:
+                continue
             try:
-                cl = p.info.get("cmdline") or []
-                if not cl or "claude" not in (p.info.get("name") or "").lower():
-                    continue
-                # Match BOTH initial-launch and resume cmdlines:
-                #   claude --session-id <sid> ...    (fresh launch)
-                #   claude --resume <sid> ...        (resumed)
-                sid = None
-                for i, tok in enumerate(cl):
-                    if tok in ("--session-id", "--resume") and i + 1 < len(cl):
-                        sid = cl[i + 1]
-                        break
-                if sid is None:
-                    continue
-                if known_session_ids and sid not in known_session_ids:
-                    continue
-                # Sum CLI RSS + all descendants (MCP server, bash, etc.)
-                rss = p.memory_info().rss
-                for c in p.children(recursive=True):
+                bash_proc = psutil.Process(bash_pid)
+                claude_proc = None
+                for child in bash_proc.children(recursive=False):
                     try:
-                        rss += c.memory_info().rss
+                        if (child.name() or "").lower() == "claude":
+                            claude_proc = child
+                            break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+                if claude_proc is None:
+                    continue
+                rss = claude_proc.memory_info().rss
+                for desc in claude_proc.children(recursive=True):
+                    try:
+                        rss += desc.memory_info().rss
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
-                rss_mb = rss / (1024 * 1024)
-                chat_total_mb += rss_mb
-                chat_count += 1
-                chats.append({
-                    "pid": p.info["pid"],
-                    "session_id": sid,
-                    "mem_mb": round(rss_mb, 1),
-                })
+                mb = rss / (1024 * 1024)
+                chat_total_mb += mb
+                chats.append({"agent_id": agent_id, "mem_mb": round(mb, 1)})
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         stats["chats"] = {
-            "count": chat_count,
+            "count": len(chats),
             "total_mb": round(chat_total_mb, 1),
-            # Per-chat breakdown for the popover. Capped at 50 just so the
-            # response stays compact under unusual conditions.
-            "items": sorted(chats, key=lambda c: -c["mem_mb"])[:50],
+            "items": sorted(chats, key=lambda c: -c["mem_mb"]),
         }
-    except (ImportError, Exception):
+    except Exception:
         logger.debug("system_stats: chat enumeration failed", exc_info=True)
         stats["chats"] = None
 

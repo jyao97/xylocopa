@@ -636,14 +636,16 @@ async def system_stats(request: Request):
                 cl = p.info.get("cmdline") or []
                 if not cl or "claude" not in (p.info.get("name") or "").lower():
                     continue
-                if "--session-id" not in " ".join(cl):
-                    continue
-                # Extract session_id from the cmdline
+                # Match BOTH initial-launch and resume cmdlines:
+                #   claude --session-id <sid> ...    (fresh launch)
+                #   claude --resume <sid> ...        (resumed)
                 sid = None
                 for i, tok in enumerate(cl):
-                    if tok == "--session-id" and i + 1 < len(cl):
+                    if tok in ("--session-id", "--resume") and i + 1 < len(cl):
                         sid = cl[i + 1]
                         break
+                if sid is None:
+                    continue
                 if known_session_ids and sid not in known_session_ids:
                     continue
                 # Sum CLI RSS + all descendants (MCP server, bash, etc.)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Bell, BellOff, Link2, ChevronDown, ChevronUp } from "lucide-react";
+import { Bell, BellOff, Link2, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, convertAndAdoptUnlinkedSession, unstarSession, clog } from "../lib/api";
+import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, convertAndAdoptUnlinkedSession, dropUnlinkedSession, unstarSession, clog } from "../lib/api";
 import { relativeTime } from "../lib/formatters";
 import { POLL_INTERVAL, SYNC_SETTLE_DELAY_GLOBAL } from "../lib/constants";
 import PageHeader from "../components/PageHeader";
@@ -193,6 +193,19 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
       setAdoptingId(null);
     }
   }, [showToast, load]);
+
+  const handleDrop = useCallback(async (session) => {
+    const fileKey = (session.file || "").replace(/\.json$/, "");
+    if (!fileKey) return;
+    // Optimistic remove; reconcile on next poll if it failed.
+    setUnlinked((prev) => prev.filter((s) => s !== session));
+    try {
+      await dropUnlinkedSession(fileKey);
+    } catch (err) {
+      showToast(err.message || "Failed to dismiss", "error");
+      loadUnlinked();
+    }
+  }, [showToast, loadUnlinked]);
 
   const handleConvertAndAdopt = useCallback(async (session) => {
     const fileKey = (session.file || "").replace(/\.json$/, "");
@@ -782,6 +795,14 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                       >
                         {adoptingId === fk ? "Linking…" : "Adopt"}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDrop(s)}
+                        className="shrink-0 p-1 rounded-full text-faint hover:text-dim hover:bg-hover transition-colors"
+                        title="Dismiss — won't re-appear if detected again"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 })}
@@ -816,6 +837,14 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                           {adoptingId === fk ? "Moving…" : "Move to tmux"}
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleDrop(s)}
+                        className="shrink-0 p-1 rounded-full text-faint hover:text-dim hover:bg-hover transition-colors"
+                        title="Dismiss — won't re-appear if detected again"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 })}

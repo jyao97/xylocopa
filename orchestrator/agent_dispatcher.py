@@ -140,6 +140,9 @@ def _write_unlinked_entry(
     Creates a JSON file in the unlinked-sessions directory (under BACKUP_DIR)
     keyed by tmux pane. Overwrites existing entry for the same pane (session
     rotation updates the session_id).
+
+    Preserves ``dropped: true`` if the user previously dismissed this same
+    session_id — re-detecting it shouldn't bring it back.
     """
     import time as _time
     from config import BACKUP_DIR
@@ -147,6 +150,15 @@ def _write_unlinked_entry(
     os.makedirs(udir, exist_ok=True)
     file_key = f"pane-{(tmux_pane or 'unknown').replace('%', '').replace('/', '_')}"
     entry_path = os.path.join(udir, f"{file_key}.json")
+    dropped = False
+    if os.path.isfile(entry_path):
+        try:
+            with open(entry_path) as _f:
+                _existing = json.load(_f)
+            if _existing.get("dropped") and _existing.get("session_id") == session_id:
+                dropped = True
+        except (OSError, json.JSONDecodeError):
+            pass
     try:
         with open(entry_path, "w") as f:
             json.dump({
@@ -157,6 +169,7 @@ def _write_unlinked_entry(
                 "tmux_session": tmux_session,
                 "project_name": project_name,
                 "timestamp": _time.time(),
+                **({"dropped": True} if dropped else {}),
             }, f)
     except OSError as e:
         logger.warning("_write_unlinked_entry: failed to write %s: %s", entry_path, e)
@@ -174,6 +187,9 @@ def _write_rejected_unlinked_entry(
     registered project but the rest of the adopt preconditions weren't met
     (e.g. claude not running in a tmux pane). Without this, the hook would
     drop silently and the user has no signal that detection ran.
+
+    Preserves ``dropped: true`` if the user previously dismissed this same
+    session_id.
     """
     import time as _time
     from config import BACKUP_DIR
@@ -181,6 +197,15 @@ def _write_rejected_unlinked_entry(
     os.makedirs(udir, exist_ok=True)
     key = (session_id or "unknown").replace("/", "_")[:32] or "unknown"
     entry_path = os.path.join(udir, f"rejected-{key}.json")
+    dropped = False
+    if os.path.isfile(entry_path):
+        try:
+            with open(entry_path) as _f:
+                _existing = json.load(_f)
+            if _existing.get("dropped") and _existing.get("session_id") == session_id:
+                dropped = True
+        except (OSError, json.JSONDecodeError):
+            pass
     try:
         with open(entry_path, "w") as f:
             json.dump({
@@ -190,6 +215,7 @@ def _write_rejected_unlinked_entry(
                 "reason": reason,
                 "rejected": True,
                 "timestamp": _time.time(),
+                **({"dropped": True} if dropped else {}),
             }, f)
     except OSError as e:
         logger.warning("_write_rejected_unlinked_entry: failed to write %s: %s", entry_path, e)

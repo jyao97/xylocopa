@@ -1373,6 +1373,10 @@ async def list_unlinked_sessions(db: Session = Depends(get_db)):
             try:
                 with open(fpath) as f:
                     info = json.load(f)
+                # User-dismissed entries stay on disk (so re-detection
+                # doesn't bring them back) but are hidden from the UI.
+                if info.get("dropped"):
+                    continue
                 sid = info.get("session_id", "")
                 if sid in bound_sids:
                     # Already adopted — clean up stale signal file
@@ -1524,6 +1528,36 @@ async def adopt_unlinked_session(
     asyncio.ensure_future(emit_agent_update(agent.id, agent.status.value, agent.project))
 
     return AgentOut.model_validate(agent)
+
+
+@router.post("/api/unlinked-sessions/{file_key}/drop")
+async def drop_unlinked_session(file_key: str):
+    """Dismiss an unlinked entry without adopting.
+
+    Marks the on-disk file with ``dropped: true`` rather than deleting it,
+    so a future SessionStart hook for the same session_id won't re-surface
+    it. Once the underlying claude process exits, _clean_stale_unlinked
+    deletes the file outright.
+    """
+    udir = _get_unlinked_dir()
+    info_path = os.path.join(udir, f"{file_key}.json")
+    if not os.path.isfile(info_path):
+        raise HTTPException(status_code=404, detail="Unlinked session not found")
+    try:
+        with open(info_path) as f:
+            info = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read entry: {e}")
+    info["dropped"] = True
+    info["dropped_at"] = _time.time()
+    try:
+        with open(info_path, "w") as f:
+            json.dump(info, f)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to mark dropped: {e}")
+    logger.info("Dropped unlinked entry %s (session %s)",
+                file_key, (info.get("session_id") or "")[:12])
+    return {"ok": True}
 
 
 @router.post("/api/unlinked-sessions/{file_key}/convert-and-adopt")

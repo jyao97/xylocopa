@@ -195,6 +195,92 @@ def _write_rejected_unlinked_entry(
         logger.warning("_write_rejected_unlinked_entry: failed to write %s: %s", entry_path, e)
 
 
+def _find_claude_pid_for_session(session_id: str) -> int | None:
+    """Find a running claude PID attached to *session_id*.
+
+    Walks /proc looking for processes with comm=='claude' owned by the
+    current uid. Matches by either:
+      1. session_id present in cmdline (covers `--resume <sid>` and
+         `--session-id <sid>` invocations).
+      2. /proc/PID/fd/* points at the session's .jsonl (covers fresh
+         `claude` invocations where the sid was assigned at startup).
+
+    Returns the first matching pid, or None.
+    """
+    target_suffix = f"/{session_id}.jsonl"
+    try:
+        uid = os.getuid()
+        for pid_name in os.listdir("/proc"):
+            if not pid_name.isdigit():
+                continue
+            pid = int(pid_name)
+            try:
+                if os.stat(f"/proc/{pid}").st_uid != uid:
+                    continue
+                with open(f"/proc/{pid}/comm") as f:
+                    if f.read().strip() != "claude":
+                        continue
+                # Strategy 1: cmdline
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    cmdline = f.read().replace(b"\0", b" ").decode("utf-8", errors="replace")
+                if session_id in cmdline:
+                    return pid
+                # Strategy 2: open file handles
+                fd_dir = f"/proc/{pid}/fd"
+                try:
+                    for fd_name in os.listdir(fd_dir):
+                        try:
+                            target = os.readlink(os.path.join(fd_dir, fd_name))
+                        except OSError:
+                            continue
+                        if target.endswith(target_suffix):
+                            return pid
+                except OSError:
+                    continue
+            except (OSError, ValueError):
+                continue
+    except OSError:
+        pass
+    return None
+
+
+def _terminate_pid(pid: int, timeout: float = 3.0) -> bool:
+    """Send SIGTERM and wait; escalate to SIGKILL if still alive after timeout.
+
+    Returns True if the process is gone by the time we return.
+    """
+    import signal as _signal
+    import time as _time
+    try:
+        os.kill(pid, _signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+    except OSError as e:
+        logger.warning("_terminate_pid: SIGTERM %d failed: %s", pid, e)
+        return False
+    deadline = _time.time() + timeout
+    while _time.time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        _time.sleep(0.1)
+    # Escalate
+    try:
+        os.kill(pid, _signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+    except OSError as e:
+        logger.warning("_terminate_pid: SIGKILL %d failed: %s", pid, e)
+        return False
+    _time.sleep(0.3)
+    try:
+        os.kill(pid, 0)
+        return False  # still alive after SIGKILL — shouldn't happen
+    except ProcessLookupError:
+        return True
+
+
 # Image metadata injected by Claude Code's Read tool — internal only, hide from UI
 
 

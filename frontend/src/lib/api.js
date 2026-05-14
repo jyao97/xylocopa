@@ -341,6 +341,11 @@ export const adoptUnlinkedSession = (sessionId, body) =>
     method: "POST",
     body: JSON.stringify(body),
   });
+export const convertAndAdoptUnlinkedSession = (fileKey, body) =>
+  request(`/api/unlinked-sessions/${fileKey}/convert-and-adopt`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 export const stopAgent = (id, { generateSummary = false, taskComplete = true, taskDrop = false, incompleteReason = null } = {}) => {
   const params = new URLSearchParams();
   if (generateSummary) params.set("generate_summary", "true");

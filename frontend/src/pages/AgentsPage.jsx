@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Bell, BellOff, Link2, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, unstarSession, clog } from "../lib/api";
+import { fetchAgents, stopAgent, deleteAgent, scanAgents, wakeSyncAll, searchMessages, markAgentRead, updateNotificationSettings, fetchUnlinkedSessions, replayPendingUnlinked, adoptUnlinkedSession, convertAndAdoptUnlinkedSession, unstarSession, clog } from "../lib/api";
 import { relativeTime } from "../lib/formatters";
 import { POLL_INTERVAL, SYNC_SETTLE_DELAY_GLOBAL } from "../lib/constants";
 import PageHeader from "../components/PageHeader";
@@ -189,6 +189,29 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
       window.dispatchEvent(new CustomEvent("agents-data-changed"));
     } catch (err) {
       showToast(err.message || "Failed to adopt session", "error");
+    } finally {
+      setAdoptingId(null);
+    }
+  }, [showToast, load]);
+
+  const handleConvertAndAdopt = useCallback(async (session) => {
+    const fileKey = (session.file || "").replace(/\.json$/, "");
+    if (!fileKey) return;
+    if (!window.confirm(
+      "This will SIGTERM your terminal's claude process so it can be resumed " +
+      "inside tmux and adopted. Your terminal claude will exit. Continue?"
+    )) return;
+    setAdoptingId(fileKey);
+    try {
+      await convertAndAdoptUnlinkedSession(fileKey, {
+        project: session.project_name,
+      });
+      showToast(`Converted to tmux → syncing ${session.project_name}`);
+      setUnlinked((prev) => prev.filter((s) => s !== session));
+      load();
+      window.dispatchEvent(new CustomEvent("agents-data-changed"));
+    } catch (err) {
+      showToast(err.message || "Failed to convert session", "error");
     } finally {
       setAdoptingId(null);
     }
@@ -768,7 +791,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                 {rejected.map((s) => {
                   const fk = (s.file || "").replace(/\.json$/, "") || s.session_id;
                   const reasonText = s.reason === "missing_tmux_pane"
-                    ? "Not running inside a tmux pane — start claude inside tmux to adopt"
+                    ? "Running outside tmux — convert to a tmux pane to adopt"
                     : (s.reason || "Cannot adopt");
                   return (
                     <div key={fk} className="px-4 py-2.5 flex items-start gap-3 bg-amber-500/5">
@@ -789,6 +812,17 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                           </p>
                         )}
                       </div>
+                      {s.reason === "missing_tmux_pane" && (
+                        <button
+                          type="button"
+                          onClick={() => handleConvertAndAdopt(s)}
+                          disabled={adoptingId === fk}
+                          className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                          title="Will SIGTERM your terminal claude and resume it inside tmux"
+                        >
+                          {adoptingId === fk ? "Converting…" : "Move to tmux"}
+                        </button>
+                      )}
                     </div>
                   );
                 })}

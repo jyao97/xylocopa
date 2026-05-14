@@ -1517,6 +1517,151 @@ async def adopt_unlinked_session(
     return AgentOut.model_validate(agent)
 
 
+@router.post("/api/unlinked-sessions/{file_key}/convert-and-adopt")
+async def convert_and_adopt_unlinked_session(
+    file_key: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Convert a non-tmux claude session into a managed tmux agent.
+
+    Used for "rejected" entries (claude running outside tmux). Steps:
+      1. Look up the running claude PID by session_id.
+      2. SIGTERM it (escalate to SIGKILL on timeout) — the user's terminal
+         claude exits. JSONL is flushed by CC on signal.
+      3. Create a fresh xy-<new_agent_id> tmux session, resume the same
+         session_id inside it.
+      4. Register the agent in DB + start sync.
+
+    file_key is "rejected-<sid_prefix>" — the JSON content carries the
+    full session_id used everywhere downstream.
+    """
+    import secrets
+    import asyncio as _asyncio
+    from agent_dispatcher import _find_claude_pid_for_session, _terminate_pid
+    from route_helpers import create_tmux_claude_session, tmux_session_name
+
+    udir = _get_unlinked_dir()
+    info_path = os.path.join(udir, f"{file_key}.json")
+    if not os.path.isfile(info_path):
+        raise HTTPException(status_code=404, detail="Rejected session not found")
+    try:
+        with open(info_path) as f:
+            info = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read entry: {e}")
+
+    if not info.get("rejected"):
+        raise HTTPException(
+            status_code=400,
+            detail="Entry is already adoptable — use /adopt instead",
+        )
+
+    session_id = (info.get("session_id") or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Entry has no session_id")
+
+    body = await request.json() if (await request.body()) else {}
+    project_name = body.get("project") or info.get("project_name")
+    proj = db.get(Project, project_name) if project_name else None
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
+
+    if db.query(Agent).filter(Agent.session_id == session_id).first():
+        try:
+            os.unlink(info_path)
+        except OSError:
+            pass
+        raise HTTPException(
+            status_code=409, detail="Session is already bound to an agent",
+        )
+
+    _check_project_capacity(db, project_name)
+
+    ad = getattr(request.app.state, "agent_dispatcher", None)
+    if not ad:
+        raise HTTPException(status_code=503, detail="Agent dispatcher not ready")
+
+    # 1. Find + terminate the user's existing claude attached to session_id.
+    pid = _find_claude_pid_for_session(session_id)
+    if pid:
+        logger.info(
+            "convert-and-adopt: terminating claude pid=%d for session %s",
+            pid, session_id[:12],
+        )
+        ok = await _asyncio.to_thread(_terminate_pid, pid, 3.0)
+        if not ok:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to terminate existing claude (pid={pid}). "
+                       "Please exit it manually and retry.",
+            )
+    else:
+        # No live claude — the JSONL is still on disk, resume will work.
+        logger.info(
+            "convert-and-adopt: no live claude found for session %s, resuming anyway",
+            session_id[:12],
+        )
+
+    # 2. Allocate new agent id (also drives tmux session name xy-<id[:8]>).
+    for _ in range(20):
+        agent_hex = secrets.token_hex(6)
+        if db.get(Agent, agent_hex) is None:
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Failed to generate agent ID")
+
+    # 3. Create tmux session running `claude --resume <session_id>`.
+    tmux_name = tmux_session_name(agent_hex)
+    import shlex
+    claude_cmd = " ".join(shlex.quote(p) for p in [
+        "claude", "--dangerously-skip-permissions",
+        "--model", proj.default_model or CC_MODEL,
+        "--resume", session_id,
+    ])
+    try:
+        pane_id = await _asyncio.to_thread(
+            create_tmux_claude_session,
+            tmux_name, proj.path, claude_cmd, agent_hex,
+        )
+    except Exception as e:
+        logger.exception("convert-and-adopt: tmux launch failed")
+        raise HTTPException(status_code=500, detail=f"tmux launch failed: {e}")
+
+    # 4. Register the agent.
+    agent = Agent(
+        id=agent_hex,
+        project=project_name,
+        name=f"Adopted: {os.path.basename(info.get('cwd', 'session'))}"[:80],
+        mode=AgentMode.AUTO,
+        status=AgentStatus.IDLE,
+        model=proj.default_model or CC_MODEL,
+        cli_sync=True,
+        session_id=session_id,
+        tmux_pane=pane_id,
+        last_message_preview="Converted from CLI to tmux",
+        last_message_at=datetime.now(timezone.utc),
+    )
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+
+    ad.start_session_sync(agent.id, session_id, proj.path, cwd=info.get("cwd", ""))
+    ad.wake_sync(agent.id)
+
+    try:
+        os.unlink(info_path)
+    except OSError:
+        pass
+
+    logger.info(
+        "convert-and-adopt: session %s → agent %s (tmux %s pane %s, killed pid=%s)",
+        session_id[:12], agent.id, tmux_name, pane_id, pid or "none",
+    )
+    asyncio.ensure_future(emit_agent_update(agent.id, agent.status.value, agent.project))
+    return AgentOut.model_validate(agent)
+
+
 def _do_replay_pending_unlinked(db: Session) -> dict:
     """Replay SessionStart events the hook stashed when backend was offline.
 

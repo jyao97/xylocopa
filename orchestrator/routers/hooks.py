@@ -292,6 +292,13 @@ async def hook_agent_session_end(request: Request):
     # before STOPPED takes effect, so the final turns make it in).  Without
     # this, any turn produced in the hook-silent window since the last sync
     # (e.g. final assistant turn before /clear) would never be imported.
+    #
+    # No `wait_for` marker: this is an intentional generic-drain — we want
+    # to flush whatever pending writes are queued, not a specific entry.
+    # Unlike Stop hook (which needs to wait for the specific subtype that
+    # CC writes AFTER the hook returns), SessionEnd's relevant entries
+    # are already written by the time the hook fires; "any growth" within
+    # the 150ms window is the correct semantic here.
     if ctx:
         await _await_jsonl_flush(ad, agent_id)
         await ad._drain_session_sync(agent_id)
@@ -411,6 +418,14 @@ async def hook_agent_user_prompt(request: Request):
             logger.exception("hook_agent_user_prompt: status flip failed")
         # Wake sync so message-state writer (delivered tick, jsonl_uuid
         # match) still runs once CC flushes the user turn.
+        #
+        # No `wait_for` marker: USP fires AFTER CC writes the user entry,
+        # so the entry-of-interest is either already in baseline or lands
+        # well within the 150ms Phase 1 window.  "Any growth" is reliable
+        # here because nothing else writes between user-entry flush and
+        # our hook return (CC is waiting for our HTTP response before it
+        # invokes the model and starts streaming the assistant turn).
+        # This is structurally different from Stop hook's race.
         logger.info("hook_agent_user_prompt: waking sync for %s", agent_id[:8])
         async def _post_prompt_sync(_aid):
             await _await_jsonl_flush(ad, _aid)
@@ -550,6 +565,12 @@ async def hook_agent_post_compact(request: Request):
     # This guarantees: /compact user msg flips to COMPLETED double-check,
     # the boundary + summary sys bubbles land in DB, the compact tool_activity
     # row is finalized — all visible by the time the hook returns.
+    #
+    # No `wait_for` marker: PostCompact fires AFTER CC has rewritten the
+    # JSONL (in-place rotation) and the new boundary + summary entries
+    # are already on disk.  This is a generic drain to catch any trailing
+    # writes — "any growth" is correct semantics; we don't have a single
+    # entry to wait for.
     if ctx:
         await _await_jsonl_flush(ad, agent_id)
         await ad._drain_session_sync(agent_id, run_compact_full_scan=True)
@@ -667,6 +688,11 @@ async def hook_agent_tool_activity(request: Request):
             # Event-driven wake: watch the JSONL file for the CC tool_use
             # flush. Replaces a fixed JSONL_FLUSH_DELAY sleep that missed
             # cases where CC's internal buffer flushed slower than expected.
+            #
+            # No `wait_for` marker: the tool_use block is written BEFORE
+            # PreToolUse fires (CC's order is "write entry → fire hook"),
+            # so it's either already in baseline or lands within 150ms.
+            # No race with a post-hook write, unlike Stop hook.
             async def _wait_jsonl_then_wake(_aid):
                 await _await_jsonl_flush(ad, _aid)
                 ad.wake_sync(_aid)
@@ -911,6 +937,9 @@ async def hook_agent_tool_activity(request: Request):
         # reasoning before /compact) would only appear later with a
         # post-rotation created_at and mis-order against the rotation
         # marker.
+        #
+        # No `wait_for` marker: generic drain — we want to flush whatever
+        # is pending before the file gets rewritten, not a specific entry.
         if ad and ad._sync_contexts.get(agent_id):
             await _await_jsonl_flush(ad, agent_id)
             await ad._drain_session_sync(agent_id)
@@ -1520,6 +1549,10 @@ async def hook_agent_session_start(request: Request):
             # — but it gives the rotation-signal pipeline time to install
             # the new sync ctx and ensures emit_context_usage below sees
             # the post-clear breakdown, not the stale pre-clear one.
+            #
+            # No `wait_for` marker: defensive drain on a typically-empty
+            # post-/clear session — "any growth" is correct; we don't
+            # have a specific entry we're waiting for.
             ad_clear = getattr(request.app.state, "agent_dispatcher", None)
             if ad_clear:
                 await _await_jsonl_flush(ad_clear, agent_id)
@@ -1572,6 +1605,11 @@ async def hook_agent_session_start(request: Request):
             # for CC to flush the user's first turn — same event-driven
             # pattern as the other hooks. Wakes the freshly registered
             # sync loop so it imports without waiting for the next hook.
+            #
+            # No `wait_for` marker: generic wait-for-any-write at session
+            # start.  The first turn entry (whatever it is — could be user,
+            # could be system continuation marker for resumed sessions)
+            # is what causes growth, so "any" is the right semantics here.
             async def _delayed_wake(_aid: str):
                 await _await_jsonl_flush(ad, _aid)
                 ad.wake_sync(_aid)

@@ -61,11 +61,34 @@ export default function ContextUsagePill({ usage, agentId }) {
   );
 }
 
-const SEVERITY_STYLES = {
-  urgent: "bg-red-500/15 text-red-600 dark:text-red-400 border-l-2 border-red-500",
-  warn: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-l-2 border-amber-500",
-  info: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-l-2 border-cyan-500",
+const SEVERITY_ICON_COLOR = {
+  urgent: "text-red-500 dark:text-red-400",
+  warn: "text-amber-500 dark:text-amber-400",
+  info: "text-cyan-500 dark:text-cyan-400",
 };
+
+function SeverityIcon({ severity, className }) {
+  const cls = `w-3.5 h-3.5 shrink-0 mt-px ${SEVERITY_ICON_COLOR[severity] || SEVERITY_ICON_COLOR.info} ${className || ""}`;
+  if (severity === "urgent") {
+    return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+    );
+  }
+  if (severity === "warn") {
+    return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.008v.008H12v-.008z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+    </svg>
+  );
+}
 
 function ContextUsagePopover({ usage, agentId, onClose }) {
   const [expanded, setExpanded] = useState({});
@@ -141,8 +164,9 @@ function ContextUsagePopover({ usage, agentId, onClose }) {
                 <div className="font-semibold text-body mb-1.5">Suggestions</div>
                 <div className="space-y-1">
                   {suggestions.map((s, i) => (
-                    <div key={i} className={`px-2 py-1.5 rounded text-[11px] leading-snug ${SEVERITY_STYLES[s.severity] || SEVERITY_STYLES.info}`}>
-                      {s.text}
+                    <div key={i} className="flex items-start gap-1.5 px-1 py-0.5">
+                      <SeverityIcon severity={s.severity} />
+                      <span className="text-dim text-[11px] leading-snug">{s.text}</span>
                     </div>
                   ))}
                 </div>

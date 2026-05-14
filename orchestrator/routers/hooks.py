@@ -72,21 +72,29 @@ def _is_subprocess_session(agent_id: str, hook_session_id: str, request: Request
     return ctx.session_id != hook_session_id
 
 
-async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
+async def _await_jsonl_flush(
+    ad, agent_id: str, *,
+    wait_for: bytes | None = None,
+    timeout: float = 10.0,
+) -> bool:
     """Wait for CC to flush new JSONL content after the hook fired.
 
     Two-phase strategy:
 
     1. **Fixed 150ms sleep** (JSONL_FLUSH_DELAY) — covers the common case
-       where CC flushes within this window. After the sleep, compare file
-       size to the *baseline at function entry* (which is "size at hook
-       arrival" for typical caller use). If file grew, the flush we wanted
-       has landed; return True immediately.
+       where CC flushes within this window. After the sleep, check the
+       new bytes appended since the *baseline at function entry*:
+       - ``wait_for=None``  → any growth counts (legacy any-grew judgement).
+       - ``wait_for=bytes`` → only return True if the marker is in the new
+         bytes (semantic judgement; eliminates the Stop-hook race where
+         Phase 1 fires on a late-flushed assistant entry instead of the
+         actual ``stop_hook_summary`` we are waiting for).
 
-    2. **Watchdog fallback** — if file didn't grow during Phase 1, install
-       a watchdog listener and wait for the next modify event, up to the
-       remaining budget. This catches the case where CC's buffer takes
-       longer than 150ms to flush.
+    2. **Watchdog loop** — if Phase 1 didn't detect the marker, install
+       a watchdog listener and re-check after each modify event, until
+       the marker appears or the remaining budget is spent. The loop
+       (vs the original one-shot) matters under ``wait_for=bytes``:
+       an unrelated entry can wake the watchdog before the marker lands.
 
     Why baseline is "size at function entry" and NOT ctx.last_offset:
     unrelated housekeeping writes (e.g. earlier PreToolUse attachments)
@@ -120,44 +128,79 @@ async def _await_jsonl_flush(ad, agent_id: str, timeout: float = 10.0) -> bool:
     except OSError:
         return False
 
-    # Phase 1: fixed 150ms sleep, then size check vs hook-arrival baseline.
+    def _check_satisfied() -> tuple[bool, int]:
+        """Return (satisfied, current_size). Reads file once."""
+        try:
+            cur = os.path.getsize(ctx.jsonl_path)
+        except OSError:
+            return False, baseline
+        if cur <= baseline:
+            return False, cur
+        if wait_for is None:
+            return True, cur
+        # Semantic check: read the tail bytes since baseline and look for
+        # the marker. Bytes are contiguous (we read from a known offset
+        # to current size), so the marker can't be split across reads.
+        try:
+            with open(ctx.jsonl_path, "rb") as f:
+                f.seek(baseline)
+                tail = f.read(cur - baseline)
+        except OSError:
+            return False, cur
+        return (wait_for in tail), cur
+
+    # Phase 1: fixed 150ms sleep, then check.
     from config import JSONL_FLUSH_DELAY
     await asyncio.sleep(JSONL_FLUSH_DELAY)
-    try:
-        cur = os.path.getsize(ctx.jsonl_path)
-        if cur > baseline:
+    satisfied, cur = _check_satisfied()
+    if satisfied:
+        logger.info(
+            "_await_jsonl_flush: agent=%s phase=1 %s (baseline=%d → %d, grew=%d bytes)",
+            agent_id[:8],
+            "marker found" if wait_for else "grew",
+            baseline, cur, cur - baseline,
+        )
+        return True
+
+    # Phase 2: watchdog loop — wake on each modify and re-check.
+    from agent_dispatcher import wait_for_jsonl_flush
+    remaining = max(0.05, timeout - JSONL_FLUSH_DELAY)
+    t_p2_start = time.monotonic()
+    deadline = t_p2_start + remaining
+    wakes = 0
+    while True:
+        budget = deadline - time.monotonic()
+        if budget <= 0:
+            break
+        woke = await wait_for_jsonl_flush(ctx.jsonl_path, timeout=budget)
+        if not woke:
+            break  # watchdog timed out
+        wakes += 1
+        satisfied, cur = _check_satisfied()
+        if satisfied:
+            elapsed_ms = (time.monotonic() - t_p2_start) * 1000
             logger.info(
-                "_await_jsonl_flush: agent=%s phase=1 grew=%d bytes (baseline=%d → %d)",
-                agent_id[:8], cur - baseline, baseline, cur,
+                "_await_jsonl_flush: agent=%s phase=2 %s after %.0fms / %d wakes "
+                "(baseline=%d → %d, grew=%d bytes)",
+                agent_id[:8],
+                "marker found" if wait_for else "grew",
+                elapsed_ms, wakes, baseline, cur, cur - baseline,
             )
             return True
-    except OSError:
-        return False
+        # Otherwise loop: marker not present yet, keep waiting.
 
-    # Phase 2: watchdog for the remaining budget.
-    remaining = max(0.05, timeout - JSONL_FLUSH_DELAY)
-    from agent_dispatcher import wait_for_jsonl_flush
-    t_p2_start = time.monotonic()
-    result = await wait_for_jsonl_flush(ctx.jsonl_path, timeout=remaining)
     elapsed_ms = (time.monotonic() - t_p2_start) * 1000
     try:
         cur = os.path.getsize(ctx.jsonl_path)
     except OSError:
         cur = baseline
-    if result:
-        logger.info(
-            "_await_jsonl_flush: agent=%s phase=2 watchdog fired after %.0fms "
-            "(baseline=%d → %d, grew=%d bytes)",
-            agent_id[:8], elapsed_ms, baseline, cur, cur - baseline,
-        )
-    else:
-        logger.warning(
-            "_await_jsonl_flush: agent=%s phase=2 TIMEOUT after %.0fms "
-            "(baseline=%d → %d, grew=%d bytes — CC flush > %ds)",
-            agent_id[:8], elapsed_ms, baseline, cur, cur - baseline,
-            int(remaining),
-        )
-    return result
+    logger.warning(
+        "_await_jsonl_flush: agent=%s phase=2 TIMEOUT after %.0fms / %d wakes "
+        "(baseline=%d → %d, grew=%d bytes, wait_for=%r — CC flush > %ds)",
+        agent_id[:8], elapsed_ms, wakes, baseline, cur, cur - baseline,
+        wait_for, int(remaining),
+    )
+    return False
 
 
 # ---- Claude Code Hooks Endpoints ----
@@ -413,6 +456,14 @@ async def hook_agent_stop(request: Request):
     # pending, slash-command completion) are handled by the sync engine when
     # it imports the stop_hook_summary entry from JSONL.  This handler only
     # needs to wake the sync loop so it picks up the new JSONL content.
+    #
+    # The wait_for marker is critical: without it, Phase 1's "any grew"
+    # judgement returns True on late-flushed pre-Stop entries (typically
+    # the assistant text), wakes sync before stop_hook_summary lands,
+    # sync misses the summary entry, agent stays EXECUTING until the
+    # next hook event happens to catch up.  Production logs (2026-05-12)
+    # showed this race firing on ~6% of Stop hooks, with ~1% stuck for
+    # >15 minutes.
     ad = getattr(request.app.state, "agent_dispatcher", None)
     if ad:
         logger.info("hook_agent_stop: waking sync for %s", agent_id[:8])
@@ -422,7 +473,10 @@ async def hook_agent_stop(request: Request):
                 ad.wake_sync(agent_id)
             else:
                 async def _post_stop_sync(_aid):
-                    await _await_jsonl_flush(ad, _aid)
+                    await _await_jsonl_flush(
+                        ad, _aid,
+                        wait_for=b'"subtype":"stop_hook_summary"',
+                    )
                     ad.wake_sync(_aid)
                 asyncio.ensure_future(_post_stop_sync(agent_id))
         else:

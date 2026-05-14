@@ -495,17 +495,6 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                     />
                   );
                 })()}
-                {sysStats.chats && sysStats.chats.count > 0 && (
-                  <UsageBar
-                    label={`Managed chats (${sysStats.chats.count})`}
-                    pct={sysStats.memory ? Math.min(Math.round(sysStats.chats.total_mb / (sysStats.memory.total_gb * 1024) * 100), 100) : 0}
-                    detail={
-                      sysStats.chats.total_mb >= 1024
-                        ? `${(sysStats.chats.total_mb / 1024).toFixed(1)} GB total`
-                        : `${Math.round(sysStats.chats.total_mb)} MB total`
-                    }
-                  />
-                )}
               </div>
 
               {/* GPUs */}

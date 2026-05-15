@@ -214,8 +214,15 @@ async def lifespan(app: FastAPI):
     # Ensure a tmux server is running before any agent resume/launch.
     # On reboot, pm2 resurrects the backend before any interactive tmux
     # invocation has materialized /tmp/tmux-<uid>/, and the first
-    # `tmux new-session -d` from the orchestrator can race-fail. Preflight
-    # `tmux start-server` is a no-op if already running.
+    # `tmux new-session -d` from the orchestrator can race-fail.
+    #
+    # `tmux start-server` alone is insufficient: in tmux 3.x the server
+    # exits immediately when no sessions exist, leaving an orphan socket
+    # that breaks subsequent connects with "No such file or directory".
+    # Pin the server alive with a detached keepalive session running a
+    # long-sleep loop. The keepalive is filtered out of agent/pane
+    # discovery because `_build_tmux_claude_map` only includes panes that
+    # have a `claude` child process.
     #
     # Diagnostic: warn if pm2's systemd unit has OOMPolicy=stop (the
     # default). In that case an agent subprocess OOM tears down the whole
@@ -223,10 +230,24 @@ async def lifespan(app: FastAPI):
     # a one-time drop-in override (see install.js prompt).
     try:
         import subprocess as _sp_init
-        r = _sp_init.run(
+        _sp_init.run(
             ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
         )
-        if r.returncode == 0:
+        has = _sp_init.run(
+            ["tmux", "has-session", "-t", "_xylocopa_keepalive"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if has.returncode != 0:
+            _sp_init.run(
+                ["tmux", "new-session", "-d", "-s", "_xylocopa_keepalive",
+                 "sh", "-c", "while sleep 86400; do :; done"],
+                capture_output=True, text=True, timeout=5,
+            )
+        verify = _sp_init.run(
+            ["tmux", "has-session", "-t", "_xylocopa_keepalive"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if verify.returncode == 0:
             oom_policy = _detect_pm2_oom_policy()
             if oom_policy == "stop":
                 import pwd as _pwd
@@ -234,7 +255,7 @@ async def lifespan(app: FastAPI):
                 logger.warning(
                     "tmux preflight: pm2-%s.service has OOMPolicy=stop — an "
                     "agent subprocess OOM will tear down the whole unit, "
-                    "killing tmux + every running agent. To fix, run:\n"
+                    "killing tmux + every running agent as collateral. To fix:\n"
                     "  sudo install -d /etc/systemd/system/pm2-%s.service.d\n"
                     "  echo -e '[Service]\\nOOMPolicy=continue' | "
                     "sudo tee /etc/systemd/system/pm2-%s.service.d/override.conf\n"
@@ -242,13 +263,16 @@ async def lifespan(app: FastAPI):
                     _user, _user, _user,
                 )
             elif oom_policy in ("continue", "kill"):
-                logger.info("tmux preflight: server ready (pm2 OOMPolicy=%s)", oom_policy)
+                logger.info(
+                    "tmux preflight: server pinned via _xylocopa_keepalive "
+                    "(pm2 OOMPolicy=%s)", oom_policy,
+                )
             else:
-                logger.info("tmux preflight: server ready")
+                logger.info("tmux preflight: server pinned via _xylocopa_keepalive")
         else:
             logger.warning(
-                "tmux preflight: start-server rc=%d stderr=%s",
-                r.returncode, r.stderr.strip(),
+                "tmux preflight: keepalive session missing after create "
+                "(stderr=%s)", verify.stderr.strip(),
             )
     except (OSError, _sp_init.TimeoutExpired) as e:
         logger.warning("tmux preflight failed (non-fatal): %s", e)

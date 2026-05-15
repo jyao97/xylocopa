@@ -1306,7 +1306,8 @@ def _clean_stale_unlinked(max_age: int = 3600):
                     sid = (info.get("session_id") or "").strip()
                     if sid:
                         from agent_dispatcher import _find_claude_pid_for_session
-                        if _find_claude_pid_for_session(sid):
+                        cwd_hint = (info.get("cwd") or "").strip() or None
+                        if _find_claude_pid_for_session(sid, cwd_hint=cwd_hint):
                             continue  # claude still alive — keep entry
                     # Just-written entries get a brief grace window in
                     # case claude hasn't finished spawning yet.
@@ -1625,8 +1626,13 @@ async def convert_and_adopt_unlinked_session(
     if not ad:
         raise HTTPException(status_code=503, detail="Agent dispatcher not ready")
 
+    entry_cwd = (info.get("cwd") or "").strip()
+
     # 1. Find + terminate the user's existing claude attached to session_id.
-    pid = _find_claude_pid_for_session(session_id)
+    #    Pass entry_cwd as a hint so we can locate the PID even before any
+    #    JSONL has been written (e.g. claude still sitting at welcome /
+    #    trust prompt — no JSONL → JSONL-based project lookup returns nil).
+    pid = _find_claude_pid_for_session(session_id, cwd_hint=entry_cwd or None)
     if pid:
         logger.info(
             "convert-and-adopt: terminating claude pid=%d for session %s",
@@ -1654,18 +1660,39 @@ async def convert_and_adopt_unlinked_session(
     else:
         raise HTTPException(status_code=500, detail="Failed to generate agent ID")
 
-    # 3. Create tmux session running `claude --resume <session_id>`.
+    # 3. Decide launch flag: --resume needs JSONL data on disk; if the
+    #    user's claude was killed before sending any message, the sid has
+    #    no JSONL and `claude --resume` fails with "No conversation
+    #    found". In that case launch with --session-id <sid> instead so
+    #    the new claude inherits the same sid (matches launch_tmux_agent's
+    #    pre_session_id pattern) — agent.session_id binding stays valid.
+    from session_cache import session_source_dir as _ssd
+    launch_cwd = entry_cwd if entry_cwd and os.path.isdir(entry_cwd) else proj.path
+    sid_jsonl = os.path.join(_ssd(launch_cwd), f"{session_id}.jsonl")
+    has_jsonl = os.path.isfile(sid_jsonl) and os.path.getsize(sid_jsonl) > 0
+    sid_flag = "--resume" if has_jsonl else "--session-id"
+
+    # Pre-write .owner so the sync engine can claim the sid on first turn
+    # (mirrors launch_tmux_agent's pre-launch ownership stamping).
+    try:
+        from agent_dispatcher import _write_session_owner
+        _sdir = _ssd(launch_cwd)
+        os.makedirs(_sdir, exist_ok=True)
+        _write_session_owner(_sdir, session_id, agent_hex)
+    except OSError as e:
+        logger.warning("convert-and-adopt: pre-write .owner failed: %s", e)
+
     tmux_name = tmux_session_name(agent_hex)
     import shlex
     claude_cmd = " ".join(shlex.quote(p) for p in [
         "claude", "--dangerously-skip-permissions",
         "--model", proj.default_model or CC_MODEL,
-        "--resume", session_id,
+        sid_flag, session_id,
     ])
     try:
         pane_id = await _asyncio.to_thread(
             create_tmux_claude_session,
-            tmux_name, proj.path, claude_cmd, agent_hex,
+            tmux_name, launch_cwd, claude_cmd, agent_hex,
         )
     except Exception as e:
         logger.exception("convert-and-adopt: tmux launch failed")
@@ -1689,7 +1716,7 @@ async def convert_and_adopt_unlinked_session(
     db.commit()
     db.refresh(agent)
 
-    ad.start_session_sync(agent.id, session_id, proj.path, cwd=info.get("cwd", ""))
+    ad.start_session_sync(agent.id, session_id, proj.path, cwd=launch_cwd)
     ad.wake_sync(agent.id)
 
     try:
@@ -1698,8 +1725,10 @@ async def convert_and_adopt_unlinked_session(
         pass
 
     logger.info(
-        "convert-and-adopt: session %s → agent %s (tmux %s pane %s, killed pid=%s)",
-        session_id[:12], agent.id, tmux_name, pane_id, pid or "none",
+        "convert-and-adopt: session %s → agent %s (tmux %s pane %s, "
+        "killed pid=%s, flag=%s, cwd=%s)",
+        session_id[:12], agent.id, tmux_name, pane_id,
+        pid or "none", sid_flag, launch_cwd,
     )
     asyncio.ensure_future(emit_agent_update(agent.id, agent.status.value, agent.project))
     return AgentOut.model_validate(agent)

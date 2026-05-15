@@ -263,17 +263,22 @@ def _project_path_for_sid(session_id: str) -> str | None:
     return None
 
 
-def _find_claude_pid_for_session(session_id: str) -> int | None:
+def _find_claude_pid_for_session(
+    session_id: str, cwd_hint: str | None = None,
+) -> int | None:
     """Find a live claude PID for *session_id*.
 
     Resolution order (single deterministic chain, no fd introspection):
       1. cmdline contains the sid — works for ``claude --resume <sid>``
          and ``claude --session-id <sid>`` (orchestrator-managed agents
          and most user invocations).
-      2. cwd-in-project — locate the project owning this sid via its
-         JSONL on disk, then find a non-orchestrator claude whose
-         ``/proc/<pid>/cwd`` lives inside that project tree.  Only
-         returned when there is a single candidate (ambiguity logged).
+      2. cwd match against *cwd_hint* — used by convert-and-adopt to find
+         the user's plain ``claude`` before any JSONL has been written
+         (the SessionStart hook captured the cwd; we trust it directly).
+      3. cwd-in-project fallback — locate the project owning this sid via
+         its JSONL on disk, then find a non-orchestrator claude whose
+         ``/proc/<pid>/cwd`` lives inside that project tree.  Only useful
+         after at least one turn has been written.
 
     Returns the first matching pid, or None.  ``claude`` does not keep
     its session JSONL open as a long-lived fd — it open/writes/closes
@@ -291,11 +296,23 @@ def _find_claude_pid_for_session(session_id: str) -> int | None:
     except (OSError, ValueError) as e:
         logger.debug("_find_claude_pid_for_session: cmdline scan failed: %s", e)
 
-    # Strategy 2: cwd-in-project (covers plain `claude` invocations)
-    proj_path = _project_path_for_sid(session_id)
+    # Strategy 2: explicit cwd hint (covers plain `claude` before any
+    # JSONL exists — e.g. user still at welcome / trust prompt)
+    proj_path: str | None = None
+    if cwd_hint:
+        try:
+            proj_path = os.path.realpath(cwd_hint)
+        except OSError:
+            proj_path = None
+
+    # Strategy 3: cwd derived from the sid's JSONL (only valid after the
+    # first turn has been written)
+    if not proj_path:
+        derived = _project_path_for_sid(session_id)
+        if derived:
+            proj_path = os.path.realpath(derived)
     if not proj_path:
         return None
-    real_project = os.path.realpath(proj_path)
     candidates: list[int] = []
     try:
         for pid in _platform.find_pids_by_name("claude"):
@@ -305,7 +322,7 @@ def _find_claude_pid_for_session(session_id: str) -> int | None:
                 cwd = _platform.get_process_cwd(pid)
             except OSError:
                 continue
-            if cwd == real_project or cwd.startswith(real_project + "/"):
+            if cwd == proj_path or cwd.startswith(proj_path + "/"):
                 candidates.append(pid)
     except (OSError, ValueError) as e:
         logger.debug("_find_claude_pid_for_session: cwd scan failed: %s", e)
@@ -315,7 +332,7 @@ def _find_claude_pid_for_session(session_id: str) -> int | None:
         return candidates[0]
     if len(candidates) > 1:
         logger.warning(
-            "_find_claude_pid_for_session: %d claude PIDs in project %s for "
+            "_find_claude_pid_for_session: %d claude PIDs at cwd %s for "
             "sid %s — ambiguous, returning None",
             len(candidates), proj_path, session_id[:12],
         )

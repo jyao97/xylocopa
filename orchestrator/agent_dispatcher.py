@@ -127,6 +127,19 @@ def _read_session_owner(session_dir: str, sid: str) -> dict | None:
         return None
 
 
+def _check_dropped(entry_path: str, session_id: str) -> bool:
+    """Check if an existing entry was user-dismissed for this session_id."""
+    if not os.path.isfile(entry_path):
+        return False
+    try:
+        with open(entry_path) as f:
+            existing = json.load(f)
+        return bool(existing.get("dropped") and existing.get("session_id") == session_id)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.debug("_check_dropped: could not read %s: %s", entry_path, e)
+        return False
+
+
 def _write_unlinked_entry(
     session_id: str,
     cwd: str,
@@ -150,15 +163,7 @@ def _write_unlinked_entry(
     os.makedirs(udir, exist_ok=True)
     file_key = f"pane-{(tmux_pane or 'unknown').replace('%', '').replace('/', '_')}"
     entry_path = os.path.join(udir, f"{file_key}.json")
-    dropped = False
-    if os.path.isfile(entry_path):
-        try:
-            with open(entry_path) as _f:
-                _existing = json.load(_f)
-            if _existing.get("dropped") and _existing.get("session_id") == session_id:
-                dropped = True
-        except (OSError, json.JSONDecodeError):
-            pass
+    dropped = _check_dropped(entry_path, session_id)
     try:
         with open(entry_path, "w") as f:
             json.dump({
@@ -181,31 +186,14 @@ def _write_rejected_unlinked_entry(
     project_name: str,
     reason: str,
 ):
-    """Persist a 'detected but not adoptable' marker for UI visibility.
-
-    Surfaces the case where a claude SessionStart fired with cwd inside a
-    registered project but the rest of the adopt preconditions weren't met
-    (e.g. claude not running in a tmux pane). Without this, the hook would
-    drop silently and the user has no signal that detection ran.
-
-    Preserves ``dropped: true`` if the user previously dismissed this same
-    session_id.
-    """
+    """Persist a 'detected but not adoptable' marker for UI visibility."""
     import time as _time
     from config import BACKUP_DIR
     udir = os.path.join(BACKUP_DIR, "unlinked-sessions")
     os.makedirs(udir, exist_ok=True)
     key = (session_id or "unknown").replace("/", "_")[:32] or "unknown"
     entry_path = os.path.join(udir, f"rejected-{key}.json")
-    dropped = False
-    if os.path.isfile(entry_path):
-        try:
-            with open(entry_path) as _f:
-                _existing = json.load(_f)
-            if _existing.get("dropped") and _existing.get("session_id") == session_id:
-                dropped = True
-        except (OSError, json.JSONDecodeError):
-            pass
+    dropped = _check_dropped(entry_path, session_id)
     try:
         with open(entry_path, "w") as f:
             json.dump({

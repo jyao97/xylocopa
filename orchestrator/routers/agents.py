@@ -1282,70 +1282,83 @@ def _get_unlinked_dir() -> str:
     return _UNLINKED_DIR
 
 
-def _clean_stale_unlinked(max_age: int = 3600):
-    """Remove unlinked session entries that are no longer actionable.
+def _safe_unlink(path: str) -> bool:
+    """Remove a file, returning True on success. Logs on failure."""
+    try:
+        os.unlink(path)
+        return True
+    except OSError as e:
+        logger.debug("_safe_unlink: %s: %s", path, e)
+        return False
 
-    Live tmux entries: kept while transcript is fresh OR the tmux pane has
-    a running pid. Rejected entries: kept while a claude process for the
-    session_id is still running; dropped on the first poll after that
-    process exits (with a 10s grace window for freshly-written entries
-    in case claude is still in the process of starting up).
-    """
+
+def _allocate_agent_id(db) -> str:
+    """Generate a unique 12-hex-char agent ID. Raises on failure."""
+    import secrets
+    for _ in range(20):
+        agent_hex = secrets.token_hex(6)
+        if db.get(Agent, agent_hex) is None:
+            return agent_hex
+    raise HTTPException(status_code=500, detail="Failed to generate agent ID")
+
+
+def _tmux_pane_alive(pane: str) -> bool:
+    """Check if a tmux pane exists and has a running process."""
+    try:
+        r = subprocess.run(
+            ["tmux", "display-message", "-t", pane, "-p", "#{pane_pid}"],
+            capture_output=True, text=True, timeout=3,
+        )
+        return bool(r.returncode == 0 and r.stdout.strip())
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _clean_stale_unlinked(max_age: int = 3600):
+    """Remove unlinked session entries that are no longer actionable."""
     udir = _get_unlinked_dir()
+    try:
+        fnames = os.listdir(udir)
+    except OSError as e:
+        logger.debug("_clean_stale_unlinked: cannot list dir: %s", e)
+        return 0
+
     now = _time.time()
     removed = 0
-    try:
-        for fname in os.listdir(udir):
-            if not fname.endswith(".json"):
-                continue
-            fpath = os.path.join(udir, fname)
-            try:
-                with open(fpath) as f:
-                    info = json.load(f)
-                if info.get("rejected"):
-                    sid = (info.get("session_id") or "").strip()
-                    if sid:
-                        from agent_dispatcher import _find_claude_pid_for_session
-                        cwd_hint = (info.get("cwd") or "").strip() or None
-                        if _find_claude_pid_for_session(sid, cwd_hint=cwd_hint):
-                            continue  # claude still alive — keep entry
-                    # Just-written entries get a brief grace window in
-                    # case claude hasn't finished spawning yet.
-                    age = now - float(info.get("timestamp") or 0)
-                    if 0 < age < 10:
-                        continue
-                    os.unlink(fpath)
-                    removed += 1
+    for fname in fnames:
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(udir, fname)
+        try:
+            with open(fpath) as f:
+                info = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.debug("_clean_stale_unlinked: removing malformed %s: %s", fname, e)
+            removed += _safe_unlink(fpath)
+            continue
+
+        if info.get("rejected"):
+            sid = (info.get("session_id") or "").strip()
+            if sid:
+                from agent_dispatcher import _find_claude_pid_for_session
+                cwd_hint = (info.get("cwd") or "").strip() or None
+                if _find_claude_pid_for_session(sid, cwd_hint=cwd_hint):
                     continue
-                transcript = info.get("transcript_path", "")
-                if transcript and os.path.isfile(transcript):
-                    mtime = os.path.getmtime(transcript)
-                    if now - mtime < max_age:
-                        continue  # still active
-                # Transcript stale or gone — check if tmux pane is alive
-                tmux_pane = info.get("tmux_pane", "")
-                if tmux_pane:
-                    try:
-                        r = subprocess.run(
-                            ["tmux", "display-message", "-t", tmux_pane, "-p", "#{pane_pid}"],
-                            capture_output=True, text=True, timeout=3,
-                        )
-                        current_pid = r.stdout.strip() if r.returncode == 0 else ""
-                        if current_pid:
-                            continue  # pane still alive — keep entry
-                    except (subprocess.TimeoutExpired, OSError):
-                        pass
-                # Transcript gone/stale and no live pane → remove
-                os.unlink(fpath)
-                removed += 1
-            except (OSError, json.JSONDecodeError):
-                try:
-                    os.unlink(fpath)
-                    removed += 1
-                except OSError:
-                    pass
-    except OSError:
-        pass
+            age = now - float(info.get("timestamp") or 0)
+            if 0 < age < 10:
+                continue
+            removed += _safe_unlink(fpath)
+            continue
+
+        transcript = info.get("transcript_path", "")
+        if transcript and os.path.isfile(transcript):
+            if now - os.path.getmtime(transcript) < max_age:
+                continue
+        tmux_pane = info.get("tmux_pane", "")
+        if tmux_pane and _tmux_pane_alive(tmux_pane):
+            continue
+        removed += _safe_unlink(fpath)
+
     if removed:
         logger.info("Cleaned %d stale unlinked session entries", removed)
     return removed
@@ -1367,35 +1380,31 @@ async def list_unlinked_sessions(db: Session = Depends(get_db)):
 
     sessions = []
     try:
-        for fname in sorted(os.listdir(udir)):
-            if not fname.endswith(".json"):
-                continue
-            fpath = os.path.join(udir, fname)
-            try:
-                with open(fpath) as f:
-                    info = json.load(f)
-                # User-dismissed entries stay on disk (so re-detection
-                # doesn't bring them back) but are hidden from the UI.
-                if info.get("dropped"):
-                    continue
-                sid = info.get("session_id", "")
-                if sid in bound_sids:
-                    # Already adopted — clean up stale signal file
-                    try:
-                        os.unlink(fpath)
-                    except OSError:
-                        pass
-                    continue
-                if not info.get("project_name"):
-                    cwd = info.get("cwd", "")
-                    info["project_name"] = os.path.basename(cwd.rstrip("/")) if cwd else ""
-                info["file"] = fname
-                sessions.append(info)
-            except (OSError, json.JSONDecodeError):
-                logger.debug("Skipped unlinked session file: %s", fname)
-                continue
+        fnames = sorted(os.listdir(udir))
     except OSError:
-        pass
+        return sessions
+
+    for fname in fnames:
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(udir, fname)
+        try:
+            with open(fpath) as f:
+                info = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            logger.debug("Skipped unlinked session file: %s", fname)
+            continue
+        if info.get("dropped"):
+            continue
+        sid = info.get("session_id", "")
+        if sid in bound_sids:
+            _safe_unlink(fpath)
+            continue
+        if not info.get("project_name"):
+            cwd = info.get("cwd", "")
+            info["project_name"] = os.path.basename(cwd.rstrip("/")) if cwd else ""
+        info["file"] = fname
+        sessions.append(info)
     return sessions
 
 
@@ -1454,10 +1463,7 @@ async def adopt_unlinked_session(
             existing.session_id = None
             db.flush()
         else:
-            try:
-                os.unlink(info_path)
-            except OSError:
-                pass
+            _safe_unlink(info_path)
             raise HTTPException(
                 status_code=409,
                 detail=f"Session already bound to active agent {existing.id} ({existing.name})",
@@ -1481,14 +1487,7 @@ async def adopt_unlinked_session(
             agent.status = AgentStatus.IDLE
         agent.cli_sync = True
     else:
-        # Create new agent
-        for _ in range(20):
-            agent_hex = secrets.token_hex(6)
-            if db.get(Agent, agent_hex) is None:
-                break
-        else:
-            raise HTTPException(status_code=500, detail="Failed to generate agent ID")
-
+        agent_hex = _allocate_agent_id(db)
         agent = Agent(
             id=agent_hex,
             project=project_name,
@@ -1515,11 +1514,7 @@ async def adopt_unlinked_session(
     ad.start_session_sync(agent.id, session_id, proj.path, cwd=actual_cwd)
     ad.wake_sync(agent.id)
 
-    # Remove the unlinked entry
-    try:
-        os.unlink(info_path)
-    except OSError:
-        pass
+    _safe_unlink(info_path)
 
     logger.info(
         "Adopted unlinked session %s → agent %s (project %s)",
@@ -1612,10 +1607,7 @@ async def convert_and_adopt_unlinked_session(
         raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
 
     if db.query(Agent).filter(Agent.session_id == session_id).first():
-        try:
-            os.unlink(info_path)
-        except OSError:
-            pass
+        _safe_unlink(info_path)
         raise HTTPException(
             status_code=409, detail="Session is already bound to an agent",
         )
@@ -1652,13 +1644,7 @@ async def convert_and_adopt_unlinked_session(
             session_id[:12],
         )
 
-    # 2. Allocate new agent id (also drives tmux session name xy-<id[:8]>).
-    for _ in range(20):
-        agent_hex = secrets.token_hex(6)
-        if db.get(Agent, agent_hex) is None:
-            break
-    else:
-        raise HTTPException(status_code=500, detail="Failed to generate agent ID")
+    agent_hex = _allocate_agent_id(db)
 
     # 3. Decide launch flag: --resume needs JSONL data on disk; if the
     #    user's claude was killed before sending any message, the sid has
@@ -1718,11 +1704,7 @@ async def convert_and_adopt_unlinked_session(
 
     ad.start_session_sync(agent.id, session_id, proj.path, cwd=launch_cwd)
     ad.wake_sync(agent.id)
-
-    try:
-        os.unlink(info_path)
-    except OSError:
-        pass
+    _safe_unlink(info_path)
 
     logger.info(
         "convert-and-adopt: session %s → agent %s (tmux %s pane %s, "
@@ -1775,20 +1757,14 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
             with open(fpath) as f:
                 ev = json.load(f)
         except (OSError, json.JSONDecodeError):
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             continue
 
         sid = (ev.get("session_id") or "").strip()
         cwd = (ev.get("cwd") or "").strip()
         pane = (ev.get("tmux_pane") or "").strip()
         if not sid or not cwd:
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             continue
 
         # Pane-less stash entry: surface as rejected if cwd is in a project.
@@ -1811,10 +1787,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
                 rejected += 1
             else:
                 skipped += 1
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             continue
 
         # Liveness: pane must still be running a non-orchestrator claude
@@ -1827,10 +1800,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
         # entry being silently dropped on replay.
         info = pane_map.get(pane)
         if not info or info["is_orchestrator"]:
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             skipped += 1
             continue
         try:
@@ -1838,19 +1808,13 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
         except OSError:
             live_cwd = ""
         if not live_cwd or os.path.realpath(live_cwd) != os.path.realpath(cwd):
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             skipped += 1
             continue
 
         # Guard A: session_id already owned by an agent
         if db.query(Agent).filter(Agent.session_id == sid).first():
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             skipped += 1
             continue
 
@@ -1866,10 +1830,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
                 rotated += 1
             except OSError as e:
                 logger.warning("replay_pending_unlinked: rotation signal failed: %s", e)
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             continue
 
         # Guard C: cwd matches a registered project
@@ -1880,10 +1841,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
             None,
         )
         if not matched:
-            try:
-                os.unlink(fpath)
-            except OSError:
-                pass
+            _safe_unlink(fpath)
             skipped += 1
             continue
 
@@ -1894,10 +1852,7 @@ def _do_replay_pending_unlinked(db: Session) -> dict:
             tmux_session=(ev.get("tmux_session") or None),
             project_name=matched.name,
         )
-        try:
-            os.unlink(fpath)
-        except OSError:
-            pass
+        _safe_unlink(fpath)
         replayed += 1
 
     if replayed or rotated or rejected or skipped:

@@ -4086,6 +4086,11 @@ Here are the day's conversations (with timestamps):
         owner_dir = os.path.dirname(jsonl_path) if os.path.isfile(jsonl_path) else session_source_dir(project_path)
         _write_session_owner(owner_dir, session_id, agent_id)
         self._cancel_sync_task(agent_id)
+        # Pre-register wake event synchronously so hooks that fire before
+        # the async sync loop executes can still set it.  Without this,
+        # wake_sync falls through to _ensure_sync_running which sees the
+        # task as "already running" and silently drops the wake.
+        self._sync_wake[agent_id] = asyncio.Event()
         task = asyncio.ensure_future(
             self._sync_session_loop(agent_id, session_id, project_path, cwd=cwd)
         )
@@ -4450,9 +4455,12 @@ Here are the day's conversations (with timestamps):
 
         POLL_INTERVAL = 300  # hooks are primary sync driver; polling is 5-min safety net
 
-        # Register wake event so stop hook can interrupt the sleep
-        wake_event = asyncio.Event()
-        self._sync_wake[agent_id] = wake_event
+        # Reuse wake event pre-registered by start_session_sync, or create
+        # one if the loop was started by another path (e.g. _ensure_sync_running).
+        wake_event = self._sync_wake.get(agent_id)
+        if not wake_event:
+            wake_event = asyncio.Event()
+            self._sync_wake[agent_id] = wake_event
 
         # Register sync lock so Stop hook serialises with this loop
         sync_lock = asyncio.Lock()

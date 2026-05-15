@@ -331,10 +331,24 @@ def _find_claude_pid_for_session(
     if len(candidates) == 1:
         return candidates[0]
     if len(candidates) > 1:
+        # Filter out managed agents by checking /proc/<pid>/environ for
+        # XY_AGENT_ID.  Managed tmux agents always have it (set via
+        # send-keys before claude launches); user terminal sessions don't.
+        unmanaged = []
+        for cpid in candidates:
+            try:
+                with open(f"/proc/{cpid}/environ", "rb") as ef:
+                    env_bytes = ef.read()
+                if b"XY_AGENT_ID=" not in env_bytes:
+                    unmanaged.append(cpid)
+            except OSError:
+                unmanaged.append(cpid)
+        if len(unmanaged) == 1:
+            return unmanaged[0]
         logger.warning(
             "_find_claude_pid_for_session: %d claude PIDs at cwd %s for "
-            "sid %s — ambiguous, returning None",
-            len(candidates), proj_path, session_id[:12],
+            "sid %s (%d after managed filter) — ambiguous, returning None",
+            len(candidates), proj_path, session_id[:12], len(unmanaged),
         )
     return None
 

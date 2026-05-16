@@ -479,7 +479,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   if (dispatching) return null;
 
   return (
-    <div className="relative">
+    <div className="relative" data-popup-bounds>
       <CardShell taskId={task.id} expanded={expanded} selecting={selecting} selected={selected}>
         <div
           className={`flex items-start gap-3 px-5 cursor-pointer transition-[padding] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${
@@ -876,7 +876,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                       task.project_name ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-faint cursor-not-allowed"
                     }`}
                     title={task.project_name ? "Start task" : "Select a project first"}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                     </svg>
                   </button>

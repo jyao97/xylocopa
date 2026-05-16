@@ -318,20 +318,13 @@ function AppRoutes({ themeProps }) {
           <Route path="/projects/:name" element={<ProjectDetailPage {...themeProps} />} />
           <Route path="/agents/:id" element={<AgentChatPage {...themeProps} />} />
           <Route path="/tasks/:id" element={<TaskDetailPage {...themeProps} />} />
-          {/* Only render as a standalone page if no background location */}
-          {!bgLocation && <Route path="/new/task" element={<NewTaskPage />} />}
           <Route path="/new" element={<NewPage {...themeProps} />} />
           <Route path="/monitor" element={<MonitorPage {...themeProps} />} />
           <Route path="/split" element={<SplitScreenPage />} />
         </Routes>
       )}
 
-      {/* Overlay: NewTaskPage sheet rendered on top of whatever is below */}
-      {bgLocation && (
-        <Routes>
-          <Route path="/new/task" element={<NewTaskPage />} />
-        </Routes>
-      )}
+      {/* NewTaskPage is now rendered as a modal in AppChrome, not via routes */}
     </div>
   );
 }
@@ -425,6 +418,7 @@ function AppChrome({ themeProps }) {
   const hideNav = location.pathname.match(/^\/agents\/[^/]+$/) || location.pathname.match(/^\/tasks\/[^/]+$/) || location.pathname === "/login" || location.pathname === "/split";
   const { total: unread } = useUnread();
   const [claudeMdPending, setClaudeMdPending] = useState(0);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
   const visible = usePageVisible();
   const pathnameRef = useRef(location.pathname);
   pathnameRef.current = location.pathname;
@@ -471,12 +465,23 @@ function AppChrome({ themeProps }) {
       {/* Attention button — FAB shows unread total, long-press opens split screen */}
       <AttentionButton />
 
+      {/* NewTaskPage modal — rendered in-place, no route change */}
+      {newTaskOpen && (
+        <Suspense fallback={null}>
+          <NewTaskPage
+            onClose={() => setNewTaskOpen(false)}
+            contextPath={location.pathname}
+          />
+        </Suspense>
+      )}
+
       {/* Bottom tab bar — floating glass pill */}
       {!hideNav && (
         <BottomNavBar
           className="fixed bottom-[13px] left-0 right-0 z-40 flex justify-center px-4"
           badges={{ agents: unread, projects: claudeMdPending }}
           onDoubleTap={handleNavDoubleTap}
+          onNewTask={() => setNewTaskOpen(true)}
           onProjectsTap={(e) => {
             e.preventDefault();
             // Double-tap detection for projects

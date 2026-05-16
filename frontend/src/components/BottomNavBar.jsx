@@ -55,7 +55,7 @@ export const navTabs = [
   },
 ];
 
-function CenterFab({ tab }) {
+function CenterFab({ tab, onNewTask }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isActive = location.pathname === tab.to;
@@ -69,9 +69,10 @@ function CenterFab({ tab }) {
       if (navigator.vibrate) navigator.vibrate(30);
       navigate("/new", { replace: true });
     },
-    // Normal tap → voice-first NewTaskPage overlay.
+    // Normal tap → NewTaskPage modal overlay.
     () => {
-      navigate("/new/task", { state: { backgroundLocation: location } });
+      if (onNewTask) onNewTask();
+      else navigate("/new/task", { state: { backgroundLocation: location } });
     },
     500,
   );
@@ -100,7 +101,7 @@ function CenterFab({ tab }) {
  *   onProjectsTap — optional (event) => void  (custom Projects nav logic)
  *   className     — extra classes on the outer wrapper
  */
-export default function BottomNavBar({ badges, onDoubleTap, onProjectsTap, className = "" }) {
+export default function BottomNavBar({ badges, onDoubleTap, onProjectsTap, onNewTask, className = "" }) {
   const location = useLocation();
 
   return (
@@ -111,7 +112,7 @@ export default function BottomNavBar({ badges, onDoubleTap, onProjectsTap, class
       >
         {navTabs.map((tab) =>
           tab.isCenter ? (
-            <CenterFab key={tab.to} tab={tab} />
+            <CenterFab key={tab.to} tab={tab} onNewTask={onNewTask} />
           ) : (
             <NavLink
               key={tab.to}

@@ -37,10 +37,10 @@ const AUTO_PICKER = [
   { value: false, label: "Off" },
 ];
 
-export default function NewTaskPage({ embedded = false }) {
+export default function NewTaskPage({ embedded = false, onClose, contextPath }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const hasBackground = !!location.state?.backgroundLocation;
+  const hasBackground = !!onClose || !!location.state?.backgroundLocation;
   // useTmux removed — all tasks use tmux now
   const [description, setDescription, clearDesc] = useDraft("new-task:description", "");
   const [project, setProject, clearProject] = useDraft("new-task:project", "");
@@ -127,7 +127,7 @@ export default function NewTaskPage({ embedded = false }) {
   // that project — overrides the persisted draft so the sheet reflects the
   // user's current context.
   useEffect(() => {
-    const bgPath = location.state?.backgroundLocation?.pathname;
+    const bgPath = contextPath || location.state?.backgroundLocation?.pathname;
     if (!bgPath) return;
     const m = bgPath.match(/^\/projects\/([^/]+)/);
     if (m) {
@@ -325,7 +325,7 @@ export default function NewTaskPage({ embedded = false }) {
       el.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
       el.style.transform = 'translateY(100%)';
     }
-    setTimeout(() => hasBackground ? navigate(-1) : navigate("/tasks", { replace: true }), 250);
+    setTimeout(() => onClose ? onClose() : (hasBackground ? navigate(-1) : navigate("/tasks", { replace: true })), 250);
   };
 
   // ---- Submit (enter key) → save to inbox ----
@@ -415,7 +415,7 @@ export default function NewTaskPage({ embedded = false }) {
       el.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
       el.style.transform = 'translateY(100%)';
     }
-    setTimeout(() => hasBackground ? navigate(-1) : navigate("/tasks", { replace: true }), 250);
+    setTimeout(() => onClose ? onClose() : (hasBackground ? navigate(-1) : navigate("/tasks", { replace: true })), 250);
 
     // Background: create + dispatch. Toast on failure only.
     (async () => {
@@ -662,7 +662,7 @@ export default function NewTaskPage({ embedded = false }) {
                   }`}
                   title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                   </svg>
                 </button>

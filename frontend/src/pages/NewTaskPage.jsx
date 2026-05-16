@@ -461,7 +461,7 @@ export default function NewTaskPage({ embedded = false }) {
       <div
         ref={sheetRef}
         data-popup-bounds
-        className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl glass-bar-nav rounded-2xl"
+        className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface shadow-card rounded-2xl"
         style={{
           maxHeight: "85vh",
           marginBottom: `calc(0.75rem + ${kbOffset}px + env(safe-area-inset-bottom, 0px))`,

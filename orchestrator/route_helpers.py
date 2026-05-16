@@ -184,6 +184,8 @@ def create_tmux_claude_session(
     # defense in depth against env name churn.
     env_setup += " && export CLAUDE_CODE_RESUME_TOKEN_THRESHOLD=999999999"
     env_setup += " && export CLAUDE_CODE_RESUME_THRESHOLD_MINUTES=999999"
+    # Enable 1M context window for Opus 4.6 (workaround for --model dropping [1m] suffix)
+    env_setup += ' && export ANTHROPIC_DEFAULT_OPUS_MODEL="claude-opus-4-6[1m]"'
     if agent_id:
         env_setup += f" && export XY_AGENT_ID={agent_id} && export AHIVE_AGENT_ID={agent_id}"
     _sp.run(["tmux", "send-keys", "-t", pane_id, env_setup, "Enter"],
@@ -191,6 +193,14 @@ def create_tmux_claude_session(
     # Launch Claude
     _sp.run(["tmux", "send-keys", "-t", pane_id, claude_cmd, "Enter"],
             check=True, capture_output=True, timeout=TMUX_CMD_TIMEOUT)
+
+    # Retire the boot keepalive now that a real session exists.
+    try:
+        _sp.run(["tmux", "kill-session", "-t", "_xylocopa_keepalive"],
+                capture_output=True, timeout=TMUX_CMD_TIMEOUT)
+    except (OSError, _sp.TimeoutExpired):
+        pass
+
     return pane_id
 
 

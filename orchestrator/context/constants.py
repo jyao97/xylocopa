@@ -13,7 +13,7 @@ from __future__ import annotations
 MODEL_LIMITS: dict[str, int] = {
     "claude-opus-4-7": 1_000_000,
     "claude-opus-4-7-20251015": 1_000_000,
-    "claude-opus-4-6": 200_000,
+    "claude-opus-4-6": 1_000_000,
     "claude-opus-4-5": 200_000,
     "claude-sonnet-4-6": 200_000,
     "claude-sonnet-4-5": 200_000,

@@ -568,13 +568,12 @@ async def hook_agent_post_compact(request: Request):
     # the boundary + summary sys bubbles land in DB, the compact tool_activity
     # row is finalized — all visible by the time the hook returns.
     #
-    # No `wait_for` marker: PostCompact fires AFTER CC has rewritten the
+    # No _await_jsonl_flush: PostCompact fires AFTER CC has rewritten the
     # JSONL (in-place rotation) and the new boundary + summary entries
-    # are already on disk.  This is a generic drain to catch any trailing
-    # writes — "any growth" is correct semantics; we don't have a single
-    # entry to wait for.
+    # are already on disk.  Flushing here waited up to 10s for file
+    # growth that never comes (manual) or isn't needed (auto — sync
+    # loop picks up trailing writes naturally).
     if ctx:
-        await _await_jsonl_flush(ad, agent_id)
         await ad._drain_session_sync(agent_id, run_compact_full_scan=True)
 
     # Compact resets the in-session running counter (in-place rotation);

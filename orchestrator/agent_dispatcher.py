@@ -2798,7 +2798,12 @@ Here are the day's conversations (with timestamps):
                 rec_now["send_path"], rec_now["content_preview"],
                 rec_now["pane_before_send_tail"],
             )
-            # leave it in the dict so a late hook can still ack it (still useful info)
+            queue = self._promote_ack_by_agent.get(rec_now["agent_id"], [])
+            try:
+                queue.remove(msg_short)
+            except ValueError:
+                pass
+            self._promote_ack_pending.pop(msg_short, None)
 
     def _ack_promote_on_user_prompt(self, agent_id: str) -> None:
         """Mark the oldest pending promote for this agent as ack'd."""

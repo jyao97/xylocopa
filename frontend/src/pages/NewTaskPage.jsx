@@ -438,7 +438,7 @@ export default function NewTaskPage({ embedded = false }) {
            transform/transition managed via sheetRef for slide-in/out. */}
       <div
         ref={sheetRef}
-        className="relative z-10 mx-3 mb-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface rounded-2xl shadow-2xl"
+        className="relative z-10 mx-3 mb-3 w-[calc(100%-1.5rem)] max-w-[24rem] bg-surface rounded-2xl shadow-2xl"
         style={{
           maxHeight: "85vh",
           marginBottom: `calc(0.75rem + ${kbOffset}px)`,
@@ -632,11 +632,11 @@ export default function NewTaskPage({ embedded = false }) {
                   type="button"
                   onClick={launchAgent}
                   disabled={!hasContent || submitting || anyUploading}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all ${
                     !project || !hasContent || submitting || anyUploading
-                      ? "bg-elevated text-dim"
-                      : "bg-cyan-500 hover:bg-cyan-400 text-white"
-                  } ${(!hasContent || submitting || anyUploading) ? "cursor-not-allowed" : "cursor-pointer"}`}
+                      ? "bg-elevated text-faint cursor-not-allowed"
+                      : "bg-cyan-500 text-white hover:bg-cyan-400"
+                  }`}
                   title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

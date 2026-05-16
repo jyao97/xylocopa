@@ -438,10 +438,10 @@ export default function NewTaskPage({ embedded = false }) {
            transform/transition managed via sheetRef for slide-in/out. */}
       <div
         ref={sheetRef}
-        className="relative z-10 mx-3 mb-3 w-[calc(100%-1.5rem)] max-w-[24rem] bg-surface rounded-2xl shadow-2xl"
+        className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl glass-bar-nav rounded-2xl"
         style={{
           maxHeight: "85vh",
-          marginBottom: `calc(0.75rem + ${kbOffset}px)`,
+          marginBottom: `calc(0.75rem + ${kbOffset}px + env(safe-area-inset-bottom, 0px))`,
           transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), margin-bottom 0.15s ease-out',
         }}
       >

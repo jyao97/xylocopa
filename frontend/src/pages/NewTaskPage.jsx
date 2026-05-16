@@ -88,9 +88,25 @@ export default function NewTaskPage({ embedded = false }) {
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
     const vv = window.visualViewport;
+    let kbOpen = false;
     const update = () => {
       const occluded = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       setKbOffset(occluded);
+      const open = occluded > 80;
+      if (open && !kbOpen) {
+        kbOpen = true;
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.top = '0';
+        document.body.style.touchAction = 'none';
+        window.scrollTo(0, 0);
+      } else if (!open && kbOpen) {
+        kbOpen = false;
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        document.body.style.touchAction = '';
+      }
     };
     update();
     vv.addEventListener("resize", update);
@@ -98,6 +114,12 @@ export default function NewTaskPage({ embedded = false }) {
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      if (kbOpen) {
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        document.body.style.touchAction = '';
+      }
     };
   }, []);
 

@@ -633,11 +633,23 @@ async def hook_agent_post_compact(request: Request):
     # compacted") to the JSONL shortly AFTER firing PostCompact.  The drain
     # above runs before those bytes land, so the bubbles are missing until
     # the next sync wake.  With POLL_INTERVAL=300s, that means a 5-min gap.
-    # Staggered wake_sync calls let the sync loop pick them up promptly.
+    # Background watchdog: poll for file growth, wake sync once it arrives.
     async def _post_compact_tail():
-        for _d in (1.0, 3.0, 8.0):
-            await asyncio.sleep(_d)
-            ad.wake_sync(agent_id)
+        _ctx = ad._sync_contexts.get(agent_id)
+        if not _ctx:
+            return
+        try:
+            _baseline = os.path.getsize(_ctx.jsonl_path)
+        except OSError:
+            return
+        for _ in range(16):  # 16 × 0.5s = 8s max
+            await asyncio.sleep(0.5)
+            try:
+                if os.path.getsize(_ctx.jsonl_path) > _baseline:
+                    ad.wake_sync(agent_id)
+                    return
+            except OSError:
+                return
     asyncio.ensure_future(_post_compact_tail())
 
     logger.info("hook_agent_post_compact: agent=%s", agent_id[:8])

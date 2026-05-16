@@ -1,10 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createTaskV2, dispatchTask, uploadFile, generateWorktreeName } from "../lib/api";
 import { MODEL_OPTIONS, modelDisplayName } from "../lib/constants";
 import { DATE_SHORT } from "../lib/formatters";
-import ProjectSelector from "../components/ProjectSelector";
 import TagPicker from "../components/cards/TagPicker";
+import useProjects from "../hooks/useProjects";
 import SendLaterPicker from "../components/SendLaterPicker";
 import ImageLightbox from "../components/ImageLightbox";
 import useDraft from "../hooks/useDraft";
@@ -149,6 +149,11 @@ export default function NewTaskPage({ embedded = false }) {
 
   const toast = useToast();
   const showToast = (message, type = "success") => type === "error" ? toast.error(message) : toast.success(message);
+  const { projects } = useProjects();
+  const projectPicker = useMemo(() => [
+    { value: "", label: "None" },
+    ...projects.map(p => ({ value: p.name, label: p.display_name || p.name })),
+  ], [projects]);
 
   const voice = useVoiceRecorder({
     onTranscript: (text) => setDescription((prev) => (prev ? prev + " " + text : text)),
@@ -460,29 +465,9 @@ export default function NewTaskPage({ embedded = false }) {
           <div className="w-10 h-1 rounded-full bg-dim/40" />
         </div>
 
-        {/* Header — swipeable like the drag handle */}
-        <div
-          className="shrink-0 px-4 pb-2"
-          style={{ touchAction: "none" }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
-          <h2 className="text-lg font-bold text-heading">New Task</h2>
-          <p className="text-xs text-dim mt-0.5">Swipe down or tap outside to save to inbox (edit later)</p>
-        </div>
-
         {/* Scrollable content */}
-        <div ref={sheetBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6" style={{ overscrollBehavior: "none" }}>
-
-          <div className="space-y-3">
-            {/* Project */}
-            <div className={`rounded-lg ${projectFlash ? "bookmark-flash" : ""}`} key={projectFlash}>
-              <ProjectSelector value={project} onChange={setProject} />
-            </div>
-
-            {/* Input card — matches inbox expanded card layout */}
-            <form onSubmit={handleSubmit} className="rounded-2xl bg-surface shadow-card px-5 pt-4 pb-4">
+        <div ref={sheetBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-6" style={{ overscrollBehavior: "none" }}>
+          <form onSubmit={handleSubmit}>
               <div
                 className="relative"
                 onDragEnter={handleDragEnter}
@@ -545,7 +530,15 @@ export default function NewTaskPage({ embedded = false }) {
                   ))}
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-1.5 mt-3">
+              <div className="flex flex-wrap items-center gap-1.5 mt-3" key={projectFlash}>
+                <TagPicker options={projectPicker} value={project} onSelect={setProject} placement="top"
+                  className={`text-[11px] font-medium rounded-full px-2 py-0.5 cursor-pointer active:scale-90 transition-transform ${
+                    project
+                      ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400"
+                      : `bg-elevated text-faint ${projectFlash ? "bookmark-flash" : ""}`
+                  }`}>
+                  {project || "Project"}
+                </TagPicker>
                 <TagPicker options={WT_PICKER} value={!!worktree} placement="top"
                   keepOpenOnSelect={(v) => v === true}
                   onSelect={async (v) => {
@@ -669,8 +662,7 @@ export default function NewTaskPage({ embedded = false }) {
                   </svg>
                 </button>
               </div>
-            </form>
-          </div>
+          </form>
         </div>
       </div>
       {previewIndex != null && attachments.length > 0 && (

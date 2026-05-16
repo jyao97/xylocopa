@@ -438,6 +438,7 @@ export default function NewTaskPage({ embedded = false }) {
            transform/transition managed via sheetRef for slide-in/out. */}
       <div
         ref={sheetRef}
+        data-popup-bounds
         className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl glass-bar-nav rounded-2xl"
         style={{
           maxHeight: "85vh",

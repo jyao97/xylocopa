@@ -45,10 +45,8 @@ export default function TagPicker({ options, value, onSelect, className, childre
     return () => document.removeEventListener("pointerdown", onOutside, true);
   }, [open, handleClose]);
 
-  // Track tag position via RAF — uses page-absolute coords (scrollY)
-  // so keyboard open/close doesn't affect positioning. Clamps the
-  // left coord so a wide popup (content-sized) doesn't overflow the
-  // right viewport edge.
+  const [popMaxW, setPopMaxW] = useState(undefined);
+
   useEffect(() => {
     if (!open) return;
     let raf;
@@ -62,9 +60,20 @@ export default function TagPicker({ options, value, onSelect, className, childre
         const top = placement === "top" && pop
           ? rect.top + window.scrollY - pop.offsetHeight - 6
           : rect.bottom + window.scrollY + 6;
+
+        const bounds = el.closest("[data-popup-bounds]");
+        const boundsRect = bounds?.getBoundingClientRect();
+        const rightEdge = boundsRect ? boundsRect.right : window.innerWidth;
+        const leftEdge = boundsRect ? boundsRect.left : 0;
+
         const rawLeft = rect.left;
-        const maxLeft = Math.max(margin, window.innerWidth - popW - margin);
+        const maxLeft = Math.max(leftEdge + margin, rightEdge - popW - margin);
         const left = Math.min(rawLeft, maxLeft) + window.scrollX;
+
+        if (boundsRect) {
+          setPopMaxW(boundsRect.width - margin * 2);
+        }
+
         setPos(prev => {
           if (prev && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.left - left) < 0.5) return prev;
           return { top, left };
@@ -93,7 +102,7 @@ export default function TagPicker({ options, value, onSelect, className, childre
             top: pos.top,
             left: pos.left,
             width: extra ? "min(180px, 70vw)" : undefined,
-            maxWidth: extra ? undefined : "calc(100vw - 1.5rem)",
+            maxWidth: extra ? undefined : popMaxW ? `${popMaxW}px` : "calc(100vw - 1.5rem)",
           }}
           onClick={(e) => e.stopPropagation()}
         >

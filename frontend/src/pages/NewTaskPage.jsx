@@ -1,11 +1,10 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createTaskV2, dispatchTask, uploadFile, generateWorktreeName } from "../lib/api";
-import { MODEL_OPTIONS } from "../lib/constants";
+import { MODEL_OPTIONS, modelDisplayName } from "../lib/constants";
 import { DATE_SHORT } from "../lib/formatters";
 import ProjectSelector from "../components/ProjectSelector";
-import EffortSelector from "../components/EffortSelector";
-import ModelSelector from "../components/ModelSelector";
+import TagPicker from "../components/cards/TagPicker";
 import VoiceRecorder from "../components/VoiceRecorder";
 import SendLaterPicker from "../components/SendLaterPicker";
 import ImageLightbox from "../components/ImageLightbox";
@@ -22,6 +21,22 @@ function deriveTitle(description) {
   const spaceIdx = cut.lastIndexOf(" ");
   return (spaceIdx > 20 ? cut.slice(0, spaceIdx) : cut) + "...";
 }
+
+const MODEL_PICKER = MODEL_OPTIONS.map(m => ({ value: m.value, label: m.label }));
+const EFFORT_PICKER = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "xhigh", label: "XHigh" },
+  { value: "max", label: "Max" },
+];
+const WT_PICKER = [
+  { value: true, label: "On" },
+  { value: false, label: "Off" },
+];
+const AUTO_PICKER = [
+  { value: true, label: "On" },
+  { value: false, label: "Off" },
+];
 
 export default function NewTaskPage({ embedded = false }) {
   const navigate = useNavigate();
@@ -589,57 +604,56 @@ export default function NewTaskPage({ embedded = false }) {
                   </button>
                 </div>
               </div>
-              {/* Controls grid — matches project page */}
-              <div className="composer-controls grid grid-cols-[max-content_1fr] gap-y-2 gap-x-2 items-center">
-                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                  <ModelSelector value={model} onChange={setModel} />
-                  <EffortSelector value={effort} onChange={setEffort} />
-                </div>
-                <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap justify-self-end">
-                  <div
-                    role="switch"
-                    aria-checked={skipPermissions}
-                    onClick={() => { const next = !skipPermissions; setSkipPermissions(next); try { localStorage.setItem("pref:skipPermissions", String(next)); } catch {} }}
-                    className={`relative w-9 h-[20px] rounded-full transition-colors ${skipPermissions ? "bg-amber-500" : "bg-elevated"}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${skipPermissions ? "translate-x-[16px]" : ""}`} />
-                  </div>
-                  <span className="text-sm text-label">Auto</span>
-                </label>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (worktree) { setWorktree(null); try { localStorage.setItem("pref:worktree", ""); } catch {} return; }
-                      setWorktree("...");
-                      const name = description.trim() ? await generateWorktreeName(description).catch(() => null) : null;
-                      const val = name || "auto";
-                      setWorktree(val);
-                      try { localStorage.setItem("pref:worktree", val); } catch {}
-                    }}
-                    className={`composer-pill flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                      worktree
-                        ? "bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30"
-                        : "bg-elevated text-dim hover:text-label"
-                    }`}
-                    title={worktree ? "Disable worktree" : "Enable worktree"}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              {/* Tags row — matches inbox card style */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <TagPicker options={WT_PICKER} value={!!worktree} placement="top"
+                  keepOpenOnSelect={(v) => v === true}
+                  onSelect={async (v) => {
+                    if (!v) { setWorktree(null); try { localStorage.setItem("pref:worktree", ""); } catch {} return; }
+                    setWorktree("...");
+                    const name = description.trim() ? await generateWorktreeName(description).catch(() => null) : null;
+                    const val = name || "auto";
+                    setWorktree(val);
+                    try { localStorage.setItem("pref:worktree", val); } catch {}
+                  }}
+                  className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full cursor-pointer active:scale-90 transition-all ${
+                    worktree ? "bg-purple-500/15 text-purple-500 dark:text-purple-400" : "bg-elevated text-faint"
+                  }`}
+                  extra={worktree ? (
+                    <input
+                      type="text"
+                      placeholder={worktree === "..." ? "generating..." : "name (blank = auto)"}
+                      value={worktree === "auto" || worktree === "..." ? "" : worktree}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { e.stopPropagation(); const val = e.target.value || "auto"; setWorktree(val); try { localStorage.setItem("pref:worktree", val); } catch {} }}
+                      className="w-full mt-1 px-2 py-1.5 rounded-lg text-xs bg-elevated text-heading placeholder-hint outline-none border border-edge/30 focus:border-cyan-500/50 transition-colors"
+                    />
+                  ) : null}
+                >
+                  <span className="flex items-center gap-0.5">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 3v12M18 9a3 3 0 100-6 3 3 0 000 6zm0 0v3a3 3 0 01-3 3H9m-3 0a3 3 0 100 6 3 3 0 000-6z" />
                     </svg>
                     Worktree
-                  </button>
-                  {worktree && (
-                    <input
-                      type="text"
-                      value={worktree === "auto" || worktree === "..." ? "" : worktree}
-                      onChange={(e) => setWorktree(e.target.value || "auto")}
-                      size={1}
-                      className="composer-pill flex-1 w-0 min-w-0 rounded-lg bg-elevated px-2.5 py-1.5 text-xs text-heading placeholder:text-faint outline-none focus:ring-1 focus:ring-purple-500/40"
-                      placeholder={worktree === "..." ? "generating..." : "worktree name"}
-                    />
-                  )}
-                </div>
+                  </span>
+                </TagPicker>
+                <TagPicker options={AUTO_PICKER} value={skipPermissions} placement="top" onSelect={(v) => {
+                  setSkipPermissions(v);
+                  try { localStorage.setItem("pref:skipPermissions", String(v)); } catch {}
+                }}
+                  className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full cursor-pointer active:scale-90 transition-all ${
+                    skipPermissions ? "bg-amber-500/15 text-amber-500 dark:text-amber-400" : "bg-elevated text-faint"
+                  }`}>
+                  Auto
+                </TagPicker>
+                <TagPicker options={MODEL_PICKER} value={model} onSelect={setModel} placement="top"
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-elevated text-dim cursor-pointer active:scale-90 transition-transform">
+                  {modelDisplayName(model)}
+                </TagPicker>
+                <TagPicker options={EFFORT_PICKER} value={effort} onSelect={setEffort} placement="top"
+                  className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-elevated text-dim cursor-pointer active:scale-90 transition-transform">
+                  {EFFORT_PICKER.find(e => e.value === effort)?.label || effort}
+                </TagPicker>
               </div>
             </form>
           </div>

@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
  * Uses portal + absolute positioning (page coords) to avoid both
  * stacking-context clipping and iOS keyboard viewport issues.
  */
-export default function TagPicker({ options, value, onSelect, className, children, extra, keepOpenOnSelect }) {
+export default function TagPicker({ options, value, onSelect, className, children, extra, keepOpenOnSelect, placement = "bottom" }) {
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(false);
   const [pos, setPos] = useState(null);
@@ -52,9 +52,12 @@ export default function TagPicker({ options, value, onSelect, className, childre
     let raf;
     const track = () => {
       const el = ref.current;
+      const pop = popRef.current;
       if (el) {
         const rect = el.getBoundingClientRect();
-        const top = rect.bottom + window.scrollY + 6;
+        const top = placement === "top" && pop
+          ? rect.top + window.scrollY - pop.offsetHeight - 6
+          : rect.bottom + window.scrollY + 6;
         const left = rect.left + window.scrollX;
         setPos(prev => {
           if (prev && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.left - left) < 0.5) return prev;
@@ -77,9 +80,9 @@ export default function TagPicker({ options, value, onSelect, className, childre
       {open && pos && createPortal(
         <div
           ref={popRef}
-          className={`absolute z-[9999] rounded-xl bg-surface shadow-lg ring-1 ring-edge/40 p-1 transform-gpu transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.22,1.15,0.36,1)] origin-top-left ${
-            visible ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          }`}
+          className={`absolute z-[9999] rounded-xl bg-surface shadow-lg ring-1 ring-edge/40 p-1 transform-gpu transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${
+            placement === "top" ? "origin-bottom-left" : "origin-top-left"
+          } ${visible ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
           style={{
             top: pos.top,
             left: pos.left,

@@ -65,18 +65,40 @@ export default function NewTaskPage({ embedded = false }) {
   const sheetBodyRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Sheet animation state — drag uses refs (not state) to avoid
-  // re-rendering the entire component on every touchmove frame.
+  // Compose-bar animation state
   const [mounted, setMounted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const sheetRef = useRef(null);
-  const sheetYRef = useRef(0);
-  const touchStartRef = useRef(null);
+  // Tracks on-screen keyboard offset (iOS Safari & Android Chrome via
+  // visualViewport). When the keyboard opens, push the compose bar up
+  // by the occluded height so it rides above the keys.
+  const [kbOffset, setKbOffset] = useState(0);
 
   // Initial position: off-screen (runs before first paint)
   useLayoutEffect(() => {
     const el = sheetRef.current;
-    if (el) el.style.transform = 'translateY(100%)';
+    if (el) el.style.transform = 'translateY(120%)';
+  }, []);
+
+  // Track on-screen keyboard via visualViewport. `offsetTop` of the
+  // visual viewport relative to the layout viewport stays 0 normally;
+  // when the keyboard opens, the visual viewport shrinks and its
+  // bottom edge sits above the keyboard, so layoutHeight -
+  // (offsetTop + height) tells us how much of the bottom is occluded.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const update = () => {
+      const occluded = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKbOffset(occluded);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
   }, []);
 
   // When opened from a project detail page, default the project field to
@@ -397,43 +419,6 @@ export default function NewTaskPage({ embedded = false }) {
   const hasContent = description.trim() || attachments.some((a) => a.uploadedPath);
   const canSubmit = hasContent && !submitting && !anyUploading;
 
-  // ---- Swipe-down gesture on drag handle ----
-  // All position updates go through the DOM ref — zero React re-renders
-  // during the gesture, so the animation runs on the GPU compositor thread.
-  const handleTouchStart = (e) => {
-    touchStartRef.current = { y: e.touches[0].clientY };
-  };
-  const handleTouchMove = (e) => {
-    if (!touchStartRef.current) return;
-    const dy = e.touches[0].clientY - touchStartRef.current.y;
-    if (dy > 0) {
-      sheetYRef.current = dy;
-      const el = sheetRef.current;
-      if (el) {
-        el.style.transition = 'none';
-        el.style.transform = `translateY(${dy}px)`;
-      }
-    }
-  };
-  const handleTouchEnd = () => {
-    if (!touchStartRef.current) return;
-    const el = sheetRef.current;
-    if (sheetYRef.current > 120) {
-      if (el) {
-        el.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
-        el.style.transform = 'translateY(100%)';
-      }
-      dismiss();
-    } else {
-      sheetYRef.current = 0;
-      if (el) {
-        el.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
-        el.style.transform = 'translateY(0px)';
-      }
-    }
-    touchStartRef.current = null;
-  };
-
   return (
     <div
       ref={containerRef}
@@ -447,39 +432,37 @@ export default function NewTaskPage({ embedded = false }) {
         onClick={() => dismiss()}
       />
 
-      {/* Bottom sheet card — transform/transition managed via sheetRef,
-           never via React state, to avoid re-render jank during drag */}
+      {/* Floating compose bar — single layer, no sheet wrapper.
+           Sits at the bottom of the visual viewport (rides up with the
+           on-screen keyboard via the bottom-offset effect below).
+           transform/transition managed via sheetRef for slide-in/out. */}
       <div
         ref={sheetRef}
-        className="relative z-10 bg-page rounded-t-[20px] shadow-2xl flex flex-col w-full max-w-2xl"
-        style={{ maxHeight: "92vh" }}
+        className="relative z-10 mx-3 mb-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface rounded-2xl shadow-2xl"
+        style={{
+          maxHeight: "85vh",
+          marginBottom: `calc(0.75rem + ${kbOffset}px)`,
+          transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), margin-bottom 0.15s ease-out',
+        }}
       >
-        {/* Drag handle */}
         <div
-          className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing shrink-0"
-          style={{ touchAction: "none" }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
+          ref={sheetBodyRef}
+          className="overflow-y-auto overflow-x-hidden px-5 pt-5 pb-3 rounded-2xl"
+          style={{ overscrollBehavior: "none", maxHeight: "85vh" }}
         >
-          <div className="w-10 h-1 rounded-full bg-dim/40" />
-        </div>
-
-        {/* Scrollable content */}
-        <div ref={sheetBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4" style={{ overscrollBehavior: "none" }}>
-          <form onSubmit={handleSubmit}>
-            <div
-              className="rounded-2xl bg-surface shadow-2xl ring-1 ring-cyan-500/30 px-5 pt-5 pb-3 relative"
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              {dragOver && (
-                <div className="absolute inset-0 z-30 rounded-2xl bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
-                  <span className="text-sm font-medium text-cyan-400">Drop files here</span>
-                </div>
-              )}
+          <form
+            onSubmit={handleSubmit}
+            className="relative"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {dragOver && (
+              <div className="absolute -inset-5 z-30 rounded-2xl bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
+                <span className="text-sm font-medium text-cyan-400">Drop files here</span>
+              </div>
+            )}
               <textarea
                 ref={textareaRef}
                 value={description}
@@ -661,7 +644,6 @@ export default function NewTaskPage({ embedded = false }) {
                   </svg>
                 </button>
               </div>
-            </div>
           </form>
         </div>
       </div>

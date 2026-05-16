@@ -705,6 +705,10 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
             logger.debug("Agent %s: processing turn %d: role=%s kind=%s uuid=%s content_len=%d",
                          ctx.agent_id[:8], seq, role, kind, jsonl_uuid, len(content or ""))
 
+            if role == "user" and kind == "slash_signal":
+                _drift_skipped_other_role.append((seq, role))
+                continue
+
             if role == "user":
                 msg = _promote_or_create_user_msg(
                     db, ctx, content, jsonl_uuid, seq, meta, kind, jsonl_ts,

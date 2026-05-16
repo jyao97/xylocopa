@@ -1005,7 +1005,8 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
             _r = _t[0]
             _k = _t[4] if len(_t) > 4 else None
             if _r == "user":
-                _saw_user_turn = True
+                if _k != "slash_signal":
+                    _saw_user_turn = True
             elif _r == "assistant":
                 _saw_assistant_turn = True
             elif _r == "system":

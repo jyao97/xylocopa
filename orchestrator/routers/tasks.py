@@ -196,7 +196,8 @@ async def _dispatch_task_tmux(db: Session, task: Task, proj: Project, ad) -> str
     if skip_permissions:
         cmd_parts.append("--dangerously-skip-permissions")
     if model:
-        cmd_parts += ["--model", model]
+        from routers.agents import _model_for_cli
+        cmd_parts += ["--model", _model_for_cli(model)]
     if effort:
         cmd_parts += ["--effort", effort]
     if worktree:

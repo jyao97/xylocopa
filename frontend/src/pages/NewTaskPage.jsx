@@ -466,41 +466,40 @@ export default function NewTaskPage({ embedded = false }) {
         </div>
 
         {/* Scrollable content */}
-        <div ref={sheetBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-6" style={{ overscrollBehavior: "none" }}>
+        <div ref={sheetBodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4" style={{ overscrollBehavior: "none" }}>
           <form onSubmit={handleSubmit}>
-              <div
-                className="relative"
-                onDragEnter={handleDragEnter}
-                onDragLeave={handleDragLeave}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-              >
-                {dragOver && (
-                  <div className="absolute inset-0 z-30 rounded-lg bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
-                    <span className="text-sm font-medium text-cyan-400">Drop files here</span>
-                  </div>
-                )}
-                <textarea
-                  ref={textareaRef}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      launchAgent();
-                    }
-                  }}
-                  onPaste={handlePaste}
-                  placeholder="Describe what needs to be done..."
-                  rows={3}
-                  className="w-full min-h-[60px] max-h-[180px] bg-transparent text-sm text-heading placeholder-hint/40 resize-none focus:outline-none leading-relaxed"
-                />
-                {voice.refining && (
-                  <div className="text-sm text-cyan-400/80 italic animate-pulse">
-                    Refining...
-                  </div>
-                )}
-              </div>
+            <div
+              className="rounded-2xl bg-surface shadow-2xl ring-1 ring-cyan-500/30 px-5 pt-5 pb-3 relative"
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              {dragOver && (
+                <div className="absolute inset-0 z-30 rounded-2xl bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
+                  <span className="text-sm font-medium text-cyan-400">Drop files here</span>
+                </div>
+              )}
+              <textarea
+                ref={textareaRef}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    launchAgent();
+                  }
+                }}
+                onPaste={handlePaste}
+                placeholder="Describe what needs to be done..."
+                rows={3}
+                className="w-full min-h-[60px] max-h-[180px] bg-transparent text-sm text-heading placeholder-hint/40 resize-none focus:outline-none leading-relaxed"
+              />
+              {voice.refining && (
+                <div className="text-sm text-cyan-400/80 italic animate-pulse">
+                  Refining...
+                </div>
+              )}
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {attachments.map((att, i) => (
@@ -662,6 +661,7 @@ export default function NewTaskPage({ embedded = false }) {
                   </svg>
                 </button>
               </div>
+            </div>
           </form>
         </div>
       </div>

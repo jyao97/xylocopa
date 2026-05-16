@@ -51,6 +51,14 @@ from websocket import emit_task_update, emit_agent_update
 
 logger = logging.getLogger("orchestrator")
 
+_1M_MODELS = {"claude-opus-4-6", "claude-sonnet-4-6"}
+
+def _model_for_cli(model: str) -> str:
+    """Append [1m] suffix for models that support 1M context window."""
+    if model in _1M_MODELS:
+        return f"{model}[1m]"
+    return model
+
 router = APIRouter(tags=["agents"])
 
 # Aliases for route_helpers functions (original code used underscore-prefixed names)
@@ -652,7 +660,7 @@ async def create_agent(body: AgentCreate, request: Request, db: Session = Depend
         if body.skip_permissions:
             cmd_parts.append("--dangerously-skip-permissions")
         if agent_model:
-            cmd_parts += ["--model", agent_model]
+            cmd_parts += ["--model", _model_for_cli(agent_model)]
         if body.effort:
             cmd_parts += ["--effort", body.effort]
         if wt:
@@ -811,7 +819,7 @@ async def launch_tmux_agent(request: Request, db: Session = Depends(get_db)):
     if skip_permissions:
         cmd_parts.append("--dangerously-skip-permissions")
     if model:
-        cmd_parts += ["--model", model]
+        cmd_parts += ["--model", _model_for_cli(model)]
     if effort:
         cmd_parts += ["--effort", effort]
     if worktree:
@@ -1672,7 +1680,7 @@ async def convert_and_adopt_unlinked_session(
     import shlex
     claude_cmd = " ".join(shlex.quote(p) for p in [
         "claude", "--dangerously-skip-permissions",
-        "--model", proj.default_model or CC_MODEL,
+        "--model", _model_for_cli(proj.default_model or CC_MODEL),
         sid_flag, session_id,
     ])
     try:
@@ -2649,7 +2657,7 @@ async def resume_agent(agent_id: str, request: Request, db: Session = Depends(ge
             if agent.skip_permissions:
                 cmd_parts.append("--dangerously-skip-permissions")
             if agent.model:
-                cmd_parts += ["--model", agent.model]
+                cmd_parts += ["--model", _model_for_cli(agent.model)]
             if agent.worktree:
                 cmd_parts += ["--worktree", agent.worktree]
             if agent.session_id:

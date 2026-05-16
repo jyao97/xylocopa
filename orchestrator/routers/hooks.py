@@ -602,21 +602,9 @@ async def hook_agent_post_compact(request: Request):
         )
     else:
         async def _post_compact_finalize():
-            _ctx = ad._sync_contexts.get(agent_id)
-            if _ctx:
-                try:
-                    _baseline = os.path.getsize(_ctx.jsonl_path)
-                except OSError:
-                    _baseline = None
-                if _baseline is not None:
-                    for _ in range(16):  # 16 × 0.5s = 8s max
-                        await asyncio.sleep(0.5)
-                        try:
-                            if os.path.getsize(_ctx.jsonl_path) > _baseline:
-                                await ad._drain_session_sync(agent_id)
-                                break
-                        except OSError:
-                            break
+            flushed = await _await_jsonl_flush(ad, agent_id, timeout=8.0)
+            if flushed:
+                await ad._drain_session_sync(agent_id)
 
             _db_pc = SessionLocal()
             try:

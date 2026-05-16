@@ -582,75 +582,68 @@ async def hook_agent_post_compact(request: Request):
     # post-compact JSONL, not stale pre-compact bytes.
     await emit_context_usage(agent_id)
 
-    # Decide the compact-window EXECUTING→IDLE transition from the hook's
-    # own `trigger` field. Default unknown → "manual" (safer to land at
-    # IDLE than leave a stuck EXECUTING). Auto: leave EXECUTING — the user
-    # task that filled context is still ongoing.
+    # CC writes compact summary entries (isCompactSummary + "Conversation
+    # compacted") AFTER firing PostCompact.  If we flip IDLE and dispatch
+    # the queued message now, the user bubble lands in the DB before the
+    # summary sys bubbles — wrong display order.
+    #
+    # Solution: defer the EXECUTING→IDLE flip (and the dispatch that
+    # follows) until the summary entries arrive.  dispatch_pending_message
+    # self-checks agent.status and bails while EXECUTING, so no early
+    # dispatch can sneak through.
+    #
+    # For auto-compact the agent stays EXECUTING anyway (original task
+    # continues), so only manual needs the deferred path.
     _trigger = (body.get("trigger") if isinstance(body, dict) else None) or "manual"
-    if _trigger == "manual":
-        _db_pc = SessionLocal()
-        try:
-            _ag_pc = _db_pc.get(Agent, agent_id)
-            if (_ag_pc and _ag_pc.status == AgentStatus.EXECUTING):
-                _ag_pc.status = AgentStatus.IDLE
-                _ag_pc.generating_msg_id = None
-                _db_pc.commit()
-                from websocket import emit_agent_update as _eau_pc
-                asyncio.ensure_future(_eau_pc(
-                    agent_id, "IDLE", _ag_pc.project,
-                ))
-                logger.info(
-                    "PostCompact: trigger=manual, agent %s → IDLE",
-                    agent_id[:8],
-                )
-        except Exception:
-            _db_pc.rollback()
-            logger.exception(
-                "PostCompact: failed to flip status for %s", agent_id[:8],
-            )
-        finally:
-            _db_pc.close()
-    else:
+    if _trigger != "manual":
         logger.info(
             "PostCompact: trigger=%s, keep agent %s EXECUTING",
             _trigger, agent_id[:8],
         )
+    else:
+        async def _post_compact_finalize():
+            _ctx = ad._sync_contexts.get(agent_id)
+            if _ctx:
+                try:
+                    _baseline = os.path.getsize(_ctx.jsonl_path)
+                except OSError:
+                    _baseline = None
+                if _baseline is not None:
+                    for _ in range(16):  # 16 × 0.5s = 8s max
+                        await asyncio.sleep(0.5)
+                        try:
+                            if os.path.getsize(_ctx.jsonl_path) > _baseline:
+                                await ad._drain_session_sync(agent_id)
+                                break
+                        except OSError:
+                            break
 
-    # Drain pending queue unconditionally. /compact does not fire a Stop
-    # hook, so queued messages have no natural drain trigger after compact.
-    # `dispatch_pending_message` self-checks agent.status before promoting:
-    # - manual: status now IDLE → queue drains
-    # - auto:   status still EXECUTING → call bails harmlessly, original
-    #           task's eventual Stop hook will drain later
-    # Separating "wake-up kick" from "status decision" keeps the gate at
-    # the right layer (the dispatcher's status check) and makes the kick
-    # robust to unusual sequences (e.g. status already IDLE before flip).
-    asyncio.ensure_future(
-        ad.dispatch_pending_message(agent_id, delay=0)
-    )
-
-    # CC writes compact summary entries (isCompactSummary + "Conversation
-    # compacted") to the JSONL shortly AFTER firing PostCompact.  The drain
-    # above runs before those bytes land, so the bubbles are missing until
-    # the next sync wake.  With POLL_INTERVAL=300s, that means a 5-min gap.
-    # Background watchdog: poll for file growth, wake sync once it arrives.
-    async def _post_compact_tail():
-        _ctx = ad._sync_contexts.get(agent_id)
-        if not _ctx:
-            return
-        try:
-            _baseline = os.path.getsize(_ctx.jsonl_path)
-        except OSError:
-            return
-        for _ in range(16):  # 16 × 0.5s = 8s max
-            await asyncio.sleep(0.5)
+            _db_pc = SessionLocal()
             try:
-                if os.path.getsize(_ctx.jsonl_path) > _baseline:
-                    ad.wake_sync(agent_id)
-                    return
-            except OSError:
-                return
-    asyncio.ensure_future(_post_compact_tail())
+                _ag_pc = _db_pc.get(Agent, agent_id)
+                if _ag_pc and _ag_pc.status == AgentStatus.EXECUTING:
+                    _ag_pc.status = AgentStatus.IDLE
+                    _ag_pc.generating_msg_id = None
+                    _db_pc.commit()
+                    from websocket import emit_agent_update as _eau_pc
+                    asyncio.ensure_future(_eau_pc(
+                        agent_id, "IDLE", _ag_pc.project,
+                    ))
+                    logger.info(
+                        "PostCompact: summary synced, agent %s → IDLE",
+                        agent_id[:8],
+                    )
+            except Exception:
+                _db_pc.rollback()
+                logger.exception(
+                    "PostCompact: failed to flip status for %s",
+                    agent_id[:8],
+                )
+            finally:
+                _db_pc.close()
+
+            await ad.dispatch_pending_message(agent_id, delay=0)
+        asyncio.ensure_future(_post_compact_finalize())
 
     logger.info("hook_agent_post_compact: agent=%s", agent_id[:8])
     return {}

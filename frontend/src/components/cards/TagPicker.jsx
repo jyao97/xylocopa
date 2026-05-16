@@ -46,7 +46,9 @@ export default function TagPicker({ options, value, onSelect, className, childre
   }, [open, handleClose]);
 
   // Track tag position via RAF — uses page-absolute coords (scrollY)
-  // so keyboard open/close doesn't affect positioning
+  // so keyboard open/close doesn't affect positioning. Clamps the
+  // left coord so a wide popup (content-sized) doesn't overflow the
+  // right viewport edge.
   useEffect(() => {
     if (!open) return;
     let raf;
@@ -55,10 +57,14 @@ export default function TagPicker({ options, value, onSelect, className, childre
       const pop = popRef.current;
       if (el) {
         const rect = el.getBoundingClientRect();
+        const popW = pop?.offsetWidth ?? 0;
+        const margin = 12;
         const top = placement === "top" && pop
           ? rect.top + window.scrollY - pop.offsetHeight - 6
           : rect.bottom + window.scrollY + 6;
-        const left = rect.left + window.scrollX;
+        const rawLeft = rect.left;
+        const maxLeft = Math.max(margin, window.innerWidth - popW - margin);
+        const left = Math.min(rawLeft, maxLeft) + window.scrollX;
         setPos(prev => {
           if (prev && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.left - left) < 0.5) return prev;
           return { top, left };
@@ -87,7 +93,7 @@ export default function TagPicker({ options, value, onSelect, className, childre
             top: pos.top,
             left: pos.left,
             width: extra ? "min(180px, 70vw)" : undefined,
-            maxWidth: extra ? undefined : "min(280px, 85vw)",
+            maxWidth: extra ? undefined : "calc(100vw - 1.5rem)",
           }}
           onClick={(e) => e.stopPropagation()}
         >

@@ -5,7 +5,6 @@ import { MODEL_OPTIONS, modelDisplayName } from "../lib/constants";
 import { DATE_SHORT } from "../lib/formatters";
 import ProjectSelector from "../components/ProjectSelector";
 import TagPicker from "../components/cards/TagPicker";
-import VoiceRecorder from "../components/VoiceRecorder";
 import SendLaterPicker from "../components/SendLaterPicker";
 import ImageLightbox from "../components/ImageLightbox";
 import useDraft from "../hooks/useDraft";
@@ -482,17 +481,17 @@ export default function NewTaskPage({ embedded = false }) {
               <ProjectSelector value={project} onChange={setProject} />
             </div>
 
-            {/* Input card — matches project detail page layout */}
-            <form onSubmit={handleSubmit} className="rounded-xl bg-surface shadow-card p-4">
+            {/* Input card — matches inbox expanded card layout */}
+            <form onSubmit={handleSubmit} className="rounded-2xl bg-surface shadow-card px-5 pt-4 pb-4">
               <div
-                className="glass-bar-nav rounded-[22px] px-3 pt-2 pb-2.5 flex flex-col gap-2 relative mb-5"
+                className="relative"
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
               >
                 {dragOver && (
-                  <div className="absolute inset-0 z-30 rounded-[22px] bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
+                  <div className="absolute inset-0 z-30 rounded-lg bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
                     <span className="text-sm font-medium text-cyan-400">Drop files here</span>
                   </div>
                 )}
@@ -509,103 +508,44 @@ export default function NewTaskPage({ embedded = false }) {
                   onPaste={handlePaste}
                   placeholder="Describe what needs to be done..."
                   rows={3}
-                  className="w-full min-h-[72px] max-h-[180px] rounded-xl bg-transparent px-3 py-2 text-sm text-heading placeholder-hint resize-none focus:outline-none transition-colors"
+                  className="w-full min-h-[60px] max-h-[180px] bg-transparent text-sm text-heading placeholder-hint/40 resize-none focus:outline-none leading-relaxed"
                 />
                 {voice.refining && (
-                  <div className="px-3 pb-1 text-sm text-cyan-400/80 italic animate-pulse">
+                  <div className="text-sm text-cyan-400/80 italic animate-pulse">
                     Refining...
                   </div>
                 )}
-                {attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 px-1">
-                    {attachments.map((att, i) => (
-                      <div key={att.id} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-elevated text-xs max-w-[140px] cursor-pointer"
-                        onClick={() => { if (!att.uploading) setPreviewIndex(i); }}>
-                        {att.previewUrl ? (
-                          <img src={att.previewUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
-                        ) : (
-                          <svg className="w-4 h-4 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                          </svg>
-                        )}
-                        <span className="truncate text-label flex-1 min-w-0">{att.originalName}</span>
-                        {att.uploading ? (
-                          <svg className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                        ) : (
-                          <button type="button" onClick={() => removeAttachment(att.id)} className="text-dim hover:text-heading shrink-0">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.yaml,.yml,.xml,.log,.zip,.tar,.gz" multiple className="hidden" onChange={handleFileSelect} />
-                <div className="grid gap-1.5 items-center px-1 grid-cols-[auto_1fr_auto_auto_auto]">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Attach files"
-                    className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors bg-elevated hover:bg-hover text-label"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                  </button>
-                  <div className="flex items-center gap-1.5 justify-end">
-                    {voice.recording && voice.remainingSeconds != null && (
-                      <span className={`text-xs font-semibold tabular-nums ${voice.remainingSeconds <= 10 ? "text-red-400" : "text-red-500"}`}>
-                        {voice.remainingSeconds >= 60
-                          ? `${Math.floor(voice.remainingSeconds / 60)}:${String(voice.remainingSeconds % 60).padStart(2, "0")}`
-                          : voice.remainingSeconds}
-                      </span>
-                    )}
-                    <VoiceRecorder
-                      recording={voice.recording}
-                      voiceLoading={voice.voiceLoading}
-                      micError={voice.micError}
-                      onToggle={voice.toggleRecording}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => dismiss()}
-                    disabled={!hasContent || submitting}
-                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                      !hasContent || submitting
-                        ? "bg-elevated text-dim cursor-not-allowed"
-                        : "bg-indigo-500 hover:bg-indigo-400 text-white"
-                    }`}
-                    title="Save to inbox & close"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={launchAgent}
-                    disabled={!hasContent || submitting || anyUploading}
-                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                      !project || !hasContent || submitting || anyUploading
-                        ? "bg-elevated text-dim"
-                        : "bg-cyan-500 hover:bg-cyan-400 text-white"
-                    } ${(!hasContent || submitting || anyUploading) ? "cursor-not-allowed" : "cursor-pointer"}`}
-                    title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                    </svg>
-                  </button>
-                </div>
               </div>
-              {/* Tags row — matches inbox card style */}
-              <div className="flex flex-wrap items-center gap-1.5">
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {attachments.map((att, i) => (
+                    <div key={att.id} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-elevated text-xs max-w-[160px] cursor-pointer"
+                      onClick={() => { if (!att.uploading) setPreviewIndex(i); }}>
+                      {att.previewUrl ? (
+                        <img src={att.previewUrl} alt="" className="w-6 h-6 rounded object-cover shrink-0" />
+                      ) : (
+                        <svg className="w-3.5 h-3.5 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                      )}
+                      <span className="truncate flex-1 min-w-0 text-dim">{att.originalName}</span>
+                      {att.uploading ? (
+                        <svg className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); removeAttachment(att.id); }} className="shrink-0 text-faint hover:text-heading">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5 mt-3">
                 <TagPicker options={WT_PICKER} value={!!worktree} placement="top"
                   keepOpenOnSelect={(v) => v === true}
                   onSelect={async (v) => {
@@ -654,6 +594,80 @@ export default function NewTaskPage({ embedded = false }) {
                   className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-elevated text-dim cursor-pointer active:scale-90 transition-transform">
                   {EFFORT_PICKER.find(e => e.value === effort)?.label || effort}
                 </TagPicker>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.yaml,.yml,.xml,.log,.zip,.tar,.gz" multiple className="hidden" onChange={handleFileSelect} />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach files"
+                  className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+                <div className="flex-1" />
+                {voice.recording && voice.remainingSeconds != null && (
+                  <span className="text-[9px] text-red-400 font-medium tabular-nums">
+                    {Math.floor(voice.remainingSeconds / 60)}:{String(voice.remainingSeconds % 60).padStart(2, "0")}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={voice.toggleRecording}
+                  disabled={voice.voiceLoading}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                    voice.recording ? "bg-red-500 text-white"
+                      : voice.voiceLoading ? "bg-elevated cursor-wait"
+                      : "bg-elevated text-dim hover:text-heading"
+                  }`}
+                  title={voice.recording ? "Stop recording" : "Voice input"}
+                >
+                  {voice.voiceLoading ? (
+                    <svg className="animate-spin w-4 h-4 text-body" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dismiss()}
+                  disabled={!hasContent || submitting}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                    !hasContent || submitting
+                      ? "bg-elevated text-dim cursor-not-allowed"
+                      : "bg-indigo-500 hover:bg-indigo-400 text-white"
+                  }`}
+                  title="Save to inbox & close"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={launchAgent}
+                  disabled={!hasContent || submitting || anyUploading}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                    !project || !hasContent || submitting || anyUploading
+                      ? "bg-elevated text-dim"
+                      : "bg-cyan-500 hover:bg-cyan-400 text-white"
+                  } ${(!hasContent || submitting || anyUploading) ? "cursor-not-allowed" : "cursor-pointer"}`}
+                  title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                  </svg>
+                </button>
               </div>
             </form>
           </div>

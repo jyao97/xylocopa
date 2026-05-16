@@ -2866,6 +2866,11 @@ Here are the day's conversations (with timestamps):
                         "drain_session_sync: agent %s compact full_scan done",
                         agent_id[:8],
                     )
+                    # full_scan resets the pointer but never creates messages.
+                    # Run sync_import again so the compact boundary + summary
+                    # system bubbles land in the DB (and display) immediately,
+                    # instead of waiting for the next sync-loop wake.
+                    await sync_import_new_turns(self, ctx)
             except Exception:
                 logger.exception(
                     "drain_session_sync failed for agent %s", agent_id[:8],

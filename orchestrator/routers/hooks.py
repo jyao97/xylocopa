@@ -663,14 +663,18 @@ async def hook_agent_tool_activity(request: Request):
 
     ad = getattr(request.app.state, "agent_dispatcher", None)
 
-    # Wake sync — tool_use writes new assistant turns to JSONL between
-    # UserPromptSubmit and Stop. Without waking sync here, the JSONL
-    # changes wouldn't be imported until the next idle poll (~60s),
-    # leaving the chat scroll silent and status stuck. Hooks themselves
-    # never write status (Rule 3); they only signal "JSONL has new bytes,
-    # please process".
+    # Wake sync — import new assistant turns written to JSONL between
+    # UserPromptSubmit and Stop.  Bare wake_sync handles the common case
+    # where CC has already flushed; the background _await_jsonl_flush
+    # covers the case where CC fires the hook before the JSONL write
+    # lands on disk (observed with batch-flush behaviour on long tool
+    # sequences).
     if ad:
         ad.wake_sync(agent_id)
+        async def _tool_flush_then_wake(_aid):
+            await _await_jsonl_flush(ad, _aid)
+            ad.wake_sync(_aid)
+        asyncio.ensure_future(_tool_flush_then_wake(agent_id))
 
     tool_name = phase = summary = output_summary = ""
     is_error = False

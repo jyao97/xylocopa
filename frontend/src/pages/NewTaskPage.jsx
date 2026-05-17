@@ -79,7 +79,10 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
 
   // Prevent background scroll. overflow:hidden handles normal scroll;
   // scroll listener resets any programmatic scroll iOS does on keyboard open.
+  // Skip in embedded (split-screen) mode — global body changes cause layout
+  // reflow across all panes.
   useLayoutEffect(() => {
+    if (embedded) return;
     const scrollY = window.scrollY;
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
@@ -94,7 +97,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
       document.documentElement.style.backgroundColor = '';
       document.body.style.backgroundColor = '';
     };
-  }, []);
+  }, [embedded]);
 
   // Track keyboard height via visualViewport — sets CSS var --kb-h for
   // positioning the sheet above the keyboard.
@@ -198,14 +201,16 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
 
   // Block touchmove on ANY element outside all overlays — catches
   // iOS Safari momentum-scroll bleed from the page behind.
+  // Skip in embedded mode — other panes need their scroll events.
   useEffect(() => {
+    if (embedded) return;
     const blockBg = (e) => {
       if (e.target.closest('[data-overlay]')) return;
       e.preventDefault();
     };
     document.addEventListener("touchmove", blockBg, { passive: false });
     return () => document.removeEventListener("touchmove", blockBg);
-  }, []);
+  }, [embedded]);
 
   const [previewIndex, setPreviewIndex] = useState(null);
 
@@ -483,10 +488,11 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
       data-overlay
       className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-end items-center`}
     >
-      {/* Backdrop */}
+      {/* Backdrop — pointer-events disabled until mounted to prevent stray
+           click events synthesized from the FAB touch that opened this overlay */}
       <div
         className="absolute inset-0 transition-opacity duration-300"
-        style={{ backgroundColor: "rgba(0,0,0,0.4)", opacity: mounted && !isClosing ? 1 : 0, touchAction: "none" }}
+        style={{ backgroundColor: "rgba(0,0,0,0.4)", opacity: mounted && !isClosing ? 1 : 0, touchAction: "none", pointerEvents: mounted && !isClosing ? "auto" : "none" }}
         onClick={() => dismiss()}
       />
 
@@ -500,7 +506,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
         className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface shadow-card rounded-2xl"
         style={{
           maxHeight: "85vh",
-          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : 'env(safe-area-inset-bottom, 0px)',
+          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : 'max(12px, env(safe-area-inset-bottom, 0px))',
           transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
         }}
       >

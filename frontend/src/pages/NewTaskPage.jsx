@@ -77,10 +77,9 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
     if (el) el.style.transform = 'translateY(120%)';
   }, []);
 
-  // Lock body scroll on mount — prevents iOS from scrolling the viewport
-  // when the keyboard opens (race: iOS native scroll-into-view fires before
-  // our JS can react).  Must happen BEFORE any input gets focus.
-  useEffect(() => {
+  // Lock body scroll before first paint — useLayoutEffect runs synchronously
+  // before the browser paints, so the background never visibly shifts.
+  useLayoutEffect(() => {
     const scrollY = window.scrollY;
     document.body.style.position = 'fixed';
     document.body.style.width = '100%';

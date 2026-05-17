@@ -788,7 +788,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   <button type="button" onClick={(e) => { e.stopPropagation(); filePickerOpenRef.current = true; fileInputRef.current?.click(); }}
                     className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
                     title="Attach file">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
                   </button>
@@ -800,7 +800,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                     }}
                     className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-red-500 active:scale-90 transition-all"
                     title="Delete task">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                     </svg>
                   </button>
@@ -808,7 +808,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   <div className="flex-1" />
 
                   {voice.recording && voice.remainingSeconds != null && (
-                    <span className="text-[10px] text-red-400 font-semibold tabular-nums">
+                    <span className="text-[9px] text-red-400 font-medium tabular-nums">
                       {Math.floor(voice.remainingSeconds / 60)}:{String(Math.floor(voice.remainingSeconds % 60)).padStart(2, "0")}
                     </span>
                   )}
@@ -821,12 +821,12 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                     }`}
                     title={voice.recording ? "Stop recording" : "Voice input"}>
                     {voice.voiceLoading ? (
-                      <svg className="animate-spin w-5 h-5 text-body" viewBox="0 0 24 24" fill="none">
+                      <svg className="animate-spin w-4 h-4 text-body" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                         <line x1="12" y1="19" x2="12" y2="23" />
@@ -841,7 +841,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                         task.notify_at ? "bg-amber-500 text-white" : "bg-elevated text-dim hover:text-heading"
                       }`}
                       title="Set notification time">
-                      <Bell className="w-5 h-5" strokeWidth={2} />
+                      <Bell className="w-4 h-4" strokeWidth={2} />
                     </button>
                     {showRemindPicker && (
                       <SendLaterPicker
@@ -858,7 +858,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                         task.deferred_to ? "bg-indigo-500 text-white" : "bg-elevated text-dim hover:text-heading"
                       }`}
                       title="Defer task">
-                      <Hourglass className="w-5 h-5" strokeWidth={2} />
+                      <Hourglass className="w-4 h-4" strokeWidth={2} />
                     </button>
                     {showDeferPicker && (
                       <SendLaterPicker
@@ -873,10 +873,10 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   <button type="button" onClick={handleDispatch}
                     disabled={!task.project_name}
                     className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all ${
-                      task.project_name ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-dim cursor-not-allowed"
+                      task.project_name ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-faint cursor-not-allowed"
                     }`}
                     title={task.project_name ? "Start task" : "Select a project first"}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                     </svg>
                   </button>

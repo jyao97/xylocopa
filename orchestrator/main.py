@@ -247,6 +247,50 @@ async def lifespan(app: FastAPI):
             ["tmux", "has-session", "-t", "_xylocopa_keepalive"],
             capture_output=True, text=True, timeout=5,
         )
+
+        # Boot diagnostic: test whether a default-shell (bash) session
+        # survives.  The keepalive uses explicit `sh -c ...` which always
+        # works; agent resume relies on the default login shell.  If bash
+        # exits at boot (the suspected cold-start root cause), this probe
+        # catches it while the keepalive keeps the server alive.
+        _diag_name = "_xy_boot_bash_probe"
+        try:
+            _sp_init.run(
+                ["tmux", "kill-session", "-t", _diag_name],
+                capture_output=True, timeout=5,
+            )
+            _sp_init.run(
+                ["tmux", "new-session", "-d", "-s", _diag_name,
+                 "-c", os.path.expanduser("~")],
+                capture_output=True, text=True, timeout=5,
+            )
+            import time as _time_init
+            _time_init.sleep(0.5)
+            _diag = _sp_init.run(
+                ["tmux", "has-session", "-t", _diag_name],
+                capture_output=True, text=True, timeout=5,
+            )
+            if _diag.returncode != 0:
+                _sock = "/tmp/tmux-%d/default" % os.getuid()
+                logger.warning(
+                    "BOOT_DIAG: default-shell (login bash) session died "
+                    "within 500ms! socket_exists=%s  SHELL=%s  TERM=%s  "
+                    "HOME=%s  XDG_RUNTIME_DIR=%s",
+                    os.path.exists(_sock),
+                    os.environ.get("SHELL", "<unset>"),
+                    os.environ.get("TERM", "<unset>"),
+                    os.environ.get("HOME", "<unset>"),
+                    os.environ.get("XDG_RUNTIME_DIR", "<unset>"),
+                )
+            else:
+                logger.info("BOOT_DIAG: default-shell session survived (bash OK)")
+                _sp_init.run(
+                    ["tmux", "kill-session", "-t", _diag_name],
+                    capture_output=True, timeout=5,
+                )
+        except Exception:
+            logger.debug("BOOT_DIAG: probe failed (non-fatal)", exc_info=True)
+
         if verify.returncode == 0:
             oom_policy = _detect_pm2_oom_policy()
             if oom_policy == "stop":

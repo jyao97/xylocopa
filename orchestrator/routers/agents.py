@@ -51,13 +51,14 @@ from websocket import emit_task_update, emit_agent_update
 
 logger = logging.getLogger("orchestrator")
 
-_1M_MODELS = {"claude-opus-4-6", "claude-sonnet-4-6"}
+_MODEL_TO_ALIAS = {
+    "claude-opus-4-6": "opus",
+    "claude-sonnet-4-6": "sonnet",
+}
 
 def _model_for_cli(model: str) -> str:
-    """Append [1m] suffix for models that support 1M context window."""
-    if model in _1M_MODELS:
-        return f"{model}[1m]"
-    return model
+    """Use alias for 1M-capable models so ANTHROPIC_DEFAULT_*_MODEL env var takes effect."""
+    return _MODEL_TO_ALIAS.get(model, model)
 
 router = APIRouter(tags=["agents"])
 

@@ -184,8 +184,9 @@ def create_tmux_claude_session(
     # defense in depth against env name churn.
     env_setup += " && export CLAUDE_CODE_RESUME_TOKEN_THRESHOLD=999999999"
     env_setup += " && export CLAUDE_CODE_RESUME_THRESHOLD_MINUTES=999999"
-    # Enable 1M context window for Opus 4.6 (workaround for --model dropping [1m] suffix)
+    # Enable 1M context window (--model drops [1m] suffix; alias + env var works)
     env_setup += ' && export ANTHROPIC_DEFAULT_OPUS_MODEL="claude-opus-4-6[1m]"'
+    env_setup += ' && export ANTHROPIC_DEFAULT_SONNET_MODEL="claude-sonnet-4-6[1m]"'
     if agent_id:
         env_setup += f" && export XY_AGENT_ID={agent_id} && export AHIVE_AGENT_ID={agent_id}"
     _sp.run(["tmux", "send-keys", "-t", pane_id, env_setup, "Enter"],

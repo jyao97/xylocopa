@@ -80,25 +80,19 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
   // Prevent background scroll. overflow:hidden handles normal scroll;
   // scroll listener resets any programmatic scroll iOS does on keyboard open.
   useLayoutEffect(() => {
-    document.getElementById('nt-preoverlay')?.remove();
     const scrollY = window.scrollY;
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     document.documentElement.style.backgroundColor = '#999';
     document.body.style.backgroundColor = '#999';
-    const meta = document.querySelector('meta[name="theme-color"]');
-    const prevTheme = meta?.getAttribute('content');
-    if (meta) meta.setAttribute('content', '#999');
     const resetScroll = () => window.scrollTo(0, scrollY);
     window.addEventListener('scroll', resetScroll);
     return () => {
-      document.getElementById('nt-preoverlay')?.remove();
       window.removeEventListener('scroll', resetScroll);
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
       document.documentElement.style.backgroundColor = '';
       document.body.style.backgroundColor = '';
-      if (meta && prevTheme != null) meta.setAttribute('content', prevTheme);
     };
   }, []);
 
@@ -489,10 +483,10 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
       data-overlay
       className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-end items-center`}
     >
-      {/* Backdrop — appears instantly, fades out on close */}
+      {/* Backdrop */}
       <div
-        className="absolute inset-0"
-        style={{ backgroundColor: "rgba(0,0,0,0.4)", opacity: isClosing ? 0 : 1, transition: isClosing ? 'opacity 0.25s' : 'none', touchAction: "none" }}
+        className="absolute inset-0 transition-opacity duration-300"
+        style={{ backgroundColor: "rgba(0,0,0,0.4)", opacity: mounted && !isClosing ? 1 : 0, touchAction: "none" }}
         onClick={() => dismiss()}
       />
 

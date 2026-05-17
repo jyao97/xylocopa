@@ -4,8 +4,8 @@
 /* ── Theme Color Tokens ── */
 :root {
   color-scheme: light;
-  --color-page:       #ffffff;
-  --color-surface:    #f6f7f8;
+  --color-page:       #f2f2f7;
+  --color-surface:    #ffffff;
   --color-input:      #ebedf0;
   --color-elevated:   #e2e5e9;
   --color-hover:      #d8dce2;

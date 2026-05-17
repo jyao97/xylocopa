@@ -1110,12 +1110,12 @@ svg text { font-family: inherit; }
 
 /* ── Global overflow prevention ── */
 html {
-  background-color: var(--color-page);
+  background-color: var(--color-surface);
   overscroll-behavior: none;
 }
 body {
   overflow-wrap: break-word;
-  background-color: var(--color-page);
+  background-color: var(--color-surface);
   overscroll-behavior: none;
 }
 /* Make body 1px taller than viewport so window.scrollBy actually

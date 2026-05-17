@@ -467,7 +467,7 @@ function AppChrome({ themeProps }) {
 
       {/* NewTaskPage modal — rendered in-place, no route change */}
       {newTaskOpen && (
-        <Suspense fallback={<div className="fixed inset-0 z-50" style={{ backgroundColor: "rgba(0,0,0,0.4)" }} />}>
+        <Suspense fallback={null}>
           <NewTaskPage
             onClose={() => setNewTaskOpen(false)}
             contextPath={location.pathname}

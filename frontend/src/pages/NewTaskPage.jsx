@@ -479,10 +479,10 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
       data-overlay
       className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-end items-center`}
     >
-      {/* Backdrop — appears instantly, fades out on close */}
+      {/* Backdrop */}
       <div
-        className="absolute inset-0"
-        style={{ backgroundColor: "rgba(0,0,0,0.4)", opacity: isClosing ? 0 : 1, transition: isClosing ? 'opacity 0.25s' : 'none', touchAction: "none" }}
+        className="absolute inset-0 transition-opacity duration-300"
+        style={{ backgroundColor: "rgba(0,0,0,0.4)", opacity: mounted && !isClosing ? 1 : 0, touchAction: "none" }}
         onClick={() => dismiss()}
       />
 

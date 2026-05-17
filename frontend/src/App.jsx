@@ -467,7 +467,7 @@ function AppChrome({ themeProps }) {
 
       {/* NewTaskPage modal — rendered in-place, no route change */}
       {newTaskOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="fixed inset-0 z-50" style={{ backgroundColor: "rgba(0,0,0,0.4)" }} />}>
           <NewTaskPage
             onClose={() => setNewTaskOpen(false)}
             contextPath={location.pathname}
@@ -481,7 +481,17 @@ function AppChrome({ themeProps }) {
           className="fixed bottom-[13px] left-0 right-0 z-40 flex justify-center px-4"
           badges={{ agents: unread, projects: claudeMdPending }}
           onDoubleTap={handleNavDoubleTap}
-          onNewTask={() => setNewTaskOpen(true)}
+          onNewTask={() => {
+            const el = document.createElement('div');
+            el.id = 'nt-preoverlay';
+            el.style.cssText = 'position:fixed;inset:0;z-index:49;background:rgba(0,0,0,0.4)';
+            document.body.appendChild(el);
+            document.documentElement.style.backgroundColor = '#999';
+            document.body.style.backgroundColor = '#999';
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#999');
+            setNewTaskOpen(true);
+          }}
           onProjectsTap={(e) => {
             e.preventDefault();
             // Double-tap detection for projects

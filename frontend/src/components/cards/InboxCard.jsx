@@ -835,40 +835,36 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                     )}
                   </button>
 
-                  <div className="relative">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setShowRemindPicker(v => !v); }}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-                        task.notify_at ? "bg-amber-500 text-white" : "bg-elevated text-dim hover:text-heading"
-                      }`}
-                      title="Set notification time">
-                      <Bell className="w-4 h-4" strokeWidth={2} />
-                    </button>
-                    {showRemindPicker && (
-                      <SendLaterPicker
-                        onSelect={handleRemindSelect}
-                        onClose={() => setShowRemindPicker(false)}
-                        onClear={task.notify_at ? handleRemindClear : undefined}
-                      />
-                    )}
-                  </div>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowRemindPicker(v => !v); }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                      task.notify_at ? "bg-amber-500 text-white" : "bg-elevated text-dim hover:text-heading"
+                    }`}
+                    title="Set notification time">
+                    <Bell className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                  {showRemindPicker && (
+                    <SendLaterPicker
+                      onSelect={handleRemindSelect}
+                      onClose={() => setShowRemindPicker(false)}
+                      onClear={task.notify_at ? handleRemindClear : undefined}
+                    />
+                  )}
 
-                  <div className="relative">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setShowDeferPicker(v => !v); }}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-                        task.deferred_to ? "bg-indigo-500 text-white" : "bg-elevated text-dim hover:text-heading"
-                      }`}
-                      title="Defer task">
-                      <Hourglass className="w-4 h-4" strokeWidth={2} />
-                    </button>
-                    {showDeferPicker && (
-                      <SendLaterPicker
-                        title="Defer Until"
-                        onSelect={handleDeferSelect}
-                        onClose={() => setShowDeferPicker(false)}
-                        onClear={task.deferred_to ? handleDeferClear : undefined}
-                      />
-                    )}
-                  </div>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowDeferPicker(v => !v); }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                      task.deferred_to ? "bg-indigo-500 text-white" : "bg-elevated text-dim hover:text-heading"
+                    }`}
+                    title="Defer task">
+                    <Hourglass className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                  {showDeferPicker && (
+                    <SendLaterPicker
+                      title="Defer Until"
+                      onSelect={handleDeferSelect}
+                      onClose={() => setShowDeferPicker(false)}
+                      onClear={task.deferred_to ? handleDeferClear : undefined}
+                    />
+                  )}
 
                   <button type="button" onClick={handleDispatch}
                     disabled={!task.project_name}

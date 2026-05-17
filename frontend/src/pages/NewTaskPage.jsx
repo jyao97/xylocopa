@@ -477,7 +477,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
     <div
       ref={containerRef}
       data-overlay
-      className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-center items-center`}
+      className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-end items-center`}
     >
       {/* Backdrop */}
       <div
@@ -496,7 +496,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
         className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface shadow-card rounded-2xl"
         style={{
           maxHeight: "85vh",
-          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : '0px',
+          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
           transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
         }}
       >
@@ -631,7 +631,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   title="Attach files"
-                  className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
+                  className="w-10 h-10 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -647,7 +647,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={voice.toggleRecording}
                   disabled={voice.voiceLoading}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                     voice.recording ? "bg-red-500 text-white"
                       : voice.voiceLoading ? "bg-elevated cursor-wait"
                       : "bg-elevated text-dim hover:text-heading"
@@ -672,7 +672,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={() => dismiss()}
                   disabled={!hasContent || submitting}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                     !hasContent || submitting
                       ? "bg-elevated text-dim cursor-not-allowed"
                       : "bg-indigo-500 hover:bg-indigo-400 text-white"
@@ -687,7 +687,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={launchAgent}
                   disabled={!hasContent || submitting || anyUploading}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-all ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-all ${
                     !project || !hasContent || submitting || anyUploading
                       ? "bg-elevated text-dim cursor-not-allowed"
                       : "bg-cyan-500 text-white hover:bg-cyan-400"

@@ -77,20 +77,18 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
     if (el) el.style.transform = 'translateY(120%)';
   }, []);
 
-  // Lock body scroll before first paint — useLayoutEffect runs synchronously
-  // before the browser paints, so the background never visibly shifts.
+  // Prevent background scroll. overflow:hidden handles normal scroll;
+  // scroll listener resets any programmatic scroll iOS does on keyboard open.
   useLayoutEffect(() => {
     const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.touchAction = 'none';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    const resetScroll = () => window.scrollTo(0, scrollY);
+    window.addEventListener('scroll', resetScroll);
     return () => {
-      document.body.style.position = '';
-      document.body.style.width = '';
-      document.body.style.top = '';
-      document.body.style.touchAction = '';
-      window.scrollTo(0, scrollY);
+      window.removeEventListener('scroll', resetScroll);
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
     };
   }, []);
 
@@ -633,7 +631,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   title="Attach files"
-                  className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
+                  className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -649,7 +647,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={voice.toggleRecording}
                   disabled={voice.voiceLoading}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                     voice.recording ? "bg-red-500 text-white"
                       : voice.voiceLoading ? "bg-elevated cursor-wait"
                       : "bg-elevated text-dim hover:text-heading"
@@ -674,7 +672,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={() => dismiss()}
                   disabled={!hasContent || submitting}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                     !hasContent || submitting
                       ? "bg-elevated text-dim cursor-not-allowed"
                       : "bg-indigo-500 hover:bg-indigo-400 text-white"
@@ -689,9 +687,9 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   type="button"
                   onClick={launchAgent}
                   disabled={!hasContent || submitting || anyUploading}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-all ${
                     !project || !hasContent || submitting || anyUploading
-                      ? "bg-elevated text-faint cursor-not-allowed"
+                      ? "bg-elevated text-dim cursor-not-allowed"
                       : "bg-cyan-500 text-white hover:bg-cyan-400"
                   }`}
                   title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}

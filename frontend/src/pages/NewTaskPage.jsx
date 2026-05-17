@@ -633,13 +633,13 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   title="Attach files"
                   className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center text-dim hover:text-heading active:scale-90 transition-all"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                 </button>
                 <div className="flex-1" />
                 {voice.recording && voice.remainingSeconds != null && (
-                  <span className="text-[9px] text-red-400 font-medium tabular-nums">
+                  <span className="text-[10px] text-red-400 font-semibold tabular-nums">
                     {Math.floor(voice.remainingSeconds / 60)}:{String(voice.remainingSeconds % 60).padStart(2, "0")}
                   </span>
                 )}
@@ -655,12 +655,12 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   title={voice.recording ? "Stop recording" : "Voice input"}
                 >
                   {voice.voiceLoading ? (
-                    <svg className="animate-spin w-4 h-4 text-body" viewBox="0 0 24 24" fill="none">
+                    <svg className="animate-spin w-5 h-5 text-body" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                   ) : (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                       <line x1="12" y1="19" x2="12" y2="23" />
@@ -679,7 +679,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   }`}
                   title="Save to inbox & close"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
                 </button>
@@ -694,7 +694,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   }`}
                   title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                   </svg>
                 </button>

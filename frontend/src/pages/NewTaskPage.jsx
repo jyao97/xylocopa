@@ -77,25 +77,33 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
     if (el) el.style.transform = 'translateY(120%)';
   }, []);
 
-  // Track keyboard via visualViewport — mirrors AgentChatPage approach:
-  // CSS variable --kb-h via direct DOM, RAF polling on focus, scroll-
-  // preserving body lock. Unlike the chat page (always at scrollY=0),
-  // this modal overlays a scrollable page, so the body lock preserves
-  // the background scroll position.
+  // Lock body scroll on mount — prevents iOS from scrolling the viewport
+  // when the keyboard opens (race: iOS native scroll-into-view fires before
+  // our JS can react).  Must happen BEFORE any input gets focus.
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
+      document.body.style.touchAction = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  // Track keyboard height via visualViewport — sets CSS var --kb-h for
+  // positioning the sheet above the keyboard.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     let rafId = null;
     let stopTimer = null;
     let prevOff = 0;
-    let isOpen = false;
-    let savedScrollY = 0;
-
-    const blockTouchOutsideSheet = (e) => {
-      if (sheetBodyRef.current?.contains(e.target)) return;
-      if (e.target.closest('[data-overlay]')) return;
-      e.preventDefault();
-    };
+    let wasOpen = false;
 
     const update = () => {
       const el = containerRef.current;
@@ -117,24 +125,9 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
         el.style.removeProperty('--kb-h');
       }
 
-      if (open && !isOpen) {
-        isOpen = true;
-        savedScrollY = window.scrollY;
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        document.body.style.top = `-${savedScrollY}px`;
-        document.body.style.touchAction = 'none';
-        document.addEventListener('touchmove', blockTouchOutsideSheet, { passive: false });
-        setKbOpen(true);
-      } else if (!open && isOpen) {
-        isOpen = false;
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.top = '';
-        document.body.style.touchAction = '';
-        document.removeEventListener('touchmove', blockTouchOutsideSheet);
-        window.scrollTo(0, savedScrollY);
-        setKbOpen(false);
+      if (open !== wasOpen) {
+        wasOpen = open;
+        setKbOpen(open);
       }
     };
 
@@ -162,14 +155,6 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
       document.removeEventListener("focusout", stopPoll);
       if (rafId) cancelAnimationFrame(rafId);
       if (stopTimer) clearTimeout(stopTimer);
-      document.removeEventListener('touchmove', blockTouchOutsideSheet);
-      if (isOpen) {
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.top = '';
-        document.body.style.touchAction = '';
-        window.scrollTo(0, savedScrollY);
-      }
     };
   }, []);
 

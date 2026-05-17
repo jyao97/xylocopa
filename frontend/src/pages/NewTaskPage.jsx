@@ -68,11 +68,8 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
   // Compose-bar animation state
   const [mounted, setMounted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [kbOpen, setKbOpen] = useState(false);
   const sheetRef = useRef(null);
-  // Tracks on-screen keyboard offset (iOS Safari & Android Chrome via
-  // visualViewport). When the keyboard opens, push the compose bar up
-  // by the occluded height so it rides above the keys.
-  const [kbOffset, setKbOffset] = useState(0);
 
   // Initial position: off-screen (runs before first paint)
   useLayoutEffect(() => {
@@ -80,45 +77,98 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
     if (el) el.style.transform = 'translateY(120%)';
   }, []);
 
-  // Track on-screen keyboard via visualViewport. `offsetTop` of the
-  // visual viewport relative to the layout viewport stays 0 normally;
-  // when the keyboard opens, the visual viewport shrinks and its
-  // bottom edge sits above the keyboard, so layoutHeight -
-  // (offsetTop + height) tells us how much of the bottom is occluded.
+  // Track keyboard via visualViewport — mirrors AgentChatPage approach:
+  // CSS variable --kb-h via direct DOM, RAF polling on focus, scroll-
+  // preserving body lock. Unlike the chat page (always at scrollY=0),
+  // this modal overlays a scrollable page, so the body lock preserves
+  // the background scroll position.
   useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
     const vv = window.visualViewport;
-    let kbOpen = false;
+    if (!vv) return;
+    let rafId = null;
+    let stopTimer = null;
+    let prevOff = 0;
+    let isOpen = false;
+    let savedScrollY = 0;
+
+    const blockTouchOutsideSheet = (e) => {
+      if (sheetBodyRef.current?.contains(e.target)) return;
+      if (e.target.closest('[data-overlay]')) return;
+      e.preventDefault();
+    };
+
     const update = () => {
-      const occluded = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKbOffset(occluded);
-      const open = occluded > 80;
-      if (open && !kbOpen) {
-        kbOpen = true;
+      const el = containerRef.current;
+      if (!el) return;
+
+      const containerH = el.clientHeight;
+      const rawDelta = Math.max(0, Math.round(containerH - vv.height));
+      const kbOffset = Math.max(0, Math.round(containerH - vv.height - vv.offsetTop));
+
+      const open = rawDelta > 100;
+
+      if (open) {
+        if (Math.abs(kbOffset - prevOff) > 3) {
+          prevOff = kbOffset;
+          el.style.setProperty('--kb-h', `${kbOffset}px`);
+        }
+      } else if (prevOff !== 0) {
+        prevOff = 0;
+        el.style.removeProperty('--kb-h');
+      }
+
+      if (open && !isOpen) {
+        isOpen = true;
+        savedScrollY = window.scrollY;
         document.body.style.position = 'fixed';
         document.body.style.width = '100%';
-        document.body.style.top = '0';
+        document.body.style.top = `-${savedScrollY}px`;
         document.body.style.touchAction = 'none';
-        window.scrollTo(0, 0);
-      } else if (!open && kbOpen) {
-        kbOpen = false;
+        document.addEventListener('touchmove', blockTouchOutsideSheet, { passive: false });
+        setKbOpen(true);
+      } else if (!open && isOpen) {
+        isOpen = false;
         document.body.style.position = '';
         document.body.style.width = '';
         document.body.style.top = '';
         document.body.style.touchAction = '';
+        document.removeEventListener('touchmove', blockTouchOutsideSheet);
+        window.scrollTo(0, savedScrollY);
+        setKbOpen(false);
       }
     };
-    update();
+
+    const poll = () => { update(); rafId = requestAnimationFrame(poll); };
+    const startPoll = () => {
+      if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
+      if (!rafId) rafId = requestAnimationFrame(poll);
+    };
+    const stopPoll = () => {
+      if (stopTimer) clearTimeout(stopTimer);
+      stopTimer = setTimeout(() => {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        update();
+      }, 400);
+    };
+
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
+    document.addEventListener("focusin", startPoll);
+    document.addEventListener("focusout", stopPoll);
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
-      if (kbOpen) {
+      document.removeEventListener("focusin", startPoll);
+      document.removeEventListener("focusout", stopPoll);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (stopTimer) clearTimeout(stopTimer);
+      document.removeEventListener('touchmove', blockTouchOutsideSheet);
+      if (isOpen) {
         document.body.style.position = '';
         document.body.style.width = '';
         document.body.style.top = '';
         document.body.style.touchAction = '';
+        window.scrollTo(0, savedScrollY);
       }
     };
   }, []);
@@ -464,8 +514,8 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
         className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface shadow-card rounded-2xl"
         style={{
           maxHeight: "85vh",
-          marginBottom: `calc(0.75rem + ${kbOffset}px + env(safe-area-inset-bottom, 0px))`,
-          transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), margin-bottom 0.15s ease-out',
+          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+          transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
         }}
       >
         <div

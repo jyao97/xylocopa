@@ -477,7 +477,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
     <div
       ref={containerRef}
       data-overlay
-      className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-end items-center`}
+      className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex flex-col justify-center items-center`}
     >
       {/* Backdrop */}
       <div
@@ -496,7 +496,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
         className="relative z-10 mx-3 w-[calc(100%-1.5rem)] max-w-2xl bg-surface shadow-card rounded-2xl"
         style={{
           maxHeight: "85vh",
-          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+          marginBottom: kbOpen ? 'var(--kb-h, 0px)' : '0px',
           transition: 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
         }}
       >

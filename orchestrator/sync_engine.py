@@ -613,8 +613,9 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
     if current_size == ctx.last_offset:
         return "no_change"
 
-    # 2. Full parse — simple, correct, the "stable point" approach
-    turns = _parse_session_turns(ctx.jsonl_path)
+    # 2. Full parse — run in thread to avoid blocking the event loop
+    #    (7MB+ JSONL files take seconds to parse synchronously)
+    turns = await asyncio.to_thread(_parse_session_turns, ctx.jsonl_path)
 
     logger.debug("Agent %s: parsed %d total turns, pointer at %d, new_turns=%d",
                  ctx.agent_id[:8], len(turns), ctx.last_turn_count,
@@ -695,6 +696,8 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
         # function opens its own session, which would see stale state).
         _deferred_updates: list[str] = []
         for i, (role, content, *rest) in enumerate(new_turns):
+            if i > 0 and i % 20 == 0:
+                await asyncio.sleep(0)
             seq = ctx.last_turn_count + i
             meta = rest[0] if rest else None
             jsonl_uuid = rest[1] if len(rest) > 1 else None
@@ -1195,7 +1198,7 @@ async def sync_full_scan(ad, ctx: SyncContext, reason: str = "startup"):
 
     logger.info("Full scan for agent %s (reason=%s)", ctx.agent_id, reason)
 
-    turns = _parse_session_turns(ctx.jsonl_path, max_bytes=MAX_AUDIT_FILE_SIZE)
+    turns = await asyncio.to_thread(_parse_session_turns, ctx.jsonl_path, max_bytes=MAX_AUDIT_FILE_SIZE)
     try:
         current_size = os.path.getsize(ctx.jsonl_path)
     except OSError as e:

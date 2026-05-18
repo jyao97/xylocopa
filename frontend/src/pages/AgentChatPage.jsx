@@ -2134,14 +2134,19 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     if (!text.trim() && uploaded.length === 0) return;
     if (disabled && !isBusy) return;
     const msg = buildMessageText(text.trim(), uploaded);
+    const savedText = text;
+    const savedAttachments = [...attachments];
+    setText("");
+    clearAttachments();
+    pendingSendRef.current = null;
     try {
       await onSend(msg);
-      setText("");
-      clearAttachments();
     } catch (_) {
-      // Keep text in input so user can retry
+      if (!textareaRef.current?.value) {
+        setText(savedText);
+        setAttachments(savedAttachments);
+      }
     }
-    pendingSendRef.current = null;
   }, [text, attachments, disabled, isBusy, onSend, setText, buildMessageText, clearAttachments]);
 
   const handleSchedule = useCallback(async (scheduledAt) => {
@@ -2154,15 +2159,21 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     const uploaded = attachments.filter((a) => a.uploadedPath);
     if (!text.trim() && uploaded.length === 0) return;
     const msg = buildMessageText(text.trim(), uploaded);
+    const savedText = text;
+    const savedAttachments = [...attachments];
+    setText("");
+    clearAttachments();
+    setShowPicker(false);
+    pendingSendRef.current = null;
     try {
       await onSendLater(msg, scheduledAt);
-      setText("");
-      clearAttachments();
-      setShowPicker(false);
     } catch (_) {
-      // Keep text in input so user can retry
+      if (!textareaRef.current?.value) {
+        setText(savedText);
+        setAttachments(savedAttachments);
+      }
+      setShowPicker(true);
     }
-    pendingSendRef.current = null;
   }, [text, attachments, onSendLater, setText, buildMessageText, clearAttachments]);
 
   // Refs so the upload-complete effect always calls the latest version

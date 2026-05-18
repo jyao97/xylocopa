@@ -292,41 +292,24 @@ def _promote_or_create_user_msg(db, ctx: SyncContext, content, jsonl_uuid, seq, 
     web_msg, method = ContentMatcher.match(content, candidates)
 
     if web_msg:
-        try:
-            with db.begin_nested():  # SAVEPOINT — protect against UUID collision
-                if jsonl_uuid:
-                    web_msg.jsonl_uuid = jsonl_uuid
-                web_msg.session_seq = seq
-                # sent → delivered: row already has display_seq (allocated
-                # at promote-to-sent time). Just update status + timestamps.
-                web_msg.delivered_at = _parse_jsonl_ts(jsonl_ts) or _utcnow()
-                web_msg.status = MessageStatus.COMPLETED
-                web_msg.completed_at = web_msg.delivered_at
-                db.flush()
-        except IntegrityError:
-            # UUID collision — skip promotion, fall through to CLI creation
-            logger.warning(
-                "Agent %s: UUID collision promoting web msg %s (uuid=%s), "
-                "creating CLI message instead",
-                ctx.agent_id[:8], web_msg.id, jsonl_uuid,
-            )
-        else:
-            logger.info("Agent %s: sent → delivered for msg %s → uuid=%s (method=%s)",
-                        ctx.agent_id[:8], web_msg.id, jsonl_uuid, method)
+        if jsonl_uuid:
+            web_msg.jsonl_uuid = jsonl_uuid
+        web_msg.session_seq = seq
+        web_msg.delivered_at = _parse_jsonl_ts(jsonl_ts) or _utcnow()
+        web_msg.status = MessageStatus.COMPLETED
+        web_msg.completed_at = web_msg.delivered_at
+        logger.info("Agent %s: sent → delivered for msg %s → uuid=%s (method=%s)",
+                    ctx.agent_id[:8], web_msg.id, jsonl_uuid, method)
 
-            # Defer the display-file write until after the caller's commit.
-            # Writing inline would open a second session that sees the
-            # uncommitted update and writes stale state.
-            if deferred_updates is not None:
-                deferred_updates.append(web_msg.id)
+        if deferred_updates is not None:
+            deferred_updates.append(web_msg.id)
 
-            # Emit WS delivery event
-            if web_msg.delivered_at:
-                from websocket import emit_message_delivered
-                asyncio.ensure_future(emit_message_delivered(
-                    ctx.agent_id, web_msg.id,
-                ))
-            return None  # updated — no insert needed
+        if web_msg.delivered_at:
+            from websocket import emit_message_delivered
+            asyncio.ensure_future(emit_message_delivered(
+                ctx.agent_id, web_msg.id,
+            ))
+        return None
 
     # 3. No promotable sent row — genuine CLI-typed input
     # (includes slash_signal: a /cmd typed directly in the tmux terminal
@@ -695,9 +678,9 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
         # violate the display_writer "commit → then flush" contract (the
         # function opens its own session, which would see stale state).
         _deferred_updates: list[str] = []
+        _pending_inserts: list[Message] = []
+        _queued_uuids: set[str] = set()
         for i, (role, content, *rest) in enumerate(new_turns):
-            if i > 0 and i % 20 == 0:
-                await asyncio.sleep(0)
             seq = ctx.last_turn_count + i
             meta = rest[0] if rest else None
             jsonl_uuid = rest[1] if len(rest) > 1 else None
@@ -710,6 +693,11 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
 
             if role == "user" and kind == "slash_signal":
                 _drift_skipped_other_role.append((seq, role))
+                continue
+
+            # In-memory dedup for same-batch duplicates
+            if jsonl_uuid and jsonl_uuid in _queued_uuids:
+                _drift_skipped_dedup.append((seq, role, kind, jsonl_uuid))
                 continue
 
             if role == "user":
@@ -741,36 +729,18 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                 _drift_skipped_other_role.append((seq, role))
                 continue
 
-            # SAVEPOINT insert — protects against duplicate UUIDs
-            try:
-                with db.begin_nested():
-                    db.add(msg)
-                    db.flush()
-                    _actually_inserted += 1
-            except IntegrityError as _exc:
-                # DRIFT_INSTRUMENT: verify whether the IntegrityError is a real
-                # duplicate (row already in DB) or a phantom (no row exists, but
-                # INSERT still failed — the latter would explain Bug B drift).
-                _existing = (
-                    db.query(Message.id)
-                      .filter(Message.agent_id == ctx.agent_id,
-                              Message.jsonl_uuid == jsonl_uuid)
-                      .first()
-                ) if jsonl_uuid else None
-                _drift_skipped_integrity.append(
-                    (seq, role, kind, jsonl_uuid, bool(_existing), str(_exc)[:120])
-                )
-                logger.warning(
-                    "DRIFT_INSTRUMENT savepoint_integrity_error agent=%s "
-                    "seq=%d role=%s kind=%s uuid=%s existing_in_db=%s exc=%s",
-                    ctx.agent_id[:8], seq, role, kind, jsonl_uuid,
-                    bool(_existing), str(_exc)[:120],
-                )
-                continue
+            if msg.jsonl_uuid:
+                _queued_uuids.add(msg.jsonl_uuid)
+            _pending_inserts.append(msg)
+            _actually_inserted += 1
 
         # Side-channel: detect UI/JSONL answer mismatches and emit a
         # SystemBubble. Doesn't touch existing card metadata.
         _detect_interactive_mismatches(db, ctx, turns)
+
+        # Batch write — write lock only held during add_all + commit
+        for _msg in _pending_inserts:
+            db.add(_msg)
 
         if _actually_inserted:
             # Pick the most recent meaningful turn for the preview.

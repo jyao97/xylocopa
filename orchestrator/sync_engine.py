@@ -596,8 +596,7 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
     if current_size == ctx.last_offset:
         return "no_change"
 
-    # 2. Full parse — run in thread to avoid blocking the event loop
-    #    (7MB+ JSONL files take seconds to parse synchronously)
+    # 2. Full parse (in thread — large files block the event loop)
     turns = await asyncio.to_thread(_parse_session_turns, ctx.jsonl_path)
 
     logger.debug("Agent %s: parsed %d total turns, pointer at %d, new_turns=%d",

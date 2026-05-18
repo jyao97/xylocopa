@@ -2135,17 +2135,13 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     if (disabled && !isBusy) return;
     const msg = buildMessageText(text.trim(), uploaded);
     const savedText = text;
-    const savedAttachments = [...attachments];
     setText("");
     clearAttachments();
     pendingSendRef.current = null;
     try {
       await onSend(msg);
     } catch (_) {
-      if (!textareaRef.current?.value) {
-        setText(savedText);
-        setAttachments(savedAttachments);
-      }
+      if (!textareaRef.current?.value) setText(savedText);
     }
   }, [text, attachments, disabled, isBusy, onSend, setText, buildMessageText, clearAttachments]);
 
@@ -2160,7 +2156,6 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     if (!text.trim() && uploaded.length === 0) return;
     const msg = buildMessageText(text.trim(), uploaded);
     const savedText = text;
-    const savedAttachments = [...attachments];
     setText("");
     clearAttachments();
     setShowPicker(false);
@@ -2168,11 +2163,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     try {
       await onSendLater(msg, scheduledAt);
     } catch (_) {
-      if (!textareaRef.current?.value) {
-        setText(savedText);
-        setAttachments(savedAttachments);
-      }
-      setShowPicker(true);
+      if (!textareaRef.current?.value) setText(savedText);
     }
   }, [text, attachments, onSendLater, setText, buildMessageText, clearAttachments]);
 

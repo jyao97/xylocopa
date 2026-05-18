@@ -363,15 +363,16 @@ def reconcile_all(*, db: SASession | None = None) -> dict[str, int]:
             totals["inserted"] += c["inserted"]
             totals["updated"] += c["updated"]
             totals["skipped"] += c["skipped"]
-            # Flush + expunge after each agent so the shared identity_map
-            # doesn't accumulate every CCSession row across 500+ agents
-            # (was the dominant slow-leak driver at 80k JSONL scale).
+            # Commit + expunge after each agent so (a) the SQLite write lock
+            # is released between agents (~ms hold instead of the full 700s
+            # sweep) and (b) the shared identity_map doesn't accumulate
+            # every CCSession row across 500+ agents.
             if own_db:
                 try:
-                    db.flush()
+                    db.commit()
                 except Exception:
                     db.rollback()
-                    logger.exception("reconcile_all: flush failed for agent %s", aid[:8])
+                    logger.exception("reconcile_all: commit failed for agent %s", aid[:8])
                     continue
                 db.expunge_all()
         if own_db:

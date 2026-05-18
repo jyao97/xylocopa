@@ -2123,7 +2123,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     }
   }, [attachmentCacheKey]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const uploading = attachments.some((a) => a.uploading);
     if (uploading) {
       pendingSendRef.current = "send";
@@ -2134,13 +2134,17 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     if (!text.trim() && uploaded.length === 0) return;
     if (disabled && !isBusy) return;
     const msg = buildMessageText(text.trim(), uploaded);
-    onSend(msg);
-    setText("");
-    clearAttachments();
+    try {
+      await onSend(msg);
+      setText("");
+      clearAttachments();
+    } catch (_) {
+      // Keep text in input so user can retry
+    }
     pendingSendRef.current = null;
   }, [text, attachments, disabled, isBusy, onSend, setText, buildMessageText, clearAttachments]);
 
-  const handleSchedule = useCallback((scheduledAt) => {
+  const handleSchedule = useCallback(async (scheduledAt) => {
     const uploading = attachments.some((a) => a.uploading);
     if (uploading) {
       pendingSendRef.current = { type: "schedule", scheduledAt };
@@ -2150,10 +2154,14 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     const uploaded = attachments.filter((a) => a.uploadedPath);
     if (!text.trim() && uploaded.length === 0) return;
     const msg = buildMessageText(text.trim(), uploaded);
-    onSendLater(msg, scheduledAt);
-    setText("");
-    clearAttachments();
-    setShowPicker(false);
+    try {
+      await onSendLater(msg, scheduledAt);
+      setText("");
+      clearAttachments();
+      setShowPicker(false);
+    } catch (_) {
+      // Keep text in input so user can retry
+    }
     pendingSendRef.current = null;
   }, [text, attachments, onSendLater, setText, buildMessageText, clearAttachments]);
 
@@ -3991,6 +3999,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       refreshMessages();
     } catch (err) {
       showToast("Failed: " + err.message, "error");
+      throw err;
     }
   };
 
@@ -4004,6 +4013,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       loadData();
     } catch (err) {
       showToast("Failed: " + err.message, "error");
+      throw err;
     }
   };
 

@@ -212,86 +212,41 @@ async def lifespan(app: FastAPI):
     _main_event_loop = asyncio.get_event_loop()
 
     # Ensure a tmux server is running before any agent resume/launch.
-    # On reboot, pm2 resurrects the backend before any interactive tmux
-    # invocation has materialized /tmp/tmux-<uid>/, and the first
-    # `tmux new-session -d` from the orchestrator can race-fail.
     #
-    # `tmux start-server` alone is insufficient: in tmux 3.x the server
-    # exits immediately when no sessions exist, leaving an orphan socket
-    # that breaks subsequent connects with "No such file or directory".
-    # Pin the server alive with a detached keepalive session running a
-    # long-sleep loop. The keepalive is filtered out of agent/pane
-    # discovery because `_build_tmux_claude_map` only includes panes that
-    # have a `claude` child process.
-    #
-    # Diagnostic: warn if pm2's systemd unit has OOMPolicy=stop (the
-    # default). In that case an agent subprocess OOM tears down the whole
-    # pm2 unit, killing tmux + every running agent as collateral. Fix is
-    # a one-time drop-in override (see install.js prompt).
+    # Root cause (confirmed May 2026): tmux servers forked from pm2's
+    # systemd cgroup (system.slice/pm2-jyao073.service) are killed by
+    # systemd at cold boot.  The fix is a dedicated user service
+    # (xylocopa-tmux.service) that starts the tmux server with
+    # exit-empty=off in the user slice, isolated from pm2's cgroup.
+    # No keepalive session needed — the server stays alive with zero
+    # sessions.
     try:
         import subprocess as _sp_init
-        _sp_init.run(
-            ["tmux", "start-server"], capture_output=True, text=True, timeout=5,
+
+        # Activate the user service (tmux server lands in user.slice).
+        _svc = _sp_init.run(
+            ["systemctl", "--user", "start", "xylocopa-tmux.service"],
+            capture_output=True, text=True, timeout=10,
         )
-        has = _sp_init.run(
-            ["tmux", "has-session", "-t", "_xylocopa_keepalive"],
+        if _svc.returncode != 0:
+            logger.info(
+                "tmux preflight: user service unavailable (%s), "
+                "falling back to direct creation",
+                _svc.stderr.strip(),
+            )
+            _sp_init.run(
+                ["tmux", "start-server", ";", "set-option", "-g",
+                 "exit-empty", "off"],
+                capture_output=True, text=True, timeout=5,
+            )
+
+        # Verify server is reachable.
+        _ping = _sp_init.run(
+            ["tmux", "list-sessions"],
             capture_output=True, text=True, timeout=5,
         )
-        if has.returncode != 0:
-            _sp_init.run(
-                ["tmux", "new-session", "-d", "-s", "_xylocopa_keepalive",
-                 "sh", "-c", "while sleep 86400; do :; done"],
-                capture_output=True, text=True, timeout=5,
-            )
-        verify = _sp_init.run(
-            ["tmux", "has-session", "-t", "_xylocopa_keepalive"],
-            capture_output=True, text=True, timeout=5,
-        )
-
-        # Boot diagnostic: test whether a default-shell (bash) session
-        # survives.  The keepalive uses explicit `sh -c ...` which always
-        # works; agent resume relies on the default login shell.  If bash
-        # exits at boot (the suspected cold-start root cause), this probe
-        # catches it while the keepalive keeps the server alive.
-        _diag_name = "_xy_boot_bash_probe"
-        try:
-            _sp_init.run(
-                ["tmux", "kill-session", "-t", _diag_name],
-                capture_output=True, timeout=5,
-            )
-            _sp_init.run(
-                ["tmux", "new-session", "-d", "-s", _diag_name,
-                 "-c", os.path.expanduser("~")],
-                capture_output=True, text=True, timeout=5,
-            )
-            import time as _time_init
-            _time_init.sleep(0.5)
-            _diag = _sp_init.run(
-                ["tmux", "has-session", "-t", _diag_name],
-                capture_output=True, text=True, timeout=5,
-            )
-            if _diag.returncode != 0:
-                _sock = "/tmp/tmux-%d/default" % os.getuid()
-                logger.warning(
-                    "BOOT_DIAG: default-shell (login bash) session died "
-                    "within 500ms! socket_exists=%s  SHELL=%s  TERM=%s  "
-                    "HOME=%s  XDG_RUNTIME_DIR=%s",
-                    os.path.exists(_sock),
-                    os.environ.get("SHELL", "<unset>"),
-                    os.environ.get("TERM", "<unset>"),
-                    os.environ.get("HOME", "<unset>"),
-                    os.environ.get("XDG_RUNTIME_DIR", "<unset>"),
-                )
-            else:
-                logger.info("BOOT_DIAG: default-shell session survived (bash OK)")
-                _sp_init.run(
-                    ["tmux", "kill-session", "-t", _diag_name],
-                    capture_output=True, timeout=5,
-                )
-        except Exception:
-            logger.debug("BOOT_DIAG: probe failed (non-fatal)", exc_info=True)
-
-        if verify.returncode == 0:
+        _alive = _ping.returncode == 0 or "no server running" not in _ping.stderr
+        if _alive:
             oom_policy = _detect_pm2_oom_policy()
             if oom_policy == "stop":
                 import pwd as _pwd
@@ -306,17 +261,15 @@ async def lifespan(app: FastAPI):
                     "  sudo systemctl daemon-reload",
                     _user, _user, _user,
                 )
-            elif oom_policy in ("continue", "kill"):
-                logger.info(
-                    "tmux preflight: server pinned via _xylocopa_keepalive "
-                    "(pm2 OOMPolicy=%s)", oom_policy,
-                )
             else:
-                logger.info("tmux preflight: server pinned via _xylocopa_keepalive")
+                logger.info(
+                    "tmux preflight: server ready via xylocopa-tmux.service "
+                    "(pm2 OOMPolicy=%s)", oom_policy or "unknown",
+                )
         else:
             logger.warning(
-                "tmux preflight: keepalive session missing after create "
-                "(stderr=%s)", verify.stderr.strip(),
+                "tmux preflight: server not reachable after start "
+                "(stderr=%s)", _ping.stderr.strip(),
             )
     except (OSError, _sp_init.TimeoutExpired) as e:
         logger.warning("tmux preflight failed (non-fatal): %s", e)

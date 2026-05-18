@@ -194,14 +194,6 @@ def create_tmux_claude_session(
     # Launch Claude
     _sp.run(["tmux", "send-keys", "-t", pane_id, claude_cmd, "Enter"],
             check=True, capture_output=True, timeout=TMUX_CMD_TIMEOUT)
-
-    # Retire the boot keepalive now that a real session exists.
-    try:
-        _sp.run(["tmux", "kill-session", "-t", "_xylocopa_keepalive"],
-                capture_output=True, timeout=TMUX_CMD_TIMEOUT)
-    except (OSError, _sp.TimeoutExpired):
-        pass
-
     return pane_id
 
 

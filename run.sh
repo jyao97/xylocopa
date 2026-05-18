@@ -115,6 +115,33 @@ case "$CMD" in
         pm2 save
         pm2 startup
         echo "Follow the instructions above if prompted."
+
+        # Install tmux user service for cold-boot reliability.
+        # tmux servers forked from pm2's systemd cgroup are killed at
+        # cold boot; this service starts tmux in user.slice instead.
+        if command -v systemctl >/dev/null 2>&1; then
+            _TMUX_UNIT_DIR="$HOME/.config/systemd/user"
+            _TMUX_UNIT="$_TMUX_UNIT_DIR/xylocopa-tmux.service"
+            mkdir -p "$_TMUX_UNIT_DIR"
+            cat > "$_TMUX_UNIT" <<'UNIT'
+[Unit]
+Description=Xylocopa tmux server
+After=default.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'exec tmux start-server \; set-option -g exit-empty off'
+
+[Install]
+WantedBy=default.target
+UNIT
+            systemctl --user daemon-reload 2>/dev/null || true
+            systemctl --user enable xylocopa-tmux.service 2>/dev/null || true
+            # Enable lingering so user services start at boot without login
+            loginctl enable-linger "$(whoami)" 2>/dev/null || true
+            echo "tmux cold-boot service installed."
+        fi
         ;;
     build-frontend-if-stale)
         _build_frontend_if_stale

@@ -161,21 +161,18 @@ def _migrate_pre_sent_legacy():
         db.close()
 
 
-def _detect_pm2_oom_policy() -> str | None:
-    """Return the effective OOMPolicy of this user's pm2 systemd unit.
+def _detect_tmux_oom_policy() -> str | None:
+    """Return the effective OOMPolicy of xylocopa-tmux.service.
 
-    Returns "continue", "stop", "kill" or None if not detected. Uses
-    `systemctl show` so drop-in overrides are applied. Used to warn at
-    startup when the policy is the default `stop` — in that case any
-    agent subprocess OOM tears down the whole pm2 unit, killing tmux and
-    every running agent as collateral.
+    Returns "continue", "stop", "kill" or None if not detected.
+    The tmux service hosts all agent sessions — OOMPolicy=continue is
+    required so that a child-process OOM doesn't cascade-kill the tmux
+    server and every running agent.
     """
     try:
-        import pwd
         import subprocess as _sp
-        user = pwd.getpwuid(os.getuid()).pw_name
         r = _sp.run(
-            ["systemctl", "show", f"pm2-{user}.service",
+            ["systemctl", "--user", "show", "xylocopa-tmux.service",
              "-p", "OOMPolicy", "--value"],
             capture_output=True, text=True, timeout=3,
         )
@@ -247,24 +244,18 @@ async def lifespan(app: FastAPI):
         )
         _alive = _ping.returncode == 0 or "no server running" not in _ping.stderr
         if _alive:
-            oom_policy = _detect_pm2_oom_policy()
+            oom_policy = _detect_tmux_oom_policy()
             if oom_policy == "stop":
-                import pwd as _pwd
-                _user = _pwd.getpwuid(os.getuid()).pw_name
                 logger.warning(
-                    "tmux preflight: pm2-%s.service has OOMPolicy=stop — an "
-                    "agent subprocess OOM will tear down the whole unit, "
-                    "killing tmux + every running agent as collateral. To fix:\n"
-                    "  sudo install -d /etc/systemd/system/pm2-%s.service.d\n"
-                    "  echo -e '[Service]\\nOOMPolicy=continue' | "
-                    "sudo tee /etc/systemd/system/pm2-%s.service.d/override.conf\n"
-                    "  sudo systemctl daemon-reload",
-                    _user, _user, _user,
+                    "tmux preflight: xylocopa-tmux.service has OOMPolicy=stop "
+                    "— a child-process OOM will cascade-kill the tmux server "
+                    "and every running agent. Add OOMPolicy=continue to the "
+                    "[Service] section of xylocopa-tmux.service.",
                 )
             else:
                 logger.info(
                     "tmux preflight: server ready via xylocopa-tmux.service "
-                    "(pm2 OOMPolicy=%s)", oom_policy or "unknown",
+                    "(OOMPolicy=%s)", oom_policy or "unknown",
                 )
         else:
             logger.warning(

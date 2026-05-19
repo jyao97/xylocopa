@@ -2134,15 +2134,10 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     if (!text.trim() && uploaded.length === 0) return;
     if (disabled && !isBusy) return;
     const msg = buildMessageText(text.trim(), uploaded);
-    const savedText = text;
     setText("");
     clearAttachments();
     pendingSendRef.current = null;
-    try {
-      await onSend(msg);
-    } catch (_) {
-      if (!textareaRef.current?.value) setText(savedText);
-    }
+    await onSend(msg);
   }, [text, attachments, disabled, isBusy, onSend, setText, buildMessageText, clearAttachments]);
 
   const handleSchedule = useCallback(async (scheduledAt) => {
@@ -2551,6 +2546,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // correct source state directly.
   const [sentMessages, setSentMessages] = useState([]);
   const [preSentMessages, setPreSentMessages] = useState([]);
+  const [failedMessages, setFailedMessages] = useState([]);
   const messages = useMemo(
     () => [...sentMessages, ...preSentMessages],
     [sentMessages, preSentMessages],
@@ -3994,14 +3990,17 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // Send message — backend decides tmux-immediate (QUEUED) vs PENDING
   const handleSend = async (content) => {
     try {
-      // New turn — clear previous tool activity state
       setActiveTool(null);
       setToolStartTime(null);
       await sendMessage(id, content);
       refreshMessages();
     } catch (err) {
-      showToast("Failed: " + err.message, "error");
-      throw err;
+      setFailedMessages((prev) => [...prev, {
+        id: `failed-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        content,
+        created_at: new Date().toISOString(),
+        error: err.message || "Send failed",
+      }]);
     }
   };
 
@@ -4044,6 +4043,17 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     } catch (err) {
       showToast("Failed: " + err.message, "error");
     }
+  };
+
+  const handleRetryFailed = async (failedId) => {
+    const msg = failedMessages.find((m) => m.id === failedId);
+    if (!msg) return;
+    setFailedMessages((prev) => prev.filter((m) => m.id !== failedId));
+    await handleSend(msg.content);
+  };
+
+  const handleDismissFailed = (failedId) => {
+    setFailedMessages((prev) => prev.filter((m) => m.id !== failedId));
   };
 
   // Send a scheduled message immediately — pre-sent transition (still
@@ -4810,13 +4820,49 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
             {/* Typing indicator while executing */}
             {isExecuting ? <div data-msg-id="typing" data-msg-type="typing_indicator"><TypingIndicator /></div> : null}
 
-            {/* Queued/scheduled messages always at the bottom — both
-                sourced from preSentMessages directly. */}
+            {/* Failed / queued / scheduled messages at the bottom */}
             {(() => {
               const queued = queuedMessages;
               const scheduled = preSentMessages.filter((m) => m.role === "USER" && m.status === "scheduled" && m.scheduled_at);
               return (
                 <>
+                  {failedMessages.map((msg) => (
+                    <div key={msg.id} data-msg-id={msg.id} data-msg-type="failed_msg" className="flex justify-end my-2">
+                      <div className="max-w-[min(85%,30rem)] min-w-0 flex flex-col items-end">
+                        <div className="flex items-center gap-2 max-w-full">
+                          <div className="flex-shrink-0 text-red-400" title="Message not delivered">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M12 2L2 20h20L12 2z" />
+                            </svg>
+                          </div>
+                          <div className="rounded-2xl px-4 py-2.5 bg-red-600/40 text-white/70 rounded-br-md overflow-hidden">
+                            <div className="text-sm break-words chat-bubble-content">
+                              <SafeMarkdown fallback={msg.content}>{renderMarkdown(msg.content, agent?.project)}</SafeMarkdown>
+                            </div>
+                            <div className="text-xs mt-1 flex items-center gap-1.5 text-red-300">
+                              {relativeTime(msg.created_at)}
+                              <span className="text-red-400">undelivered</span>
+                              <span className="ml-auto text-red-400" title="Undelivered">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-1 mr-1">
+                          <button
+                            onClick={() => handleRetryFailed(msg.id)}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                          >Retry</button>
+                          <button
+                            onClick={() => handleDismissFailed(msg.id)}
+                            className="text-xs text-dim hover:text-body transition-colors"
+                          >Dismiss</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                   {queued.map((msg, idx) => (
                     <div key={msg.id} data-msg-id={msg.id} data-msg-type="queued_msg"><ChatBubble message={msg} project={agent.project} onCancelMessage={handleCancelMessage} onUpdateMessage={handleUpdateMessage} onSendNow={handleSendNow} agentId={id} onRefresh={refreshMessages} queuePosition={idx + 1} queueTotal={queued.length} openMenuMsgId={openMenuMsgId} setOpenMenuMsgId={setOpenMenuMsgId} bookmarkedSet={bookmarkedSet} onAfterBookmark={handleAfterBookmark} /></div>
                   ))}

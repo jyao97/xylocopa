@@ -551,64 +551,13 @@ async def lifespan(app: FastAPI):
 
     daily_heartbeat_task = asyncio.create_task(_daily_heartbeat_loop())
 
-    # CC-session JSONL → cc_sessions reconcile.
-    # One sweep at startup catches anything written while we were offline,
-    # then a periodic background loop keeps the table in sync with on-disk
-    # JSONL growth. Pure-additive: only inserts missing rows + bumps token
-    # totals; never touches metadata.
-    async def _cc_session_reconcile_loop():
-        from cc_session_reconcile import reconcile_all
-        import time as _t
-
-        def _rss_mb() -> int:
-            try:
-                with open(f"/proc/{os.getpid()}/status") as _f:
-                    for _l in _f:
-                        if _l.startswith("VmRSS:"):
-                            return int(_l.split()[1]) // 1024
-            except OSError:
-                pass
-            return 0
-
-        # Initial sweep — runs in a thread so we don't stall the loop on
-        # slow disk scans.
-        try:
-            _rss_before = _rss_mb()
-            _t0 = _t.monotonic()
-            totals = await asyncio.to_thread(reconcile_all)
-            logger.info(
-                "cc_session reconcile (startup): agents=%d disc=%d ins=%d upd=%d skp=%d "
-                "took=%.1fs rss=%d→%dMB delta=%+dMB",
-                totals.get("agents", 0), totals.get("discovered", 0),
-                totals.get("inserted", 0), totals.get("updated", 0),
-                totals.get("skipped", 0),
-                _t.monotonic() - _t0, _rss_before, _rss_mb(),
-                _rss_mb() - _rss_before,
-            )
-        except Exception:
-            logger.exception("cc_session reconcile startup sweep failed (non-fatal)")
-        # Periodic — every 30 minutes is plenty for a backstop reconcile;
-        # the dispatcher writes rows live on rotation/end so this only
-        # cleans up sessions the live writer missed.
-        while True:
-            await asyncio.sleep(1800)
-            try:
-                _rss_before = _rss_mb()
-                _t0 = _t.monotonic()
-                totals = await asyncio.to_thread(reconcile_all)
-                _rss_after = _rss_mb()
-                # Always log RSS delta for forensic trail, even when no writes.
-                logger.info(
-                    "cc_session reconcile: ins=%d upd=%d (disc=%d) took=%.1fs rss=%d→%dMB delta=%+dMB",
-                    totals.get("inserted", 0), totals.get("updated", 0),
-                    totals.get("discovered", 0),
-                    _t.monotonic() - _t0, _rss_before, _rss_after,
-                    _rss_after - _rss_before,
-                )
-            except Exception:
-                logger.exception("cc_session reconcile loop failed (non-fatal)")
-
-    cc_session_reconcile_task = asyncio.create_task(_cc_session_reconcile_loop())
+    # CC-session reconcile disabled — the live writer in sync_engine and
+    # agent_dispatcher covers normal operation. The reconcile sweep scanned
+    # 131K JSONL files every 30 minutes (700s each) for ~2 inserts per run,
+    # and its single-transaction design held the SQLite write lock for the
+    # entire duration, blocking all other writers. The code is kept in
+    # cc_session_reconcile.py for manual CLI use (`python reconcile.py`).
+    cc_session_reconcile_task = None
 
     yield
 

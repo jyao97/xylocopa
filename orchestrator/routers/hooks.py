@@ -997,12 +997,17 @@ async def hook_agent_tool_activity(request: Request):
     return {}
 
 
-async def _handle_ask_user_question(request, agent_id: str, tool_input: dict):
+async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, tool_use_id: str = ""):
     """Block until user answers AskUserQuestion from web UI, return updatedInput.
 
     Called from hook_agent_permission for ALL agents (both skip_permissions and
     supervised).  The activity hook fires in parallel and handles tool_activity
     tracking + sync wake — this handler only does the blocking + updatedInput.
+
+    Creates a DB Message with interactive metadata immediately so the card
+    renders before the JSONL flushes (CC may not flush until the hook returns).
+    Uses jsonl_uuid="interactive-{tool_use_id}" to match the parser's format
+    so the later JSONL sync deduplicates naturally.
     """
     from permissions import PermissionManager
 
@@ -1027,6 +1032,48 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict):
         _agent_project = _ag.project if _ag else ""
     finally:
         _db.close()
+
+    # Persist interactive card in DB immediately — CC may not flush the
+    # tool_use block to JSONL until this hook returns, so relying on sync
+    # alone would leave the card invisible while the hook blocks.
+    if tool_use_id:
+        _auq_uuid = f"interactive-{tool_use_id}"
+        _auq_meta = {
+            "interactive": [{
+                "type": "ask_user_question",
+                "tool_use_id": tool_use_id,
+                "request_id": req.id,
+                "questions": questions,
+                "answer": None,
+            }],
+        }
+        _db_auq = SessionLocal()
+        try:
+            _auq_msg = Message(
+                agent_id=agent_id,
+                role=MessageRole.AGENT,
+                kind=None,
+                content="",
+                source="hook",
+                status=MessageStatus.COMPLETED,
+                meta_json=json.dumps(_auq_meta),
+                tool_use_id=tool_use_id,
+                jsonl_uuid=_auq_uuid,
+            )
+            _db_auq.add(_auq_msg)
+            _db_auq.commit()
+            from display_writer import flush_agent as _flush_auq
+            _flush_auq(agent_id)
+            _ad = getattr(request.app.state, "agent_dispatcher", None)
+            if _ad:
+                _ad._bump_unread_and_notify_interactive(
+                    agent_id,
+                    f"[interactive cards] {q_summary}",
+                )
+        except Exception:
+            logger.exception("_handle_ask_user_question: failed to persist card for agent %s", agent_id[:8])
+        finally:
+            _db_auq.close()
 
     await ws_manager.broadcast("permission_request", {
         "request_id": req.id,
@@ -1103,7 +1150,8 @@ async def hook_agent_permission(request: Request):
     # skip_permissions and supervised).  Must intercept BEFORE skip_permissions
     # check, since skip_permissions agents would otherwise pass through.
     if tool_name == "AskUserQuestion":
-        return await _handle_ask_user_question(request, agent_id, tool_input)
+        tool_use_id = body.get("tool_use_id", "")
+        return await _handle_ask_user_question(request, agent_id, tool_input, tool_use_id)
 
     from permissions import PermissionManager, SAFE_TOOLS
 

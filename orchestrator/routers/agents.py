@@ -3619,7 +3619,20 @@ async def answer_agent_interactive(
         # All questions answered — try updatedInput path (hook-based, no tmux keys)
         from permissions import PermissionManager
         pm: PermissionManager | None = getattr(request.app.state, "permission_manager", None)
-        pending_id = pm.find_pending_by_tool(agent_id, "AskUserQuestion") if pm else None
+        # Route strictly by the tool_use_id of the card the user answered.
+        # No tool-name fallback: if the exact request can't be found,
+        # routing to "whichever AskUserQuestion happens to be pending" is
+        # the same wrong guess that cross-contaminated answers before. A
+        # mismatch means something is already off — surface it instead of
+        # guessing. (pending_id stays None → falls through to the tmux path
+        # below, the genuine mechanism for non-hook / old-CC cards.)
+        pending_id = pm.find_pending_by_tool_use_id(agent_id, body.tool_use_id) if pm else None
+        if pm and body.tool_use_id and not pending_id:
+            logger.warning(
+                "answer: no pending AskUserQuestion request for agent %s "
+                "tool_use_id=%s — not guessing, falling through to tmux path",
+                agent_id[:8], body.tool_use_id,
+            )
 
         if pending_id:
             # Build updatedInput payload: {questions: [...], answers: {q_text: label}}

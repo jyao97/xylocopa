@@ -1019,7 +1019,10 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
     questions = tool_input.get("questions", [])
     q_summary = questions[0].get("question", "Question") if questions else "Question"
 
-    req = pm.create_request(agent_id, "AskUserQuestion", tool_input, q_summary)
+    req = pm.create_request(
+        agent_id, "AskUserQuestion", tool_input, q_summary,
+        tool_use_id=tool_use_id,
+    )
 
     # Broadcast to frontend so notification badge updates
     from websocket import ws_manager

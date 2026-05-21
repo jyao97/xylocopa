@@ -28,6 +28,7 @@ class PermissionRequest:
     tool_name: str
     tool_input: dict
     summary: str
+    tool_use_id: str = ""   # id of the triggering tool_use block — exact card routing
     created_at: float = field(default_factory=time.time)
     event: asyncio.Event = field(default_factory=asyncio.Event)
     decision: str | None = None   # "allow" / "deny"
@@ -75,6 +76,7 @@ class PermissionManager:
     # ------------------------------------------------------------------
     def create_request(
         self, agent_id: str, tool_name: str, tool_input: dict, summary: str,
+        tool_use_id: str = "",
     ) -> PermissionRequest:
         """Create a pending permission request. Returns immediately."""
         import secrets
@@ -85,6 +87,7 @@ class PermissionManager:
             tool_name=tool_name,
             tool_input=tool_input,
             summary=summary,
+            tool_use_id=tool_use_id,
         )
         self._pending[request_id] = req
         logger.info(
@@ -144,5 +147,19 @@ class PermissionManager:
         """Find a pending request by agent_id and tool_name. Returns request_id or None."""
         for req in self._pending.values():
             if req.agent_id == agent_id and req.tool_name == tool_name:
+                return req.id
+        return None
+
+    def find_pending_by_tool_use_id(self, agent_id: str, tool_use_id: str) -> str | None:
+        """Find a pending request by agent_id and the triggering tool_use_id.
+
+        Exact match — unlike find_pending_by_tool (tool-name only), this
+        cannot return a sibling card's request when several interactive
+        cards are pending for the same agent at the same time.
+        """
+        if not tool_use_id:
+            return None
+        for req in self._pending.values():
+            if req.agent_id == agent_id and req.tool_use_id == tool_use_id:
                 return req.id
         return None

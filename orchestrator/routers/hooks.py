@@ -1037,6 +1037,23 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
     # tool_use block to JSONL until this hook returns, so relying on sync
     # alone would leave the card invisible while the hook blocks.
     if tool_use_id:
+        from display_writer import flush_agent as _flush_auq
+        # Drain sync first: the parallel activity hook already woke the sync
+        # loop, but it may not have committed yet.  drain_session_sync imports
+        # pending JSONL turns (including the user message) so delivered_at is
+        # set — without this, flush_agent skips user messages (delivered_at
+        # IS NULL filter) and the card gets a lower display_seq than the task.
+        _ad_pre = getattr(request.app.state, "agent_dispatcher", None)
+        if _ad_pre:
+            try:
+                await _ad_pre._drain_session_sync(agent_id)
+            except Exception:
+                pass
+        # Pre-flush: write any pending messages to display before the card.
+        try:
+            _flush_auq(agent_id)
+        except Exception:
+            pass
         _auq_uuid = f"interactive-{tool_use_id}"
         _auq_meta = {
             "interactive": [{
@@ -1062,7 +1079,6 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
             )
             _db_auq.add(_auq_msg)
             _db_auq.commit()
-            from display_writer import flush_agent as _flush_auq
             _flush_auq(agent_id)
             _ad = getattr(request.app.state, "agent_dispatcher", None)
             if _ad:

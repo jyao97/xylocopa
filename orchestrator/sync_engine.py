@@ -1091,6 +1091,22 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                 ad._emit(emit_agent_update(
                     ctx.agent_id, _sh_status or "IDLE", _sh_project,
                 ))
+            # Dismiss stale interactive cards — if the agent continued past
+            # an AskUserQuestion (e.g. timeout), the tool_result lands in a
+            # later sync batch than the tool_use, so the pointer-based import
+            # never retroactively updates the card's answer in the DB/display.
+            from routers.agents import _dismiss_pending_interactive_cards
+            _sh_dismissed = _dismiss_pending_interactive_cards(db, ctx.agent_id)
+            if _sh_dismissed:
+                from websocket import emit_metadata_update
+                for _d in _sh_dismissed:
+                    ad._emit(emit_metadata_update(
+                        ctx.agent_id, _d["message_id"],
+                    ))
+                logger.info(
+                    "sync: dismissed %d interactive card(s) for agent %s on stop_hook",
+                    len(_sh_dismissed), ctx.agent_id[:8],
+                )
             # mark slash commands completed
             import slash_commands as _sc
             _sc.mark_completed(ctx.agent_id)

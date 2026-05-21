@@ -506,6 +506,42 @@ def parse_session_turns_from_lines(
                                     b.get("text", "") if isinstance(b, dict) else str(b)
                                     for b in result_content
                                 ).strip() or ""
+                            # Faithful classification by *outcome*, not by
+                            # tool name. The parser otherwise turns every
+                            # AskUserQuestion/ExitPlanMode tool_use into an
+                            # interactive card unconditionally — but a call
+                            # rejected by CC's input-schema validation
+                            # (InputValidationError — e.g. an AskUserQuestion
+                            # whose question has <2 options) never reached the
+                            # user: no card was shown, no PreToolUse hook fired.
+                            # It is not an interactive card — it is just a
+                            # failed tool call. Reclassify it as a normal
+                            # tool_use turn (the same path every other tool
+                            # takes) so it stays faithfully and completely in
+                            # the timeline, but never as a clickable question.
+                            # Not dropped (that would lose it); not a card (it
+                            # never was one).
+                            if (block.get("is_error")
+                                    and "InputValidationError" in str(result_content)):
+                                _rejected = interactive_by_id.pop(tool_use_id, None)
+                                if (_rejected is not None
+                                        and _rejected in pending_interactive):
+                                    pending_interactive.remove(_rejected)
+                                    flush_text()
+                                    _rname = ("AskUserQuestion"
+                                              if _rejected.get("type") == "ask_user_question"
+                                              else "ExitPlanMode")
+                                    turns.append((
+                                        "assistant",
+                                        f"> `{_rname}` — rejected: InputValidationError",
+                                        {"tool_name": _rname,
+                                         "tool_use_id": tool_use_id,
+                                         "is_error": True},
+                                        f"tool-{tool_use_id}",
+                                        "tool_use",
+                                        entry_ts,
+                                    ))
+                                continue
                             interactive_by_id[tool_use_id]["answer"] = result_content
                             derive_selected_index(interactive_by_id[tool_use_id])
                             # Flush so each interactive Q&A becomes its

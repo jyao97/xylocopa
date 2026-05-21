@@ -2101,6 +2101,9 @@ class AgentDispatcher:
             if not is_sub and not self._is_agent_in_use(agent.id, agent.tmux_pane):
                 agent.unread_count += 1
                 bumped = True
+            if body:
+                agent.last_message_preview = body[:200]
+                agent.last_message_at = _utcnow()
             db.commit()
             project = agent.project
             status = agent.status.value

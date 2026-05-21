@@ -287,32 +287,11 @@ def flush_agent(agent_id: str):
         if not undisplayed:
             return
 
-        # Detect out-of-order: if the earliest new message predates the
-        # last displayed message, a hook-created card was flushed before
-        # its preceding text arrived via sync.  Rebuild to fix ordering.
-        last_displayed = (
-            db.query(Message)
-            .filter(
-                Message.agent_id == agent_id,
-                Message.display_seq.isnot(None),
-            )
-            .order_by(Message.display_seq.desc())
-            .first()
-        )
-        if last_displayed and _sort_key(undisplayed[0]) < _sort_key(last_displayed):
-            logger.info(
-                "Out-of-order detected for agent %s — rebuilding display "
-                "(new %s < displayed %s)",
-                agent_id[:8],
-                _sort_key(undisplayed[0]).isoformat(),
-                _sort_key(last_displayed).isoformat(),
-            )
-            db.close()
-            rebuild_agent(agent_id)
-            return
-
-        max_seq = last_displayed.display_seq if last_displayed else 0
-        next_seq = max_seq + 1
+        # Get current max display_seq
+        max_seq = db.query(func.max(Message.display_seq)).filter(
+            Message.agent_id == agent_id,
+        ).scalar()
+        next_seq = (max_seq or 0) + 1
 
         # Ensure directory exists
         os.makedirs(DISPLAY_DIR, exist_ok=True)

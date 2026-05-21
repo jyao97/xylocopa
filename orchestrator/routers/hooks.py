@@ -1030,24 +1030,15 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
     finally:
         _db.close()
 
-    # Drain pending JSONL so card appears after preceding messages
+    # Drain pending JSONL so card appears after preceding messages.
+    # Note: CC doesn't flush ANY JSONL (not even preceding text) until the
+    # hook returns, so drain typically finds delta=0. The drain is still
+    # useful for importing turns from earlier sync cycles that haven't
+    # been flushed to the display file yet.
     _ad = getattr(request.app.state, "agent_dispatcher", None)
     if _ad:
         try:
-            _drain_result = await _ad._drain_session_sync(agent_id)
-            # Diagnostic: check if JSONL has content beyond what sync imported
-            _ctx = _ad._sync_contexts.get(agent_id)
-            if _ctx:
-                try:
-                    _jsize = os.path.getsize(_ctx.jsonl_path)
-                    logger.info(
-                        "AskUserQuestion diag agent=%s drain=%s "
-                        "jsonl_size=%d last_offset=%d delta=%d",
-                        agent_id[:8], _drain_result, _jsize,
-                        _ctx.last_offset, _jsize - _ctx.last_offset,
-                    )
-                except OSError:
-                    pass
+            await _ad._drain_session_sync(agent_id)
         except Exception:
             pass
 

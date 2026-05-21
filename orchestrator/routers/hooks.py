@@ -1001,13 +1001,10 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
     """Block until user answers AskUserQuestion from web UI, return updatedInput.
 
     Called from hook_agent_permission for ALL agents (both skip_permissions and
-    supervised).  The activity hook fires in parallel and handles tool_activity
-    tracking + sync wake — this handler only does the blocking + updatedInput.
-
-    Creates a DB Message with interactive metadata immediately so the card
-    renders before the JSONL flushes (CC may not flush until the hook returns).
-    Uses jsonl_uuid="interactive-{tool_use_id}" to match the parser's format
-    so the later JSONL sync deduplicates naturally.
+    supervised).  Card creation follows the same pattern as permission cards:
+    drain pending JSONL → persist card in DB → flush display → notify →
+    broadcast → block.  Uses jsonl_uuid="interactive-{tool_use_id}" so the
+    later JSONL sync deduplicates naturally.
     """
     from permissions import PermissionManager
 
@@ -1024,9 +1021,6 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
         tool_use_id=tool_use_id,
     )
 
-    # Broadcast to frontend so notification badge updates
-    from websocket import ws_manager
-    # DB lookup for agent name
     from database import SessionLocal
     _db = SessionLocal()
     try:
@@ -1036,64 +1030,53 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
     finally:
         _db.close()
 
-    # Persist interactive card in DB immediately — CC may not flush the
-    # tool_use block to JSONL until this hook returns, so relying on sync
-    # alone would leave the card invisible while the hook blocks.
-    if tool_use_id:
-        from display_writer import flush_agent as _flush_auq
-        # Drain sync first: the parallel activity hook already woke the sync
-        # loop, but it may not have committed yet.  drain_session_sync imports
-        # pending JSONL turns (including the user message) so delivered_at is
-        # set — without this, flush_agent skips user messages (delivered_at
-        # IS NULL filter) and the card gets a lower display_seq than the task.
-        _ad_pre = getattr(request.app.state, "agent_dispatcher", None)
-        if _ad_pre:
-            try:
-                await _ad_pre._drain_session_sync(agent_id)
-            except Exception:
-                pass
-        # Pre-flush: write any pending messages to display before the card.
+    # Drain pending JSONL so card appears after preceding messages
+    _ad = getattr(request.app.state, "agent_dispatcher", None)
+    if _ad:
         try:
-            _flush_auq(agent_id)
+            await _ad._drain_session_sync(agent_id)
         except Exception:
             pass
-        _auq_uuid = f"interactive-{tool_use_id}"
-        _auq_meta = {
-            "interactive": [{
-                "type": "ask_user_question",
-                "tool_use_id": tool_use_id,
-                "request_id": req.id,
-                "questions": questions,
-                "answer": None,
-            }],
-        }
-        _db_auq = SessionLocal()
-        try:
-            _auq_msg = Message(
-                agent_id=agent_id,
-                role=MessageRole.AGENT,
-                kind=None,
-                content="",
-                source="hook",
-                status=MessageStatus.COMPLETED,
-                meta_json=json.dumps(_auq_meta),
-                tool_use_id=tool_use_id,
-                jsonl_uuid=_auq_uuid,
-            )
-            _db_auq.add(_auq_msg)
-            _db_auq.commit()
-            _flush_auq(agent_id)
-            _ad = getattr(request.app.state, "agent_dispatcher", None)
-            if _ad:
-                _ad._bump_unread_and_notify_interactive(
-                    agent_id,
-                    f"[interactive cards] {q_summary}",
-                )
-        except Exception:
-            logger.exception("_handle_ask_user_question: failed to persist card for agent %s", agent_id[:8])
-        finally:
-            _db_auq.close()
 
+    # Persist interactive card in DB (same pattern as permission cards)
+    _card_uuid = f"interactive-{tool_use_id}" if tool_use_id else f"hookauq-{req.id}"
+    _meta = {
+        "interactive": [{
+            "type": "ask_user_question",
+            "tool_use_id": tool_use_id or _card_uuid,
+            "request_id": req.id,
+            "questions": questions,
+            "answer": None,
+        }],
+    }
+    _db_card = SessionLocal()
+    try:
+        _msg = Message(
+            agent_id=agent_id,
+            role=MessageRole.AGENT,
+            kind=None,
+            content="",
+            source="hook",
+            status=MessageStatus.COMPLETED,
+            meta_json=json.dumps(_meta),
+            tool_use_id=tool_use_id or _card_uuid,
+            jsonl_uuid=_card_uuid,
+        )
+        _db_card.add(_msg)
+        _db_card.commit()
+        from display_writer import flush_agent
+        flush_agent(agent_id)
+        if _ad:
+            _ad._bump_unread_and_notify_interactive(
+                agent_id,
+                f"[interactive cards] {q_summary}",
+            )
+    except Exception:
+        logger.exception("_handle_ask_user_question: failed to persist card for agent %s", agent_id[:8])
+    finally:
+        _db_card.close()
+
+    from websocket import ws_manager
     await ws_manager.broadcast("permission_request", {
         "request_id": req.id,
         "agent_id": agent_id,
@@ -1103,11 +1086,6 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
         "tool_input": tool_input,
         "summary": q_summary,
     })
-    # Explicit new_message signal — flush_agent's ensure_future may not
-    # run before we block on wait_for_decision below.
-    if tool_use_id:
-        from websocket import emit_new_message
-        await emit_new_message(agent_id, f"interactive-{tool_use_id}")
 
     # Block until user answers (reuse permission timeout)
     _perm_timeout = int(os.getenv("XY_PERMISSION_TIMEOUT") or os.getenv("AHIVE_PERMISSION_TIMEOUT") or "7200")
@@ -1213,6 +1191,14 @@ async def hook_agent_permission(request: Request):
     from websocket import _tool_input_summary
     summary = _tool_input_summary(tool_name, tool_input) if tool_input else ""
     req = pm.create_request(agent_id, tool_name, tool_input, summary)
+
+    # Drain pending JSONL so card appears after preceding messages
+    _ad_drain = getattr(request.app.state, "agent_dispatcher", None)
+    if _ad_drain:
+        try:
+            await _ad_drain._drain_session_sync(agent_id)
+        except Exception:
+            pass
 
     # Persist as interactive card in DB so it survives page refresh
     _perm_tool_use_id = f"hookperm-{req.id}"

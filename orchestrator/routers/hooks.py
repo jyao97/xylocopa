@@ -1034,7 +1034,20 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
     _ad = getattr(request.app.state, "agent_dispatcher", None)
     if _ad:
         try:
-            await _ad._drain_session_sync(agent_id)
+            _drain_result = await _ad._drain_session_sync(agent_id)
+            # Diagnostic: check if JSONL has content beyond what sync imported
+            _ctx = _ad._sync_contexts.get(agent_id)
+            if _ctx:
+                try:
+                    _jsize = os.path.getsize(_ctx.jsonl_path)
+                    logger.info(
+                        "AskUserQuestion diag agent=%s drain=%s "
+                        "jsonl_size=%d last_offset=%d delta=%d",
+                        agent_id[:8], _drain_result, _jsize,
+                        _ctx.last_offset, _jsize - _ctx.last_offset,
+                    )
+                except OSError:
+                    pass
         except Exception:
             pass
 

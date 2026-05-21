@@ -4219,26 +4219,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   if (isStarting) disabledReason = "Agent is starting…";
   else if (isStopped) disabledReason = "Agent is stopped — click Resume to restart";
   else if (isError) disabledReason = "Agent errored — click Resume to restart";
-  else if (hasPendingInteractive) {
-    // Determine if the pending card is a plan or question
-    let pendingType = "question";
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const meta = messages[i].metadata;
-      if (messages[i].role === "AGENT" && meta?.interactive?.length) {
-        for (const item of meta.interactive) {
-          if (item.auto_approved) continue;
-          if (item.answer == null && item.selected_index == null) {
-            pendingType = item.type === "exit_plan_mode" ? "plan" : "question";
-            break;
-          }
-        }
-        break;
-      }
-    }
-    disabledReason = pendingType === "plan"
-      ? "Approve or reject the plan above"
-      : "Answer the question above first";
-  }
 
   return (
     <div ref={kbContainerRef} className="flex flex-col h-full relative">
@@ -4911,7 +4891,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         project={agent?.project}
         onSend={handleSend}
         onSendLater={handleSendLater}
-        disabled={isStarting || isStopped || isError || hasPendingInteractive}
+        disabled={isStarting || isStopped || isError}
         disabledReason={disabledReason}
         isBusy={!hasTmux && isExecuting}
         tmuxMode={hasTmux}

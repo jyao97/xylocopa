@@ -1084,6 +1084,11 @@ async def _handle_ask_user_question(request, agent_id: str, tool_input: dict, to
         "tool_input": tool_input,
         "summary": q_summary,
     })
+    # Explicit new_message signal — flush_agent's ensure_future may not
+    # run before we block on wait_for_decision below.
+    if tool_use_id:
+        from websocket import emit_new_message
+        await emit_new_message(agent_id, f"interactive-{tool_use_id}")
 
     # Block until user answers (reuse permission timeout)
     _perm_timeout = int(os.getenv("XY_PERMISSION_TIMEOUT") or os.getenv("AHIVE_PERMISSION_TIMEOUT") or "7200")

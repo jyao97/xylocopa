@@ -87,6 +87,36 @@ def _is_subprocess_session(agent_id: str, hook_session_id: str, request: Request
     return ctx.session_id != hook_session_id
 
 
+def _reset_compact_abandoned(ad, agent_id: str, reason: str):
+    """Reset compact_notified and clean up stale UI artifacts.
+
+    Called when we detect that CC abandoned a compact attempt (sent a
+    non-PostCompact hook, or JSONL grew during the compact window).
+    """
+    ctx = ad._sync_contexts.get(agent_id)
+    if not ctx or not ctx.compact_notified:
+        return
+    ctx.compact_notified = False
+    ctx.compact_notified_at = 0.0
+    ctx.compact_detected_at = 0.0
+    logger.warning("Compact abandoned: agent %s %s, resetting sync pause", agent_id[:8], reason)
+    # Close the stale "Compact start" tool_activity record
+    from sync_engine import _end_compact_activity
+    _db = SessionLocal()
+    try:
+        _act_id = _end_compact_activity(_db, agent_id, ctx.session_id)
+        if _act_id:
+            _db.commit()
+            from websocket import emit_tool_activity as _emit_ta
+            asyncio.ensure_future(_emit_ta(
+                agent_id, "Compact", "end",
+                tool_output="compact abandoned",
+            ))
+    finally:
+        _db.close()
+    ad.wake_sync(agent_id)
+
+
 async def _await_jsonl_flush(
     ad, agent_id: str, *,
     wait_for: bytes | None = None,
@@ -391,15 +421,7 @@ async def hook_agent_user_prompt(request: Request):
         # Compact-abandoned detection (same logic as tool-activity handler)
         ctx = ad._sync_contexts.get(agent_id)
         if ctx and ctx.compact_notified:
-            ctx.compact_notified = False
-            ctx.compact_notified_at = 0.0
-            ctx.compact_detected_at = 0.0
-            logger.warning(
-                "Compact abandoned: agent %s sent UserPromptSubmit while "
-                "compact_notified=True, resetting sync pause",
-                agent_id[:8],
-            )
-            ad.wake_sync(agent_id)
+            _reset_compact_abandoned(ad, agent_id, "sent UserPromptSubmit")
 
         # GHOST_DELIVERED probe: ack the most recent un-acked promote
         # so we can correlate hook-arrival to send-keys.
@@ -500,15 +522,7 @@ async def hook_agent_stop(request: Request):
         ctx = ad._sync_contexts.get(agent_id)
         if ctx:
             if ctx.compact_notified:
-                ctx.compact_notified = False
-                ctx.compact_notified_at = 0.0
-                ctx.compact_detected_at = 0.0
-                logger.warning(
-                    "Compact abandoned: agent %s sent Stop while "
-                    "compact_notified=True, resetting sync pause",
-                    agent_id[:8],
-                )
-                ad.wake_sync(agent_id)
+                _reset_compact_abandoned(ad, agent_id, "sent Stop")
             else:
                 async def _post_stop_sync(_aid):
                     await _await_jsonl_flush(
@@ -694,15 +708,7 @@ async def hook_agent_tool_activity(request: Request):
     if ad and hook_event != "PreCompact":
         ctx = ad._sync_contexts.get(agent_id)
         if ctx and ctx.compact_notified:
-            ctx.compact_notified = False
-            ctx.compact_notified_at = 0.0
-            ctx.compact_detected_at = 0.0
-            logger.warning(
-                "Compact abandoned: agent %s sent %s while compact_notified=True, "
-                "resetting sync pause",
-                agent_id[:8], hook_event,
-            )
-            ad.wake_sync(agent_id)
+            _reset_compact_abandoned(ad, agent_id, f"sent {hook_event}")
 
     # Wake sync — import new assistant turns written to JSONL between
     # UserPromptSubmit and Stop.  Bare wake_sync handles the common case

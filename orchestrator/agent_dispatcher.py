@@ -4565,9 +4565,9 @@ Here are the day's conversations (with timestamps):
                         "window (%d → %d), resetting sync pause",
                         agent_id, ctx.last_offset, _cur,
                     )
-                    ctx.compact_notified = False
-                    ctx.compact_notified_at = 0.0
-                    ctx.compact_detected_at = 0.0
+                    from routers.hooks import _reset_compact_abandoned
+                    _reset_compact_abandoned(self, agent_id,
+                        f"JSONL grew ({ctx.last_offset} → {_cur})")
                 else:
                     continue
 

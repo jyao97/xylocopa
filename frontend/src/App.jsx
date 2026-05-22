@@ -20,20 +20,7 @@ import AttentionButton from "./components/AttentionButton";
 import BottomNavBar from "./components/BottomNavBar";
 import RouteFallback from "./components/skeletons/RouteFallback";
 
-const MODULE_IMPORT_ERROR_PATTERNS = [
-  "Importing a module script failed",
-  "Failed to fetch dynamically imported module",
-  "error loading dynamically imported module",
-  "Load failed for the module with source",
-  "is not a valid JavaScript MIME type",
-  "disallowed MIME type",
-];
 const MODULE_RELOAD_KEY = "ah:module-import-reload-attempted";
-
-function isModuleImportError(err) {
-  const msg = String(err?.message || err || "");
-  return MODULE_IMPORT_ERROR_PATTERNS.some((p) => msg.includes(p));
-}
 
 async function clearModuleCachesBestEffort() {
   try {
@@ -71,7 +58,6 @@ function lazyPage(importer) {
           return mod;
         } catch (err) {
           lastErr = err;
-          if (!isModuleImportError(err)) throw err;
           if (attempt < 3) await new Promise((r) => setTimeout(r, 1000));
         }
       }

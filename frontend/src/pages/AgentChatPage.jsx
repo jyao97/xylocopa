@@ -2187,10 +2187,6 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
 
   const addFiles = useCallback((files) => {
     for (const file of files) {
-      if (file.size > 50 * 1024 * 1024) {
-        setUploadError(`${file.name} exceeds 50 MB limit`);
-        continue;
-      }
       const id = Math.random().toString(36).slice(2, 10);
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : null;
@@ -2657,7 +2653,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   // Feedback attachment helpers
   const addFeedbackFiles = (files) => {
     for (const file of files) {
-      if (file.size > 50 * 1024 * 1024) continue;
       const fid = Math.random().toString(36).slice(2, 10);
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : null;

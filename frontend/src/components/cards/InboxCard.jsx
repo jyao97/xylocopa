@@ -355,7 +355,6 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
   const addFiles = useCallback(async (fileList) => {
     const uploadedPaths = [];
     for (const file of fileList) {
-      if (file.size > 50 * 1024 * 1024) continue;
       try {
         const result = await uploadFile(file);
         uploadedPaths.push(result.path);

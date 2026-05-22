@@ -276,7 +276,6 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
 
   const addFiles = (files) => {
     for (const file of files) {
-      if (file.size > 50 * 1024 * 1024) { showToast(`${file.name} exceeds 50 MB limit`, "error"); continue; }
       const id = Math.random().toString(36).slice(2, 10);
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : null;

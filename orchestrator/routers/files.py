@@ -409,8 +409,6 @@ async def upload_file(request: Request):
         raise HTTPException(status_code=400, detail="No file provided")
 
     content = await file.read()
-    if len(content) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File exceeds 50 MB limit")
 
     # Sanitize original filename
     original_name = os.path.basename(file.filename or "upload")

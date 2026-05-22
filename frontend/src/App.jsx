@@ -25,6 +25,8 @@ const MODULE_IMPORT_ERROR_PATTERNS = [
   "Failed to fetch dynamically imported module",
   "error loading dynamically imported module",
   "Load failed for the module with source",
+  "is not a valid JavaScript MIME type",
+  "disallowed MIME type",
 ];
 const MODULE_RELOAD_KEY = "ah:module-import-reload-attempted";
 

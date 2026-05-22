@@ -388,6 +388,19 @@ async def hook_agent_user_prompt(request: Request):
 
     ad = getattr(request.app.state, "agent_dispatcher", None)
     if ad:
+        # Compact-abandoned detection (same logic as tool-activity handler)
+        ctx = ad._sync_contexts.get(agent_id)
+        if ctx and ctx.compact_notified:
+            ctx.compact_notified = False
+            ctx.compact_notified_at = 0.0
+            ctx.compact_detected_at = 0.0
+            logger.warning(
+                "Compact abandoned: agent %s sent UserPromptSubmit while "
+                "compact_notified=True, resetting sync pause",
+                agent_id[:8],
+            )
+            ad.wake_sync(agent_id)
+
         # GHOST_DELIVERED probe: ack the most recent un-acked promote
         # so we can correlate hook-arrival to send-keys.
         try:
@@ -487,6 +500,14 @@ async def hook_agent_stop(request: Request):
         ctx = ad._sync_contexts.get(agent_id)
         if ctx:
             if ctx.compact_notified:
+                ctx.compact_notified = False
+                ctx.compact_notified_at = 0.0
+                ctx.compact_detected_at = 0.0
+                logger.warning(
+                    "Compact abandoned: agent %s sent Stop while "
+                    "compact_notified=True, resetting sync pause",
+                    agent_id[:8],
+                )
                 ad.wake_sync(agent_id)
             else:
                 async def _post_stop_sync(_aid):
@@ -555,6 +576,7 @@ async def hook_agent_post_compact(request: Request):
     ctx = ad._sync_contexts.get(agent_id)
     if ctx:
         ctx.compact_notified = False
+        ctx.compact_notified_at = 0.0
         ctx.compact_end_emitted = True  # prevent duplicate from sync engine
         ctx.compact_detected_at = 0.0
 
@@ -665,6 +687,22 @@ async def hook_agent_tool_activity(request: Request):
     from websocket import emit_tool_activity, _tool_input_summary, _tool_output_summary
 
     ad = getattr(request.app.state, "agent_dispatcher", None)
+
+    # Compact-abandoned detection: if CC sends a non-PreCompact hook while
+    # compact_notified is True, the compact operation failed (e.g. API error)
+    # and CC resumed work.  Reset the flag so sync resumes immediately.
+    if ad and hook_event != "PreCompact":
+        ctx = ad._sync_contexts.get(agent_id)
+        if ctx and ctx.compact_notified:
+            ctx.compact_notified = False
+            ctx.compact_notified_at = 0.0
+            ctx.compact_detected_at = 0.0
+            logger.warning(
+                "Compact abandoned: agent %s sent %s while compact_notified=True, "
+                "resetting sync pause",
+                agent_id[:8], hook_event,
+            )
+            ad.wake_sync(agent_id)
 
     # Wake sync — import new assistant turns written to JSONL between
     # UserPromptSubmit and Stop.  Bare wake_sync handles the common case
@@ -953,7 +991,9 @@ async def hook_agent_tool_activity(request: Request):
             await _await_jsonl_flush(ad, agent_id)
             await ad._drain_session_sync(agent_id)
             # Now pause sync — JSONL is about to be rewritten
+            import time as _time
             ad._sync_contexts[agent_id].compact_notified = True
+            ad._sync_contexts[agent_id].compact_notified_at = _time.monotonic()
         # Write a SYSTEM "Compacting context..." bubble immediately so the
         # user sees pre-compact feedback. Hook-owned: synthetic uuid keeps
         # sync's UUID-dedup from collision; source="hook" keeps compact
@@ -1490,6 +1530,7 @@ async def hook_agent_session_start(request: Request):
                 ctx = ad._sync_contexts.get(agent_id)
                 if ctx:
                     ctx.compact_notified = False
+                    ctx.compact_notified_at = 0.0
 
                 # Look up project_path + worktree for rotation
                 _proj_path = None

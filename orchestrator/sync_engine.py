@@ -68,6 +68,7 @@ class SyncContext:
 
     # Agent operational state
     compact_notified: bool = False
+    compact_notified_at: float = 0.0  # monotonic timestamp for abandoned-compact safety net
     compact_end_emitted: bool = False
     compact_detected_at: float = 0.0
     idle_polls: int = 0
@@ -1312,6 +1313,7 @@ async def sync_full_scan(ad, ctx: SyncContext, reason: str = "startup"):
                 import time as _time
                 ctx.compact_detected_at = _time.monotonic()
             ctx.compact_notified = False
+            ctx.compact_notified_at = 0.0
 
             # Status transitions for the compact window are owned by the
             # PreCompact (→EXECUTING) and PostCompact (manual→IDLE,

@@ -4548,8 +4548,28 @@ Here are the day's conversations (with timestamps):
             # Pause sync during compact (PreCompact → SessionStart gap).
             # The JSONL is being rewritten; reading it mid-rewrite would
             # import an intermediate state with 100+ false "new" turns.
+            #
+            # Compact-abandoned detection (secondary to hooks.py event-driven
+            # reset): if the JSONL file GROWS during the compact window, CC is
+            # appending new entries (API error, resumed tool use) — compact
+            # either failed or was skipped. A successful compact REWRITES the
+            # file (shrinks), never appends.
             if ctx.compact_notified:
-                continue
+                try:
+                    _cur = os.path.getsize(ctx.jsonl_path)
+                except OSError:
+                    _cur = ctx.last_offset
+                if _cur > ctx.last_offset:
+                    logger.warning(
+                        "Compact abandoned: agent %s JSONL grew during compact "
+                        "window (%d → %d), resetting sync pause",
+                        agent_id, ctx.last_offset, _cur,
+                    )
+                    ctx.compact_notified = False
+                    ctx.compact_notified_at = 0.0
+                    ctx.compact_detected_at = 0.0
+                else:
+                    continue
 
             # Fallback: if sync detected compact but PostCompact hook never
             # arrived (hook failure, race, etc.), emit the UI signals after

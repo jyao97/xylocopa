@@ -107,6 +107,13 @@ export default defineConfig({
             urlPattern: /^.*\/api\/.*/,
             handler: 'NetworkOnly',
           },
+          // Catch-all: any request not matched above goes straight to
+          // network. Prevents Workbox from returning an empty response
+          // (no-response) when a stale SW has outdated routing rules.
+          {
+            urlPattern: () => true,
+            handler: 'NetworkOnly',
+          },
         ],
       },
       manifest: {

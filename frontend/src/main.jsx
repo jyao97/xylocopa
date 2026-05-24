@@ -109,8 +109,13 @@ prefetchHeavyChunks();
     beacon({ action: "reload-trace", reason: "beforeunload" });
   });
   if ("serviceWorker" in navigator) {
+    // Track whether we had a controller at load time — first-install
+    // (null → SW) should not reload, but SW-swap (old → new) must.
+    let hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      beacon({ action: "reload-trace", reason: "sw-controllerchange" });
+      beacon({ action: "reload-trace", reason: "sw-controllerchange", hadController });
+      if (hadController) window.location.reload();
+      hadController = true;
     });
   }
   try {

@@ -36,7 +36,14 @@ export default class ErrorBoundary extends Component {
           </p>
           <button
             type="button"
-            onClick={() => this.setState({ hasError: false, error: null })}
+            onClick={() => {
+              const msg = this.state.error?.message || "";
+              if (/MIME type|dynamically imported module|Importing a module script failed/i.test(msg)) {
+                window.location.reload();
+              } else {
+                this.setState({ hasError: false, error: null });
+              }
+            }}
             className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm hover:bg-cyan-500 transition-colors"
           >
             Try Again

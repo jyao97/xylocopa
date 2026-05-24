@@ -30,6 +30,32 @@ export default defineConfig({
         return html.replace(/__APP_VERSION__/g, pkg.version)
       },
     },
+    // Vite's built-in htmlFallbackMiddleware rewrites ALL 404s to
+    // /index.html (SPA fallback) — including missing .js/.css chunks.
+    // The browser then receives HTML with Content-Type text/html instead
+    // of the expected JS, triggering Safari's "'text/html' is not a valid
+    // JavaScript MIME type" error.  This plugin intercepts after the
+    // rewrite and returns a proper 404 for asset requests.
+    {
+      name: 'asset-404',
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          req.__originalUrl = req.url;
+          next();
+        });
+        return () => {
+          server.middlewares.use((req, res, next) => {
+            if (req.__originalUrl && req.url === '/index.html' &&
+                /\/assets\/.+\.(js|css|mjs)(\?|$)/.test(req.__originalUrl)) {
+              res.writeHead(404, { 'Content-Type': 'text/plain' });
+              res.end('Not Found');
+              return;
+            }
+            next();
+          });
+        };
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({

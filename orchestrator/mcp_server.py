@@ -476,8 +476,9 @@ def task_create(
         - claude-opus-4-6             → architectural decisions, multi-file
                                        redesigns, debugging across layers,
                                        anything needing deep reasoning
-        - claude-opus-4-7             → same as 4-6 but the latest tier;
-                                       prefer for highest-stakes work
+        - claude-opus-4-7             → same as 4-6, a newer tier
+        - claude-opus-4-8             → latest tier; prefer for
+                                       highest-stakes work
 
       effort:
         - low      → < 1 hour, well-scoped (~30 lines or contained tweak)
@@ -605,7 +606,8 @@ def task_update(
         project: New project name. Must exist in the Project table.
             Empty = leave unchanged.
         model: New Claude model id (claude-haiku-4-5-20251001 |
-            claude-sonnet-4-6 | claude-opus-4-6 | claude-opus-4-7).
+            claude-sonnet-4-6 | claude-opus-4-6 | claude-opus-4-7 |
+            claude-opus-4-8).
             Empty = leave unchanged.
         effort: New effort level (low|medium|high|xhigh|max).
             Empty = leave unchanged.

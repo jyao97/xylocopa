@@ -339,7 +339,7 @@ class ProjectOut(BaseModel):
     git_remote: str | None = None
     description: str | None = None
     max_concurrent: int = 8
-    default_model: str = "claude-opus-4-7"
+    default_model: str = "claude-opus-4-8"
     archived: bool = False
     auto_progress_summary: bool = False
     ai_insights: bool = False

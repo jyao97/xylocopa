@@ -231,7 +231,7 @@ class Project(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     max_concurrent: Mapped[int] = mapped_column(Integer, default=8)
     default_model: Mapped[str] = mapped_column(
-        String(100), default="claude-opus-4-7"
+        String(100), default="claude-opus-4-8"
     )
     archived: Mapped[bool] = mapped_column(default=False)
     auto_progress_summary: Mapped[bool] = mapped_column(Boolean, default=False)

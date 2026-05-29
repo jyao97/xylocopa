@@ -109,12 +109,15 @@ prefetchHeavyChunks();
     beacon({ action: "reload-trace", reason: "beforeunload" });
   });
   if ("serviceWorker" in navigator) {
-    // Track whether we had a controller at load time — first-install
-    // (null → SW) should not reload, but SW-swap (old → new) must.
+    // New SW activation is traced but does NOT force a page reload. With
+    // clientsClaim the fresh SW controls the page immediately, so updated
+    // assets are served on the next navigation. Forcing location.reload()
+    // on every controllerchange reloaded every open tab on every rebuild;
+    // genuinely stale in-memory chunk refs are caught by the chunk-recovery
+    // net in index.html (capture-phase asset 404 + dynamic-import failure).
     let hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       beacon({ action: "reload-trace", reason: "sw-controllerchange", hadController });
-      if (hadController) window.location.reload();
       hadController = true;
     });
   }

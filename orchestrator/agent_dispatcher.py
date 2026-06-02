@@ -2709,6 +2709,14 @@ Here are the day's conversations (with timestamps):
             else:
                 target_status = TaskStatus.COMPLETE
 
+        # Launch-failure recovery: an agent that errored before ever getting a
+        # CLI session (session_id is None) never actually ran — its prompt was
+        # never delivered. Send the task back to INBOX (editable and
+        # re-dispatchable; re-dispatch re-sanitizes a bad worktree name) instead
+        # of stranding it in FAILED, where the prompt can't be recovered via UI.
+        if target_status == TaskStatus.FAILED and not agent.session_id:
+            target_status = TaskStatus.INBOX
+
         from task_state import TaskStateMachine
         TaskStateMachine.transition(task, target_status, strict=False)
         logger.info(

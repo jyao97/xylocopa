@@ -23,7 +23,7 @@ from websocket import emit_task_update, emit_agent_update, emit_agent_created
 from route_helpers import (
     check_project_capacity, create_tmux_claude_session,
     generate_worktree_name_local, resolve_project_path,
-    tmux_session_candidates, tmux_session_name,
+    sanitize_worktree_name, tmux_session_candidates, tmux_session_name,
 )
 from utils import utcnow as _utcnow
 
@@ -158,7 +158,10 @@ async def _dispatch_task_tmux(db: Session, task: Task, proj: Project, ad) -> str
     effort = task.effort or "xhigh"
     worktree = None
     if getattr(task, "use_worktree", True):
-        worktree = task.worktree_name or _generate_worktree_name_local(prompt)
+        # Sanitize here too (belt-and-suspenders): heals any already-stored bad
+        # name (e.g. an over-long LLM name) on (re-)dispatch so the launch can't
+        # be rejected by the CLI's 64-char `--worktree` limit.
+        worktree = sanitize_worktree_name(task.worktree_name or _generate_worktree_name_local(prompt))
         task.worktree_name = worktree
         task.branch_name = task.branch_name or f"worktree-{worktree}"
     skip_permissions = getattr(task, "skip_permissions", True)
@@ -1038,10 +1041,10 @@ async def generate_worktree_name(request: Request):
             max_tokens=30,
             temperature=0.3,
         )
-        name = resp.choices[0].message.content.strip().lower()
-        name = re.sub(r"[^a-z0-9-]", "-", name).strip("-")
-        name = re.sub(r"-+", "-", name)
-        return {"name": name or _generate_worktree_name_local(prompt)}
+        name = sanitize_worktree_name(resp.choices[0].message.content)
+        if name == "task":  # LLM gave nothing usable — fall back to prompt-derived name
+            name = _generate_worktree_name_local(prompt)
+        return {"name": name}
     except Exception as e:
         logger.warning("Worktree name generation failed: %s", e)
         return {"name": _generate_worktree_name_local(prompt)}

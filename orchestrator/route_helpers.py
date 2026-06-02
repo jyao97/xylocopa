@@ -267,12 +267,41 @@ def graceful_kill_tmux_agent(pane_id: str | None, agent_id: str):
             logger.debug("tmux kill-session %s failed (may already be dead)", session_name)
 
 
+# Claude Code's `--worktree` flag hard-rejects names longer than this
+# ("Invalid worktree name: must be 64 characters or fewer"), which makes the
+# CLI exit before the TUI starts and the agent launch fail.
+MAX_WORKTREE_NAME_LEN = 64
+
+
+def sanitize_worktree_name(name: str) -> str:
+    """Normalize a worktree name so `claude --worktree <name>` never rejects it.
+
+    LLM- or user-supplied names can carry invalid chars, repeated tokens, or
+    run past Claude Code's 64-char limit. Collapse to kebab-case, drop adjacent
+    duplicate tokens, and cap length on a token boundary (no dangling word).
+    """
+    name = re.sub(r"[^a-z0-9-]", "-", (name or "").lower())
+    name = re.sub(r"-+", "-", name).strip("-")
+    if not name:
+        return "task"
+    # Drop adjacent duplicate tokens: "active-xylo-xylo-3dgs" -> "active-xylo-3dgs".
+    tokens: list[str] = []
+    for tok in name.split("-"):
+        if tok and (not tokens or tokens[-1] != tok):
+            tokens.append(tok)
+    name = "-".join(tokens)
+    if len(name) > MAX_WORKTREE_NAME_LEN:
+        head = name[:MAX_WORKTREE_NAME_LEN]
+        name = (head.rsplit("-", 1)[0] if "-" in head else head).strip("-")
+    return name or "task"
+
+
 def generate_worktree_name_local(prompt: str) -> str:
     """Generate a short branch-style worktree name from the prompt (no API)."""
     words = re.sub(r"[^a-zA-Z0-9\s]", "", prompt).lower().split()
     skip = {"the", "a", "an", "to", "in", "on", "for", "and", "or", "is", "it", "of", "with", "my", "me", "i", "this", "that", "please", "can", "you", "do", "make", "let"}
     words = [w for w in words if w not in skip][:4]
-    return "-".join(words) if words else "task"
+    return sanitize_worktree_name("-".join(words) if words else "task")
 
 
 def enrich_agent_briefs(rows, request, db: Session | None = None) -> list[AgentBrief]:

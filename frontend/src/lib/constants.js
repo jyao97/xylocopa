@@ -44,13 +44,18 @@ export const AGENT_MODES = [
 ];
 
 export const MODEL_OPTIONS = [
-  { value: "claude-opus-4-8", label: "Opus 4.8" },
   { value: "claude-fable-5", label: "Fable 5" },
+  { value: "claude-opus-4-8", label: "Opus 4.8" },
   { value: "claude-opus-4-7", label: "Opus 4.7" },
   { value: "claude-opus-4-6", label: "Opus 4.6" },
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
 ];
+
+// Default model for new tasks — the latest Opus, deliberately NOT
+// MODEL_OPTIONS[0]: Fable 5 leads the picker visually but is opt-in
+// (~2x cost), so new tasks default to Opus 4.8 unless the user picks Fable.
+export const DEFAULT_MODEL = "claude-opus-4-8";
 
 /** Map full model ID to short display name. */
 export function modelDisplayName(modelId) {

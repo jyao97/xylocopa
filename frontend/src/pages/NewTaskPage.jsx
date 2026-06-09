@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createTaskV2, dispatchTask, uploadFile, generateWorktreeName } from "../lib/api";
-import { MODEL_OPTIONS, modelDisplayName } from "../lib/constants";
+import { MODEL_OPTIONS, DEFAULT_MODEL, modelDisplayName } from "../lib/constants";
 import { DATE_SHORT } from "../lib/formatters";
 import TagPicker from "../components/cards/TagPicker";
 import useProjects from "../hooks/useProjects";
@@ -44,7 +44,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
   // useTmux removed — all tasks use tmux now
   const [description, setDescription, clearDesc] = useDraft("new-task:description", "");
   const [project, setProject, clearProject] = useDraft("new-task:project", "");
-  const [model, setModel, clearModel] = useDraft("new-task:model", MODEL_OPTIONS[0].value);
+  const [model, setModel, clearModel] = useDraft("new-task:model", DEFAULT_MODEL);
   const [effort, setEffort, clearEffort] = useDraft("new-task:effort", "xhigh");
   const [priority, setPriority] = useState(0);
   const [skipPermissions, setSkipPermissions] = useState(() => {

@@ -505,8 +505,9 @@ def task_create(
     # Lazy imports so read-only callers don't pay the cost
     from pydantic import ValidationError
 
-    from models import Project, Task, TaskStatus
+    from models import Project, TaskStatus
     from schemas import TaskCreate
+    from task_service import build_task
 
     inferred_from_cwd = False
 
@@ -556,18 +557,7 @@ def task_create(
         except ValidationError as e:
             return f"Validation error:\n{e}"
 
-        task = Task(
-            title=payload.title,
-            description=payload.description,
-            project_name=payload.project_name,
-            model=payload.model,
-            effort=payload.effort,
-            priority=payload.priority,
-            skip_permissions=payload.skip_permissions,
-            use_worktree=payload.use_worktree,
-            use_tmux=payload.use_tmux,
-            status=TaskStatus.INBOX,
-        )
+        task = build_task(payload, status=TaskStatus.INBOX)
         db.add(task)
         db.commit()
         task_id = task.id

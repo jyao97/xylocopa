@@ -20,6 +20,7 @@ from schemas import AttemptAgentOut, MessageOut, TaskCreate, TaskDetailOut, Task
 from task_state_machine import can_transition, InvalidTransitionError
 from task_state import TaskStateMachine
 from websocket import emit_task_update, emit_agent_update, emit_agent_created
+from task_service import build_task
 from route_helpers import (
     check_project_capacity, create_tmux_claude_session,
     generate_worktree_name_local, get_task_or_404, resolve_project_path,
@@ -322,20 +323,7 @@ async def create_task_v2(body: TaskCreate, db: Session = Depends(get_db)):
             raise HTTPException(400, f"Project not found: {body.project_name}")
         initial_status = TaskStatus.PENDING
 
-    task = Task(
-        title=title,
-        description=body.description,
-        project_name=body.project_name,
-        model=body.model,
-        effort=body.effort,
-        priority=body.priority,
-        skip_permissions=body.skip_permissions,
-        sync_mode=body.sync_mode,
-        use_worktree=body.use_worktree,
-        use_tmux=body.use_tmux,
-        notify_at=body.notify_at,
-        status=initial_status,
-    )
+    task = build_task(body, status=initial_status, title=title)
     db.add(task)
     db.commit()
     db.refresh(task)

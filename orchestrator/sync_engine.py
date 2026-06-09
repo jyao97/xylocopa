@@ -153,6 +153,21 @@ def _notify_interactive(ad, agent, new_turns):
         ad._bump_unread_and_notify_interactive(agent.id, body)
 
 
+def _is_unimported_turn(role: str, kind: str | None) -> bool:
+    """True for JSONL turns the import loop intentionally never writes to
+    the DB (currently: slash_signal user turns — CC's /command markers,
+    skipped since 93ca3330 to avoid duplicate "/compact" bubbles).
+
+    Every drift audit (sync_full_scan's missing_in_db, the realtime drift
+    snapshot in sync_import_new_turns) MUST exclude these turns via this
+    same predicate. An asymmetry leaves them permanently "missing in DB",
+    so every full scan treats them as real drift and rewinds the pointer —
+    replaying history through the status-signal accumulator (the
+    auto-compact → spurious IDLE incident, 2026-06-03).
+    """
+    return role == "user" and kind == "slash_signal"
+
+
 def _infer_status_from_signals(
     db,
     ctx: SyncContext,
@@ -691,7 +706,7 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
             logger.debug("Agent %s: processing turn %d: role=%s kind=%s uuid=%s content_len=%d",
                          ctx.agent_id[:8], seq, role, kind, jsonl_uuid, len(content or ""))
 
-            if role == "user" and kind == "slash_signal":
+            if _is_unimported_turn(role, kind):
                 _drift_skipped_other_role.append((seq, role))
                 continue
 
@@ -815,7 +830,14 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
         # Real-time drift snapshot: compare full parser-emitted UUID set
         # against DB UUID set for this agent. Anything in JSONL but not in
         # DB is drift. Cheap (one indexed query, ~1ms for typical sessions).
-        _parser_uuids = {t[3] for t in turns if len(t) > 3 and t[3]}
+        # Intentionally-unimported turns are excluded — they never get DB
+        # rows, so counting them produced a permanent drift_detected error
+        # on every cycle.
+        _parser_uuids = {
+            t[3] for t in turns
+            if len(t) > 3 and t[3]
+            and not _is_unimported_turn(t[0], t[4] if len(t) > 4 else None)
+        }
         if _parser_uuids:
             _db_uuids_now = set(
                 _r[0] for _r in
@@ -1211,8 +1233,22 @@ async def sync_full_scan(ad, ctx: SyncContext, reason: str = "startup"):
         db_by_uuid = {m.jsonl_uuid: m for m in db_msgs}
         logger.debug("Agent %s: full_scan found %d DB messages with UUID", ctx.agent_id[:8], len(db_msgs))
 
-        # Detect drift
-        missing_in_db = [u for u in jsonl_uuids if u not in db_by_uuid]
+        # Detect drift. Intentionally-unimported turns (slash_signal) are
+        # excluded from the missing set: they never get DB rows by design,
+        # so counting them as missing rewinds the pointer on EVERY full
+        # scan and replays history. They stay in jsonl_uuids on purpose —
+        # extra_in_db must still recognize legacy DB rows holding their
+        # uuids (pre-93ca3330 imports), otherwise a compact scan would
+        # purge those rows as orphans.
+        _unimported_uuids = {
+            t[3] for t in turns
+            if len(t) > 3 and t[3]
+            and _is_unimported_turn(t[0], t[4] if len(t) > 4 else None)
+        }
+        missing_in_db = [
+            u for u in jsonl_uuids
+            if u not in db_by_uuid and u not in _unimported_uuids
+        ]
         extra_in_db = [
             m for m in db_msgs
             if m.jsonl_uuid and m.jsonl_uuid not in jsonl_uuids

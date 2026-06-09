@@ -9,7 +9,6 @@ Tests the building blocks used by _sync_agent_messages_impl reconciliation:
 """
 
 import json
-from datetime import datetime, timezone
 
 import pytest
 
@@ -33,10 +32,7 @@ from jsonl_parser import (
     _AGENTHIVE_PROMPT_MARKER,
     _is_wrapped_prompt,
 )
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
+from utils import utcnow as _utcnow
 
 
 class DummyWorkerManager:

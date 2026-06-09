@@ -1,16 +1,11 @@
 """Tests for message creation, listing, and pagination."""
 
 import json
-from datetime import datetime, timezone
-
 import pytest
 
 from models import Agent, AgentMode, AgentStatus, Message, MessageRole, MessageStatus, Project
 from schemas import MessageOut
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
+from utils import utcnow as _utcnow
 
 
 # ---- Model tests ----

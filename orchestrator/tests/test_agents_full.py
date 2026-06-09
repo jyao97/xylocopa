@@ -1,15 +1,12 @@
 """Comprehensive tests for Agent API endpoints — listing, detail, update, stop, delete, read."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 
 from models import Agent, AgentMode, AgentStatus, Message, MessageRole, MessageStatus, Project
 from schemas import AgentOut
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
+from utils import utcnow as _utcnow
 
 
 # ---------------------------------------------------------------------------

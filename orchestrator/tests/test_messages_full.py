@@ -3,17 +3,14 @@
 Covers: send, get (pagination), delete, update, and search.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from urllib.parse import quote
 
 import pytest
 
 from models import Agent, AgentMode, AgentStatus, Message, MessageRole, MessageStatus, Project
 from schemas import MessageOut
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
+from utils import utcnow as _utcnow
 
 
 def _make_session(db_engine):

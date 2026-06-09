@@ -13,7 +13,7 @@ Covers:
 import asyncio
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,11 +35,8 @@ from models import (
     TaskStatus,
 )
 from task_state_machine import InvalidTransitionError, can_transition, validate_transition
+from utils import utcnow as _utcnow
 from worker_manager import WorkerManager
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------

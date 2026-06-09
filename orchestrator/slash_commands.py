@@ -15,7 +15,8 @@ Empirically verified against Claude Code v2.1.140 (2026-05-13).
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+
+from utils import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -209,10 +210,6 @@ def completes_on_stop(content: str) -> bool:
 # ---------------------------------------------------------------------------
 # Lifecycle helpers — delivery + completion
 # ---------------------------------------------------------------------------
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
 
 def mark_delivered(agent_id: str, content: str) -> str | None:
     """Mark the matching undelivered slash command message as delivered.

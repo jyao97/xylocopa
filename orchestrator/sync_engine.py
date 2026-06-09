@@ -695,6 +695,14 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
         _deferred_updates: list[str] = []
         _pending_inserts: list[Message] = []
         _queued_uuids: set[str] = set()
+        # Batch indices of turns that were UUID-dedup'd against rows already
+        # in the DB — i.e. replayed history (pointer rewind / full-scan drift
+        # repair), not live events. The status-signal accumulator below must
+        # skip these: counting a replayed stop_hook flipped EXECUTING→IDLE
+        # mid-task and re-fired stop-hook ops (the auto-compact spurious-IDLE
+        # incident). Indexed by batch position, not uuid, so a live turn that
+        # shares a uuid with a same-batch duplicate is still counted.
+        _replayed_idx: set[int] = set()
         for i, (role, content, *rest) in enumerate(new_turns):
             seq = ctx.last_turn_count + i
             meta = rest[0] if rest else None
@@ -710,18 +718,26 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                 _drift_skipped_other_role.append((seq, role))
                 continue
 
-            # In-memory dedup for same-batch duplicates
+            # In-memory dedup for same-batch duplicates — the first
+            # occurrence carries the signal, the duplicate doesn't.
             if jsonl_uuid and jsonl_uuid in _queued_uuids:
                 _drift_skipped_dedup.append((seq, role, kind, jsonl_uuid))
+                _replayed_idx.add(i)
                 continue
 
             if role == "user":
+                _deferred_before = len(_deferred_updates)
                 msg = _promote_or_create_user_msg(
                     db, ctx, content, jsonl_uuid, seq, meta, kind, jsonl_ts,
                     deferred_updates=_deferred_updates,
                 )
                 if msg is None:
                     _drift_skipped_dedup.append((seq, role, kind, jsonl_uuid))
+                    # A sent→delivered promotion (deferred_updates grew) is a
+                    # live delivery event and keeps its signal; a plain UUID
+                    # dedup is replayed history.
+                    if len(_deferred_updates) == _deferred_before:
+                        _replayed_idx.add(i)
                     continue
 
             elif role == "assistant":
@@ -730,6 +746,7 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                 )
                 if msg is None:
                     _drift_skipped_dedup.append((seq, role, kind, jsonl_uuid))
+                    _replayed_idx.add(i)
                     continue
 
             elif role == "system":
@@ -738,6 +755,7 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
                 )
                 if msg is None:
                     _drift_skipped_dedup.append((seq, role, kind, jsonl_uuid))
+                    _replayed_idx.add(i)
                     continue
 
             else:
@@ -990,17 +1008,23 @@ async def sync_import_new_turns(ad, ctx: SyncContext):
         # Derive state signals by accumulating across new_turns. Last-only
         # was structurally fragile: Claude Code's JSONL writer occasionally
         # places a trailing assistant entry after stop_hook_summary (with an
-        # earlier timestamp), which left agents stuck EXECUTING. Accumulator
-        # is safe now that 93fbd00 distinguishes real drift from benign
-        # timing gaps — full-scan replay is rare and already restricted
-        # to genuinely-missing turns; the residual side-effect risk on
-        # restart (extra unread bump / push retry) is acceptable.
+        # earlier timestamp), which left agents stuck EXECUTING.
+        #
+        # Replayed turns (_replayed_idx — UUID-dedup'd against rows already
+        # in the DB) are excluded: they are history, not live signals. A
+        # pointer rewind re-slices old turns, and counting their stop_hooks
+        # flipped EXECUTING→IDLE mid-task and re-fired stop-hook operations
+        # (push notify, unread bump, dispatch). Genuinely-new turns are
+        # always inserted (or promoted sent→delivered), so live signals —
+        # including the trailing-assistant case above — survive the gate.
         _saw_user_turn = False
         _saw_assistant_turn = False
         _saw_stop_hook = False
         _saw_interrupt = False
         _saw_rate_limit = False
-        for _t in new_turns:
+        for _i, _t in enumerate(new_turns):
+            if _i in _replayed_idx:
+                continue
             _r = _t[0]
             _k = _t[4] if len(_t) > 4 else None
             if _r == "user":

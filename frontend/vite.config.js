@@ -22,12 +22,21 @@ const ICON_BASE = `https://cdn.jsdelivr.net/gh/jyao97/xylocopa@v${pkg.version}/f
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    // Inject __APP_VERSION__ placeholder in index.html with the current
-    // package.json version (used by the apple-touch-icon CDN URL).
+    // Inject __APP_VERSION__ and __BUILD_HASH__ placeholders in index.html.
+    // APP_VERSION: apple-touch-icon CDN URL.
+    // BUILD_HASH: auto cache-bust — every build produces a new hash so
+    // clients clear their stale SW without a manual version bump.
     {
-      name: 'inject-app-version',
-      transformIndexHtml(html) {
-        return html.replace(/__APP_VERSION__/g, pkg.version)
+      name: 'inject-build-vars',
+      transformIndexHtml(html, ctx) {
+        let buildHash = Date.now().toString(36);
+        if (ctx.bundle) {
+          const entry = Object.keys(ctx.bundle).find(k => k.startsWith('assets/index-') && k.endsWith('.js'));
+          if (entry) buildHash = entry.replace(/^assets\/index-|\.js$/g, '');
+        }
+        return html
+          .replace(/__APP_VERSION__/g, pkg.version)
+          .replace(/__BUILD_HASH__/g, buildHash)
       },
     },
     // Vite's built-in htmlFallbackMiddleware rewrites ALL 404s to

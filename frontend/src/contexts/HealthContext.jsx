@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { fetchHealth, getAuthToken } from "../lib/api";
+import { fetchHealth } from "../lib/api";
 
 const HealthContext = createContext(null);
 
@@ -29,7 +29,6 @@ export function HealthProvider({ children }) {
     };
 
     const check = async () => {
-      if (!getAuthToken()) return;
       try {
         const data = await fetchHealth();
         if (cancelled) return;

@@ -367,7 +367,7 @@ Here is recent agent activity in this project (last 50 messages):
         _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", prompt, "--output-format", "text",
-             "--no-session-persistence"],
+             "--no-session-persistence", "--model", CC_MODEL],
             capture_output=True, text=True, timeout=600,
             cwd="/tmp",
             env=subprocess_clean_env(),
@@ -571,7 +571,7 @@ Here are today's conversations (with timestamps):
         _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-             "--no-session-persistence"],
+             "--no-session-persistence", "--model", CC_MODEL],
             input=prompt,
             capture_output=True, text=True, timeout=600,
             cwd="/tmp",
@@ -733,7 +733,7 @@ Agent: {agent_name} | Task: {task_title}
             # Popen (not run) so cancel_insight_run can terminate the proc mid-flight.
             proc = subprocess.Popen(
                 [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-                 "--no-session-persistence"],
+                 "--no-session-persistence", "--model", CC_MODEL],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, text=True,
                 cwd="/tmp",
@@ -912,7 +912,7 @@ Task: {task_title}{reason_line}
         _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-             "--no-session-persistence"],
+             "--no-session-persistence", "--model", CC_MODEL],
             input=prompt,
             capture_output=True, text=True, timeout=120,
             cwd="/tmp",

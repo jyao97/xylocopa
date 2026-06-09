@@ -721,7 +721,7 @@ def _grep_dedup_insights(new_section: str, existing_progress: str,
     # hook returns {} for non-agent subprocesses, causing empty output).
     result = subprocess.run(
         [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-         "--no-session-persistence"],
+         "--no-session-persistence", "--model", CC_MODEL],
         input=dedup_prompt,
         capture_output=True, text=True, timeout=120,
         cwd="/tmp",
@@ -2270,7 +2270,7 @@ Here are the day's conversations (with timestamps):
         # hook returns {} for non-agent subprocesses, causing empty output).
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-             "--no-session-persistence"],
+             "--no-session-persistence", "--model", CC_MODEL],
             input=prompt,
             capture_output=True, text=True, timeout=600,
             cwd="/tmp",

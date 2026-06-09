@@ -39,7 +39,7 @@ from worker_manager import WorkerManager
 logger = logging.getLogger("orchestrator.agent_dispatcher")
 
 # Agent status groupings for query filters
-ALIVE_STATUSES = [AgentStatus.IDLE, AgentStatus.EXECUTING, AgentStatus.STARTING, AgentStatus.IDLE]
+ALIVE_STATUSES = [AgentStatus.IDLE, AgentStatus.EXECUTING, AgentStatus.STARTING]
 ACTIVE_STATUSES = [AgentStatus.STARTING, AgentStatus.EXECUTING, AgentStatus.IDLE]
 TERMINAL_STATUSES = [AgentStatus.STOPPED, AgentStatus.ERROR]
 
@@ -49,24 +49,12 @@ TERMINAL_STATUSES = [AgentStatus.STOPPED, AgentStatus.ERROR]
 _STALE_SESSION_THRESHOLD = 1800
 
 
-def _query_verify_agents(db: Session, task_id, *, alive_only=True):
-    """Query verify sub-agents for a task."""
-    q = db.query(Agent).filter(
-        Agent.task_id == task_id,
-        Agent.is_subagent == True,
-        Agent.name.like("Verify:%"),
-    )
-    if alive_only:
-        q = q.filter(Agent.status.notin_([AgentStatus.STOPPED, AgentStatus.ERROR]))
-    return q.all()
-
-
 from jsonl_parser import (  # noqa: E402 — extracted module
     parse_session_turns as _parse_session_turns,
     strip_agent_preamble as _strip_agent_preamble,
-    format_tool_summary as _format_tool_summary,
+    # _derive_selected_index is re-imported from here by routers/hooks.py
+    # and test_multi_question.py — keep even though unused locally.
     derive_selected_index as _derive_selected_index,
-    _is_image_metadata,
 )
 
 
@@ -376,184 +364,6 @@ def _terminate_pid(pid: int, timeout: float = 3.0) -> bool:
         return False  # still alive after SIGKILL — shouldn't happen
     except ProcessLookupError:
         return True
-
-
-# Image metadata injected by Claude Code's Read tool — internal only, hide from UI
-
-
-def _parse_stream_parts(
-    logs: str,
-) -> tuple[list[tuple[str, str]], dict | None, list[dict]]:
-    """Parse stream-json logs into an ordered list of (kind, content) parts.
-
-    Returns ``(parts, result_event, interactive_items)`` where *parts* is a
-    list of ``("text", text_string)`` or ``("tool", summary_string)`` tuples,
-    and *interactive_items* captures any ``AskUserQuestion`` /
-    ``ExitPlanMode`` tool calls together with their answers (if present).
-
-    Tool activity visualization is handled entirely by PreToolUse/PostToolUse
-    hooks — no stream-based active_tool detection needed.
-    """
-    parts: list[tuple[str, str]] = []
-    result_event = None
-    interactive_items: list[dict] = []
-    interactive_by_id: dict[str, dict] = {}
-    tool_result_ids: set[str] = set()
-
-    for line in logs.strip().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            event = json.loads(line)
-            if event.get("type") == "result":
-                result_event = event
-
-            if event.get("type") == "assistant" and "message" in event:
-                # Skip subagent messages (Task agents)
-                if event.get("parent_tool_use_id"):
-                    continue
-                msg = event["message"]
-                if isinstance(msg, dict):
-                    for block in msg.get("content", []):
-                        if not isinstance(block, dict):
-                            continue
-                        if block.get("type") == "text":
-                            if not _is_image_metadata(block.get("text", "")):
-                                parts.append(("text", block["text"]))
-                        elif block.get("type") == "tool_use":
-                            tool_name = block.get("name", "")
-                            tool_input = block.get("input", {})
-                            tool_use_id = block.get("id", "")
-
-                            # Capture interactive tool calls
-                            if tool_name == "AskUserQuestion":
-                                entry = {
-                                    "type": "ask_user_question",
-                                    "tool_use_id": tool_use_id,
-                                    "questions": tool_input.get("questions", []),
-                                    "answer": None,
-                                }
-                                interactive_items.append(entry)
-                                interactive_by_id[tool_use_id] = entry
-                            elif tool_name == "ExitPlanMode":
-                                entry = {
-                                    "type": "exit_plan_mode",
-                                    "tool_use_id": tool_use_id,
-                                    "allowedPrompts": tool_input.get("allowedPrompts", []),
-                                    "plan": tool_input.get("plan", ""),
-                                    "answer": None,
-                                }
-                                interactive_items.append(entry)
-                                interactive_by_id[tool_use_id] = entry
-
-                            summary = _format_tool_summary(
-                                tool_name, tool_input,
-                            )
-                            if summary:
-                                parts.append(("tool", summary))
-
-            # Check user entries for tool_result answers to interactive calls
-            if event.get("type") == "user":
-                user_content = event.get("message", {}).get("content", "")
-                if isinstance(user_content, list):
-                    for block in user_content:
-                        if isinstance(block, dict) and block.get("type") == "tool_result":
-                            tid = block.get("tool_use_id", "")
-                            tool_result_ids.add(tid)
-                            if tid in interactive_by_id:
-                                rc = block.get("content", "")
-                                if isinstance(rc, list):
-                                    rc = " ".join(
-                                        b.get("text", "") if isinstance(b, dict) else str(b)
-                                        for b in rc
-                                    ).strip()
-                                interactive_by_id[tid]["answer"] = rc
-                                _derive_selected_index(interactive_by_id[tid])
-
-        except json.JSONDecodeError:
-            continue  # expected: partial/truncated lines during streaming
-        except (KeyError, TypeError):
-            logger.warning("_parse_stream_parts: unexpected error parsing line: %s", line[:200], exc_info=True)
-            continue
-
-    return parts, result_event, interactive_items
-
-
-def _format_parts(parts: list[tuple[str, str]]) -> str:
-    """Format parsed parts into a single markdown-ish string."""
-    if not parts:
-        return ""
-    groups = []
-    current_tools = []
-    for kind, content in parts:
-        if kind == "tool":
-            current_tools.append(content)
-        else:
-            if current_tools:
-                groups.append("\n".join(current_tools))
-                current_tools = []
-            groups.append(content)
-    if current_tools:
-        groups.append("\n".join(current_tools))
-
-    text = "\n\n".join(groups)
-    # Strip legacy EXIT_SUCCESS / EXIT_FAILURE markers
-    text = re.sub(r"\n?EXIT_SUCCESS\s*$", "", text).strip()
-    text = re.sub(r"\n?EXIT_FAILURE:?.*$", "", text).strip()
-    return text
-
-
-
-def _extract_result(logs: str) -> tuple[str, str | None]:
-    """Extract agent response text and tool call summaries from stream-json.
-
-    Returns ``(text, meta_json)`` where *meta_json* is a JSON string
-    containing interactive tool call data (``AskUserQuestion``,
-    ``ExitPlanMode``) if any were found, or ``None``.
-    """
-    parts, result_event, interactive_items = _parse_stream_parts(logs)
-
-    meta_json = None
-    if interactive_items:
-        meta_json = json.dumps({"interactive": interactive_items})
-
-    # Friendly error messages for known error patterns
-    if result_event and result_event.get("is_error"):
-        errors = result_event.get("errors", [])
-        for err in errors:
-            if isinstance(err, str) and "No conversation found with session ID" in err:
-                return (
-                    "This session's conversation data is no longer available. "
-                    "It may have been cleaned up or created on a different machine. "
-                    "Please start a new conversation instead.",
-                    meta_json,
-                )
-
-    text = _format_parts(parts)
-    if text:
-        return text, meta_json
-
-    # Fallback: return last chunk of raw output — but skip if the log only
-    # contains system/init events (no actual assistant response).
-    lines = logs.strip().splitlines()
-    has_only_system = True
-    for raw_line in lines:
-        raw_line = raw_line.strip()
-        if not raw_line:
-            continue
-        try:
-            ev = json.loads(raw_line)
-            if ev.get("type") not in ("system", None):
-                has_only_system = False
-                break
-        except (json.JSONDecodeError, TypeError):
-            has_only_system = False
-            break
-    if has_only_system:
-        return "(no output)", meta_json
-    fallback = "\n".join(lines[-20:]) if lines else "(no output)"
-    return fallback, meta_json
 
 
 def _parse_session_model(jsonl_path: str) -> str | None:
@@ -3558,7 +3368,6 @@ Here are the day's conversations (with timestamps):
         status: str = "queued",
         scheduled_at: datetime | None = None,
         wrap_prompt: bool = False,
-        include_history: bool = False,
         msg_id: str | None = None,
     ) -> tuple[dict, str, list[str]]:
         """Build a pre-sent entry dict (NOT a DB row) plus the prompt to
@@ -3619,13 +3428,11 @@ Here are the day's conversations (with timestamps):
                 )
                 prompt = self._build_agent_prompt(
                     agent, project, task_body,
-                    include_history=include_history, db=db,
                     insights_list=[],
                 )
             else:
                 prompt = self._build_agent_prompt(
                     agent, project, content,
-                    include_history=include_history, db=db,
                     insights_list=insights_list,
                 )
 
@@ -3658,7 +3465,6 @@ Here are the day's conversations (with timestamps):
         existing_message: Message | None = None,
         source: str | None = "web",
         wrap_prompt: bool = False,
-        include_history: bool = False,
     ) -> tuple[Message, str, list[str]]:
         """Prepare a user message for dispatch.  Single entry point for all
         message paths — handles RAG insights, metadata, prompt wrapping,
@@ -3750,7 +3556,6 @@ Here are the day's conversations (with timestamps):
                 )
                 prompt = self._build_agent_prompt(
                     agent, project, task_body,
-                    include_history=include_history, db=db,
                     insights_list=[],
                 )
             else:
@@ -3760,7 +3565,6 @@ Here are the day's conversations (with timestamps):
                 # prompt would cause it to ignore the new instruction.
                 prompt = self._build_agent_prompt(
                     agent, project, content,
-                    include_history=include_history, db=db,
                     insights_list=insights_list,
                 )
 
@@ -3772,7 +3576,6 @@ Here are the day's conversations (with timestamps):
 
     def _build_agent_prompt(
         self, agent: Agent, project: Project, user_message: str,
-        include_history: bool = False, db: Session | None = None,
         insights_list: list[str] | None = None,
     ) -> str:
         """Build the wrapped prompt sent to Claude for an agent message.
@@ -3784,10 +3587,6 @@ Here are the day's conversations (with timestamps):
         Agent/message ownership is tracked via .owner sidecar files,
         NOT embedded in the prompt content.
         """
-        history_block = ""
-        if include_history and db:
-            history_block = self._format_conversation_history(agent, db)
-
         # Format insights block from pre-computed list
         insights_block = ""
         if insights_list is None:
@@ -3814,41 +3613,11 @@ Here are the day's conversations (with timestamps):
             f"First read the project's CLAUDE.md to understand project conventions.\n"
             f"Do NOT write to memory files (.claude/memory/, MEMORY.md) or modify CLAUDE.md.\n"
             f"\n"
-            f"{history_block}\n"
             f"{user_message}"
             f"{insights_block}\n\n"
             f"If you make code changes, commit with message format: "
             f"[scope] short description"
         )
-
-    def _format_conversation_history(self, agent: Agent, db: Session) -> str:
-        """Format recent conversation messages as context for a fresh session."""
-        recent = (
-            db.query(Message)
-            .filter(
-                Message.agent_id == agent.id,
-                Message.role.in_([MessageRole.USER, MessageRole.AGENT]),
-                Message.status.in_([MessageStatus.COMPLETED, MessageStatus.FAILED]),
-            )
-            .order_by(Message.created_at.desc())
-            .limit(20)
-            .all()
-        )
-        if not recent:
-            return ""
-
-        recent.reverse()  # chronological order
-        lines = ["\n--- Previous conversation history (for context) ---"]
-        for msg in recent:
-            role = "User" if msg.role == MessageRole.USER else "Agent"
-            # Truncate long agent responses to keep prompt manageable
-            content = msg.content
-            if role == "Agent" and len(content) > 500:
-                content = content[:500] + "… [truncated]"
-            lines.append(f"[{role}]: {content}")
-        lines.append("--- End of history ---\n")
-        return "\n".join(lines)
-
 
     def _auto_detect_cli_sessions(self, db: Session):
         """Revive managed agents (ah-* tmux sessions) whose process restarted.

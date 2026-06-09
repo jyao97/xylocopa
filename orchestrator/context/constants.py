@@ -11,6 +11,7 @@ from __future__ import annotations
 # Opus 4.7 has a 1M native window — see the CHANGELOG entry "Fixed Opus 4.7
 # sessions showing inflated /context percentages".
 MODEL_LIMITS: dict[str, int] = {
+    "claude-fable-5": 1_000_000,
     "claude-opus-4-8": 1_000_000,
     "claude-opus-4-7": 1_000_000,
     "claude-opus-4-7-20251015": 1_000_000,

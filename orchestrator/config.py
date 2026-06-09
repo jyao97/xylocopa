@@ -34,6 +34,7 @@ CC_MODEL = os.getenv("CC_MODEL", "claude-opus-4-8")
 
 # Valid model names — keep in sync with frontend MODEL_OPTIONS
 VALID_MODELS = {
+    "claude-fable-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-4-6",

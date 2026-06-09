@@ -477,8 +477,9 @@ def task_create(
                                        redesigns, debugging across layers,
                                        anything needing deep reasoning
         - claude-opus-4-7             → same as 4-6, a newer tier
-        - claude-opus-4-8             → latest tier; prefer for
-                                       highest-stakes work
+        - claude-opus-4-8             → latest Opus tier; high-stakes work
+        - claude-fable-5              → most capable; flagship for the
+                                       hardest tasks (~2x cost of Opus)
 
       effort:
         - low      → < 1 hour, well-scoped (~30 lines or contained tweak)
@@ -607,7 +608,7 @@ def task_update(
             Empty = leave unchanged.
         model: New Claude model id (claude-haiku-4-5-20251001 |
             claude-sonnet-4-6 | claude-opus-4-6 | claude-opus-4-7 |
-            claude-opus-4-8).
+            claude-opus-4-8 | claude-fable-5).
             Empty = leave unchanged.
         effort: New effort level (low|medium|high|xhigh|max).
             Empty = leave unchanged.

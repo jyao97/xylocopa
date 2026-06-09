@@ -26,6 +26,7 @@ from jsonl_parser import (  # noqa: E402
     parse_session_turns,
     strip_agent_preamble,
 )
+from utils import truncate  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration — all from env vars, no config.py import
@@ -36,6 +37,9 @@ XYLOCOPA_ROOT = os.environ.get(
 )
 DB_PATH = os.path.join(XYLOCOPA_ROOT, "data", "orchestrator.db")
 CLAUDE_HOME = os.path.expanduser(os.environ.get("CLAUDE_HOME", "~/.claude"))
+
+# Max chars of one message/turn in MCP read outputs before truncation
+TURN_CONTENT_MAX_CHARS = 3000
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("xylocopa.mcp")
@@ -327,8 +331,7 @@ def _read_from_display(
         ts = (entry.get("created_at") or "")[:19]
         content = entry.get("content") or ""
 
-        if len(content) > 3000:
-            content = content[:3000] + "\n... (truncated)"
+        content = truncate(content, TURN_CONTENT_MAX_CHARS)
 
         lines.append(f"**[{role}]** {ts}")
         lines.append(content)
@@ -403,8 +406,7 @@ def _read_from_jsonl(
             if summary:
                 content = summary
 
-        if len(content) > 3000:
-            content = content[:3000] + "\n... (truncated)"
+        content = truncate(content, TURN_CONTENT_MAX_CHARS)
 
         lines.append(f"**[{role_label}]** {ts}")
         lines.append(content)

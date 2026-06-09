@@ -18,7 +18,7 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from config import CC_MODEL, CLAUDE_HOME, DISPLAY_DIR, VALID_MODELS
+from config import CC_MODEL, CLAUDE_HOME, DISPLAY_DIR, PORT, VALID_MODELS
 from database import SessionLocal, get_db
 from models import (
     Agent, AgentInsightSuggestion, AgentMode, AgentStatus,
@@ -288,8 +288,7 @@ def _write_agent_hooks_config(project_path: str):
 
     SessionStart is handled globally via _write_global_session_hook().
     """
-    port = os.getenv("PORT", "8080")
-    base_url = f"http://localhost:{port}/api/hooks"
+    base_url = f"http://localhost:{PORT}/api/hooks"
 
     hook_script = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),

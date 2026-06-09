@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+from config import DEFAULT_CLAUDE_MODEL
 from models import AgentMode, AgentStatus, MessageRole, MessageStatus, TaskStatus
 
 logger = logging.getLogger("orchestrator.schemas")
@@ -339,7 +340,7 @@ class ProjectOut(BaseModel):
     git_remote: str | None = None
     description: str | None = None
     max_concurrent: int = 8
-    default_model: str = "claude-opus-4-8"
+    default_model: str = DEFAULT_CLAUDE_MODEL
     archived: bool = False
     auto_progress_summary: bool = False
     ai_insights: bool = False

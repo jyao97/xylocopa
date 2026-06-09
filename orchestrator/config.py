@@ -25,12 +25,22 @@ def _resolve(path: str) -> str:
     return os.path.join(_PROJECT_ROOT, path)
 
 
+# HTTP server port — shared by the FastAPI bind (main.py) and hook URL
+# construction (routers/agents.py).  mcp_server.py reads the PORT env var
+# itself by design (it avoids importing config.py).
+PORT = int(os.getenv("PORT", "8080"))
+
 # Worker config
 MAX_CONCURRENT_WORKERS = int(os.getenv("MAX_CONCURRENT_WORKERS", "5"))
 TASK_TIMEOUT_SECONDS = int(os.getenv("TASK_TIMEOUT_SECONDS", "1800"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 MAX_IDLE_AGENTS = int(os.getenv("MAX_IDLE_AGENTS", "20"))
-CC_MODEL = os.getenv("CC_MODEL", "claude-opus-4-8")
+
+# Default Claude model — single source of truth; also the
+# Project.default_model column default (models.py) and the project
+# schema default (schemas.py).
+DEFAULT_CLAUDE_MODEL = "claude-opus-4-8"
+CC_MODEL = os.getenv("CC_MODEL", DEFAULT_CLAUDE_MODEL)
 
 # Valid model names — keep in sync with frontend MODEL_OPTIONS
 VALID_MODELS = {

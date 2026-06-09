@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from config import DEFAULT_CLAUDE_MODEL
 from utils import utcnow as _utcnow
 
 
@@ -231,7 +232,7 @@ class Project(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     max_concurrent: Mapped[int] = mapped_column(Integer, default=8)
     default_model: Mapped[str] = mapped_column(
-        String(100), default="claude-opus-4-8"
+        String(100), default=DEFAULT_CLAUDE_MODEL
     )
     archived: Mapped[bool] = mapped_column(default=False)
     auto_progress_summary: Mapped[bool] = mapped_column(Boolean, default=False)

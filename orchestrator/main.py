@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from config import CORS_ORIGINS, PROJECT_CONFIGS_PATH, CC_MODEL, VALID_MODELS
+from config import CORS_ORIGINS, PORT, PROJECT_CONFIGS_PATH, CC_MODEL, VALID_MODELS
 from database import SessionLocal, get_db, init_db
 from log_config import setup_logging
 from models import Agent, Project, Task, TaskStatus, AgentStatus
@@ -191,7 +191,7 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     import socket
 
-    port = int(os.environ.get("PORT", 8080))
+    port = PORT
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:

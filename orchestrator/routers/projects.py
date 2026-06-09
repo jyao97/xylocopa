@@ -33,7 +33,7 @@ from schemas import (
 )
 from route_helpers import (
     resolve_project_path, check_project_capacity, compute_successor_id,
-    enrich_agent_briefs,
+    enrich_agent_briefs, get_project_or_404,
     API_REQUEST_TIMEOUT, SUBPROCESS_STRIP_VARS,
     subprocess_clean_env, graceful_kill_tmux,
     graceful_kill_tmux_agent, tmux_session_candidates,
@@ -1684,9 +1684,7 @@ async def create_project(body: ProjectCreate, request: Request, db: Session = De
 async def rename_project(name: str, body: ProjectRename, request: Request, db: Session = Depends(get_db)):
     """Rename a project — updates all agent/task/session references, registry, and directory."""
 
-    proj = db.get(Project, name)
-    if not proj:
-        raise HTTPException(status_code=404, detail="Project not found")
+    proj = get_project_or_404(db, name)
 
     new_name = body.new_name
     if new_name == name:
@@ -1827,9 +1825,7 @@ async def archive_project(name: str, request: Request, db: Session = Depends(get
     """Archive a project — blocks if active agents exist, unassigns remaining tasks."""
     from websocket import emit_task_update
 
-    proj = db.get(Project, name)
-    if not proj:
-        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+    proj = get_project_or_404(db, name)
     if proj.archived:
         raise HTTPException(status_code=400, detail="Project is already archived")
 
@@ -2519,9 +2515,7 @@ async def rebuild_insights(name: str, db: Session = Depends(get_db)):
 @router.patch("/api/projects/{name}/settings")
 async def update_project_settings(name: str, request: Request, db: Session = Depends(get_db)):
     """Update project toggle settings (auto_progress_summary, etc.)."""
-    proj = db.get(Project, name)
-    if not proj:
-        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+    proj = get_project_or_404(db, name)
 
     body = await request.json()
     if "auto_progress_summary" in body:

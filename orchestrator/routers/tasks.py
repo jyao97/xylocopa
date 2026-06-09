@@ -22,7 +22,7 @@ from task_state import TaskStateMachine
 from websocket import emit_task_update, emit_agent_update, emit_agent_created
 from route_helpers import (
     check_project_capacity, create_tmux_claude_session,
-    generate_worktree_name_local, resolve_project_path,
+    generate_worktree_name_local, get_task_or_404, resolve_project_path,
     sanitize_worktree_name, tmux_session_candidates, tmux_session_name,
 )
 from utils import utcnow as _utcnow
@@ -631,9 +631,7 @@ async def list_tasks_v2(
 @router.get("/api/v2/tasks/{task_id}", response_model=TaskDetailOut)
 async def get_task_v2(task_id: str, db: Session = Depends(get_db)):
     """Get task detail with agent conversation if assigned."""
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
+    task = get_task_or_404(db, task_id)
     conversation = []
     if task.agent_id:
         msgs = (
@@ -797,9 +795,7 @@ async def reorder_tasks_v2(body: dict, db: Session = Depends(get_db)):
 @router.put("/api/v2/tasks/{task_id}", response_model=TaskOut)
 async def update_task_v2(task_id: str, body: TaskUpdate, db: Session = Depends(get_db)):
     """Update task fields. Only allowed for INBOX/PLANNING tasks."""
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
+    task = get_task_or_404(db, task_id)
     # Note is editable regardless of status
     if "note" in body.model_fields_set:
         task.note = body.note
@@ -851,9 +847,7 @@ async def dispatch_task_v2(task_id: str, request: Request, db: Session = Depends
     Creates a tmux agent and moves the task to EXECUTING.
     Returns the task with agent_id set so the frontend can navigate immediately.
     """
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
+    task = get_task_or_404(db, task_id)
     if not task.project_name:
         raise HTTPException(400, "Task requires a project_name before dispatch")
     if not task.title:
@@ -921,9 +915,7 @@ async def dispatch_task_v2(task_id: str, request: Request, db: Session = Depends
 @router.post("/api/v2/tasks/{task_id}/cancel", response_model=TaskOut)
 async def cancel_task_v2(task_id: str, request: Request, db: Session = Depends(get_db)):
     """Cancel a task. Stops agent if running."""
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
+    task = get_task_or_404(db, task_id)
     if not can_transition(task.status, TaskStatus.CANCELLED):
         raise HTTPException(409, f"Invalid task transition: {task.status.value} -> cancelled (task {task.id})")
     ad = getattr(request.app.state, "agent_dispatcher", None)
@@ -951,9 +943,7 @@ async def cancel_task_v2(task_id: str, request: Request, db: Session = Depends(g
 @router.post("/api/v2/tasks/{task_id}/complete", response_model=TaskOut)
 async def complete_task_v2(task_id: str, request: Request, db: Session = Depends(get_db)):
     """Manually complete a task. Stops agent and marks COMPLETE."""
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
+    task = get_task_or_404(db, task_id)
     if not can_transition(task.status, TaskStatus.COMPLETE):
         raise HTTPException(409, f"Cannot complete task in {task.status.value} state")
     ad = getattr(request.app.state, "agent_dispatcher", None)
@@ -972,9 +962,7 @@ async def complete_task_v2(task_id: str, request: Request, db: Session = Depends
 @router.post("/api/v2/tasks/{task_id}/regenerate-summary", response_model=TaskOut)
 async def regenerate_task_summary(task_id: str, db: Session = Depends(get_db)):
     """Manually re-trigger retry summary generation for a task."""
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
+    task = get_task_or_404(db, task_id)
     if task.attempt_number < 2:
         raise HTTPException(409, "No previous attempt to summarize")
 

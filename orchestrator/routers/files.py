@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from config import UPLOADS_DIR
 from database import get_db
+from route_helpers import get_project_or_404
 from models import Project
 
 logger = logging.getLogger("orchestrator")
@@ -213,9 +214,7 @@ def _resolve_project_file(project: str, path: str, db) -> str:
 
     Raises HTTPException(404) if the file cannot be found.
     """
-    proj = db.get(Project, project)
-    if not proj:
-        raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
+    proj = get_project_or_404(db, project)
 
     base_dir = os.path.realpath(proj.path)
     base_name = os.path.basename(base_dir)

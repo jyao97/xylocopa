@@ -17,8 +17,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, get_db
+from route_helpers import get_project_or_404
 from models import (
-    Agent, BookmarkedMessage, Message, MessageRole, Project,
+    Agent, BookmarkedMessage, Message, MessageRole,
 )
 
 logger = logging.getLogger(__name__)
@@ -391,9 +392,7 @@ def _to_out(bm: BookmarkedMessage, msg: Message | None, agent: Agent | None) -> 
 
 @router.get("/api/projects/{name}/bookmarks", response_model=list[BookmarkOut])
 def list_bookmarks(name: str, db: Session = Depends(get_db)):
-    proj = db.get(Project, name)
-    if proj is None:
-        raise HTTPException(404, f"Project not found: {name}")
+    get_project_or_404(db, name)
 
     rows = (
         db.query(BookmarkedMessage)
@@ -417,9 +416,7 @@ def create_bookmark(
     payload: BookmarkUpdate | None = None,
     db: Session = Depends(get_db),
 ):
-    proj = db.get(Project, name)
-    if proj is None:
-        raise HTTPException(404, f"Project not found: {name}")
+    get_project_or_404(db, name)
     msg = db.get(Message, message_id)
     if msg is None:
         raise HTTPException(404, f"Message not found: {message_id}")

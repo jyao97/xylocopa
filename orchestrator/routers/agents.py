@@ -35,6 +35,7 @@ from schemas import (
 from route_helpers import (
     check_project_capacity, compute_successor_id,
     create_tmux_claude_session, enrich_agent_briefs,
+    get_agent_or_404, get_project_or_404,
     generate_worktree_name_local, graceful_kill_tmux,
     graceful_kill_tmux_agent,
     subprocess_clean_env, tmux_launch_sem,
@@ -770,9 +771,7 @@ async def launch_tmux_agent(request: Request, db: Session = Depends(get_db)):
     if not project_name:
         raise HTTPException(status_code=400, detail="Project is required")
 
-    proj = db.get(Project, project_name)
-    if not proj:
-        raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
+    proj = get_project_or_404(db, project_name)
     if not os.path.isdir(proj.path):
         raise HTTPException(status_code=400, detail="Project directory not found on disk")
 
@@ -1447,9 +1446,7 @@ async def adopt_unlinked_session(
     project_name = body.get("project") or os.path.basename(info.get("cwd", "").rstrip("/"))
     existing_agent_id = body.get("agent_id")
 
-    proj = db.get(Project, project_name)
-    if not proj:
-        raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
+    proj = get_project_or_404(db, project_name)
 
     actual_cwd = info.get("cwd", "")
 
@@ -1487,9 +1484,7 @@ async def adopt_unlinked_session(
 
     if existing_agent_id:
         # Bind to existing agent
-        agent = db.get(Agent, existing_agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
+        agent = get_agent_or_404(db, existing_agent_id)
         agent.session_id = session_id
         agent.tmux_pane = info.get("tmux_pane")
         if agent.status in (AgentStatus.STOPPED, AgentStatus.ERROR):
@@ -2044,8 +2039,7 @@ async def get_context_usage_endpoint(agent_id: str, db: Session = Depends(get_db
     pill bootstraps from this on mount; subsequent updates flow over WS
     via `emit_context_usage` so the popover never refetches separately.
     """
-    if not db.get(Agent, agent_id):
-        raise HTTPException(status_code=404, detail="Agent not found")
+    get_agent_or_404(db, agent_id)
     from context import get_context_breakdown
     return get_context_breakdown(agent_id)
 
@@ -2062,9 +2056,7 @@ async def get_agent_cc_sessions(agent_id: str, db: Session = Depends(get_db)):
     from models import CCSession
     from context.lifetime import build_cc_session_tree
 
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     rows = (
         db.query(CCSession)
         .filter(CCSession.agent_id == agent_id)
@@ -2078,9 +2070,7 @@ async def get_agent_cc_sessions(agent_id: str, db: Session = Depends(get_db)):
 @router.get("/api/agents/{agent_id}", response_model=AgentOut)
 async def get_agent(agent_id: str, request: Request, db: Session = Depends(get_db)):
     """Get full agent details."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     # Compute live session file size + successor link
     result = AgentOut.model_validate(agent)
@@ -2115,9 +2105,7 @@ async def stop_agent(agent_id: str, request: Request,
                      incomplete_reason: str | None = None,
                      db: Session = Depends(get_db)):
     """Stop an agent — marks STOPPED."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if agent.status == AgentStatus.STOPPED:
         raise HTTPException(status_code=400, detail="Agent is already stopped")
 
@@ -2290,9 +2278,7 @@ async def get_agent_suggestions(agent_id: str, status: str = "pending",
 
     status: "pending" (default), "accepted", "rejected", or "processed" (accepted+rejected).
     """
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     q = db.query(AgentInsightSuggestion).filter(
         AgentInsightSuggestion.agent_id == agent_id,
     )
@@ -2313,13 +2299,9 @@ class _ApplySuggestionsBody(BaseModel):
 async def apply_agent_suggestions(agent_id: str, body: _ApplySuggestionsBody,
                                   db: Session = Depends(get_db)):
     """Accept/reject insight suggestions — write accepted ones to PROGRESS.md + FTS5."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
-    project = db.get(Project, agent.project)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project_or_404(db, agent.project)
 
     accepted_ids = {item["id"] for item in body.accepted}
     edits = {item["id"]: item.get("edited_content") for item in body.accepted}
@@ -2399,9 +2381,7 @@ async def apply_agent_suggestions(agent_id: str, body: _ApplySuggestionsBody,
 @router.delete("/api/agents/{agent_id}/suggestions")
 async def discard_agent_suggestions(agent_id: str, db: Session = Depends(get_db)):
     """Reject all pending suggestions for an agent."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     db.query(AgentInsightSuggestion).filter(
         AgentInsightSuggestion.agent_id == agent_id,
@@ -2420,9 +2400,7 @@ async def discard_agent_suggestions(agent_id: str, db: Session = Depends(get_db)
 @router.post("/api/agents/{agent_id}/regenerate-insights")
 async def regenerate_agent_insights(agent_id: str, db: Session = Depends(get_db)):
     """Re-trigger insight generation for a stopped agent (e.g. after interrupted generation)."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if agent.status != AgentStatus.STOPPED:
         raise HTTPException(status_code=400, detail="Agent must be stopped")
     if agent.insight_status == "generating":
@@ -2467,9 +2445,7 @@ async def permanently_delete_agent(agent_id: str, request: Request, db: Session 
     """Permanently delete an agent, its messages, session JSONL, and output logs."""
     from session_cache import cleanup_source_session, evict_session
 
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if agent.status not in (AgentStatus.STOPPED, AgentStatus.ERROR):
         raise HTTPException(status_code=400, detail="Agent must be stopped before deleting")
 
@@ -2560,9 +2536,7 @@ async def permanently_delete_agent(agent_id: str, request: Request, db: Session 
 @router.post("/api/agents/{agent_id}/resume", response_model=AgentOut)
 async def resume_agent(agent_id: str, request: Request, db: Session = Depends(get_db)):
     """Resume a stopped or errored agent."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if agent.status not in (AgentStatus.STOPPED, AgentStatus.ERROR):
         raise HTTPException(status_code=400, detail="Agent is already running")
 
@@ -2582,9 +2556,7 @@ async def resume_agent(agent_id: str, request: Request, db: Session = Depends(ge
             }),
         )
 
-    project = db.get(Project, agent.project)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project_or_404(db, agent.project)
     if project.archived:
         raise HTTPException(status_code=400, detail="Cannot resume agents for archived projects — activate first")
 
@@ -2799,9 +2771,7 @@ async def mark_all_agents_read(db: Session = Depends(get_db)):
 @router.put("/api/agents/{agent_id}", response_model=AgentOut)
 async def update_agent(agent_id: str, request: Request, db: Session = Depends(get_db)):
     """Update agent properties (currently: name)."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     body = await request.json()
     if "name" in body:
         name = str(body["name"]).strip()
@@ -2859,9 +2829,7 @@ async def get_agent_display_sent(
     updates and delivery-status patches; `_deleted` tombstones drop the
     entry entirely.
     """
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     display_path = os.path.join(DISPLAY_DIR, f"{agent_id}.jsonl")
     empty = SentDisplayResponse(messages=[], next_offset=0, has_earlier=False, has_later=False)
@@ -2982,9 +2950,7 @@ async def get_agent_display_pre_sent(
     the increment-vs-snapshot semantic confusion that gave us the
     "queued bubble disappears" bug.
     """
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     from display_writer import pre_sent_list
     entries: list[DisplayEntry] = []
@@ -3007,9 +2973,7 @@ async def wake_agent_sync(agent_id: str, request: Request, db: Session = Depends
     immediately exit.  This is the only path that does ERROR→IDLE —
     hooks calling wake_sync() won't auto-recover.
     """
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     ad = getattr(request.app.state, "agent_dispatcher", None)
     if not ad:
         raise HTTPException(status_code=503, detail="Dispatcher not ready")
@@ -3096,9 +3060,7 @@ async def send_agent_message(
     if slash_commands.is_slash_command(body.content) and not slash_commands.is_allowed(body.content):
         raise HTTPException(status_code=400, detail=slash_commands.rejection_message(body.content))
 
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if agent.status == AgentStatus.STOPPED:
         raise HTTPException(status_code=400, detail="Agent is stopped")
 
@@ -3196,9 +3158,7 @@ async def send_agent_message(
 @router.put("/api/agents/{agent_id}/read")
 async def mark_agent_read(agent_id: str, db: Session = Depends(get_db)):
     """Mark agent as read (reset unread count)."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     agent.unread_count = 0
     db.commit()
     asyncio.ensure_future(emit_agent_update(agent.id, agent.status.value, agent.project))
@@ -3218,9 +3178,7 @@ async def delete_message(agent_id: str, message_id: str, db: Session = Depends(g
     Distinct from `POST .../messages/{id}/cancel` which only soft-cancels
     (used by ESC to grey-out queued backlog without removing it).
     """
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     from display_writer import (
         pre_sent_cancel,
@@ -3263,9 +3221,7 @@ async def cancel_message(agent_id: str, message_id: str, db: Session = Depends(g
     bubbles disappear — distinct from the DELETE endpoint which removes
     the bubble entirely.
     """
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     from display_writer import pre_sent_cancel, pre_sent_get
     from websocket import emit_pre_sent_updated
@@ -3297,9 +3253,7 @@ async def update_message(
     db: Session = Depends(get_db),
 ):
     """Update content and/or scheduled_at of a queued/scheduled pre-sent message."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
 
     from display_writer import pre_sent_get, pre_sent_update
     from websocket import emit_pre_sent_updated
@@ -3580,9 +3534,7 @@ async def answer_agent_interactive(
     db: Session = Depends(get_db),
 ):
     """Answer an AskUserQuestion or approve/reject ExitPlanMode via tmux keys."""
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if agent.status not in (AgentStatus.IDLE, AgentStatus.EXECUTING, AgentStatus.IDLE):
         raise HTTPException(status_code=400, detail=f"Agent is {agent.status}, not in interactive state")
 
@@ -3833,9 +3785,7 @@ async def send_escape_to_agent(agent_id: str, request: Request, db: Session = De
     """Send Escape key to the agent's tmux pane to dismiss interactive prompts."""
     import time
 
-    agent = db.get(Agent, agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = get_agent_or_404(db, agent_id)
     if not agent.tmux_pane:
         raise HTTPException(status_code=400, detail="Agent has no tmux pane")
 

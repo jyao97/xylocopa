@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 import re
 
 from agent_dispatcher import ACTIVE_STATUSES
-from models import Agent, Project, StarredSession
+from models import Agent, Project, StarredSession, Task
 from schemas import AgentBrief
 
 logger = logging.getLogger("orchestrator")
@@ -121,6 +121,30 @@ def check_project_capacity(db, project_name: str) -> tuple[int, int]:
     )
     # max_concurrent enforcement removed — all agents launch immediately
     return (active, proj.max_concurrent)
+
+
+def get_agent_or_404(db: Session, agent_id: str) -> Agent:
+    """Return the Agent row or raise HTTP 404."""
+    agent = db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+def get_project_or_404(db: Session, name: str) -> Project:
+    """Return the Project row or raise HTTP 404."""
+    proj = db.get(Project, name)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+    return proj
+
+
+def get_task_or_404(db: Session, task_id: str) -> Task:
+    """Return the Task row or raise HTTP 404."""
+    task = db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
 
 def resolve_project_path(name: str, db) -> str:

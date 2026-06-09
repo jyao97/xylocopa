@@ -3357,6 +3357,84 @@ Here are the day's conversations (with timestamps):
             Message.status.in_([MessageStatus.COMPLETED, MessageStatus.EXECUTING]),
         ).first() is None
 
+    async def _query_first_message_insights(
+        self, db: Session, agent: Agent, project: Project, content: str,
+        task: Task | None,
+    ) -> list[str]:
+        """RAG insights for an agent's first user message (else empty).
+
+        Task agents use a task-specific query with a higher limit;
+        non-task agents query by message content (AI-assisted when the
+        project has ai_insights enabled).
+        """
+        if not content or not self._is_first_user_message(db, agent.id):
+            return []
+        if task:
+            query_text = f"{task.title} {task.description or ''}"
+            return await asyncio.to_thread(
+                _query_insights_threadsafe,
+                project.name, query_text, 15, 7, True,
+            )
+        if project.ai_insights:
+            return await asyncio.to_thread(
+                _query_insights_ai_threadsafe, project.name, content,
+            )
+        return await asyncio.to_thread(
+            _query_insights_threadsafe,
+            project.name, content, 10,
+        )
+
+    @staticmethod
+    def _patch_meta_json(msg: Message, **updates) -> None:
+        """Merge *updates* into msg.meta_json (tolerates corrupt JSON)."""
+        meta: dict = {}
+        if msg.meta_json:
+            try:
+                meta = json.loads(msg.meta_json)
+            except (json.JSONDecodeError, ValueError):
+                logger.warning("_patch_meta_json: corrupt meta_json for msg %s, resetting", msg.id)
+        meta.update(updates)
+        msg.meta_json = json.dumps(meta)
+
+    @staticmethod
+    def _retry_display_content(task: Task | None, source: str | None) -> str | None:
+        """display_content override for a retry task's first message, or None.
+
+        Shows the user's retry feedback in the display file instead of the
+        full structured prompt sent to Claude.
+        """
+        if (source == "task" and task and task.retry_context
+                and (task.attempt_number or 0) > 1):
+            return re.sub(
+                r'^User feedback:\s*', '', task.retry_context, flags=re.IGNORECASE,
+            )
+        return None
+
+    def _wrap_dispatch_prompt(
+        self, db: Session, agent: Agent, project: Project, content: str,
+        task: Task | None, insights_list: list[str],
+    ) -> str:
+        """Wrap a message with project context for delivery to Claude.
+
+        Initial task dispatch builds the full task body (title/description/
+        retry context, with insights inline) and wraps that.  Follow-up
+        messages and non-task agents wrap the actual user content — the
+        agent already has task context from the resumed session, and
+        resending the original task prompt would cause it to ignore the
+        new instruction.
+        """
+        if task and self._is_first_user_message(db, agent.id):
+            task_body, _ = self._build_task_prompt(
+                task, db=None, insights_list=insights_list,
+            )
+            # insights_list=[] — _build_task_prompt already inlined them.
+            return self._build_agent_prompt(
+                agent, project, task_body, insights_list=[],
+            )
+        return self._build_agent_prompt(
+            agent, project, content, insights_list=insights_list,
+        )
+
     async def _prepare_pre_sent_entry(
         self,
         db: Session,
@@ -3389,52 +3467,25 @@ Here are the day's conversations (with timestamps):
         import uuid as _uuid
 
         # 1. RAG insights — only for the first user message
-        insights_list: list[str] = []
         task: Task | None = db.get(Task, agent.task_id) if agent.task_id else None
-        if content and self._is_first_user_message(db, agent.id):
-            if task:
-                query_text = f"{task.title} {task.description or ''}"
-                insights_list = await asyncio.to_thread(
-                    _query_insights_threadsafe,
-                    project.name, query_text, 15, 7, True,
-                )
-            elif project.ai_insights:
-                insights_list = await asyncio.to_thread(
-                    _query_insights_ai_threadsafe, project.name, content,
-                )
-            else:
-                insights_list = await asyncio.to_thread(
-                    _query_insights_threadsafe,
-                    project.name, content, 10,
-                )
+        insights_list = await self._query_first_message_insights(
+            db, agent, project, content, task,
+        )
 
         # 2. Build metadata dict (same shape as DB meta_json would hold).
         metadata: dict = {}
         if insights_list:
             metadata["insights"] = insights_list
-        if (source == "task" and task and task.retry_context
-                and (task.attempt_number or 0) > 1):
-            metadata["display_content"] = re.sub(
-                r'^User feedback:\s*', '', task.retry_context, flags=re.IGNORECASE,
-            )
+        display_content = self._retry_display_content(task, source)
+        if display_content is not None:
+            metadata["display_content"] = display_content
 
         # 3. Build prompt (optionally wrapped with project context)
         prompt = content
         if wrap_prompt:
-            is_first = self._is_first_user_message(db, agent.id)
-            if task and is_first:
-                task_body, _ = self._build_task_prompt(
-                    task, db=None, insights_list=insights_list,
-                )
-                prompt = self._build_agent_prompt(
-                    agent, project, task_body,
-                    insights_list=[],
-                )
-            else:
-                prompt = self._build_agent_prompt(
-                    agent, project, content,
-                    insights_list=insights_list,
-                )
+            prompt = self._wrap_dispatch_prompt(
+                db, agent, project, content, task, insights_list,
+            )
 
         # 4. Update agent preview
         agent.last_message_preview = content[:200]
@@ -3482,25 +3533,10 @@ Here are the day's conversations (with timestamps):
         - WebSocket notifications
         """
         # 1. RAG insights — only for the first user message
-        insights_list: list[str] = []
         task: Task | None = db.get(Task, agent.task_id) if agent.task_id else None
-        if content and self._is_first_user_message(db, agent.id):
-            if task:
-                # Task agents: use task-specific query with higher limit
-                query_text = f"{task.title} {task.description or ''}"
-                insights_list = await asyncio.to_thread(
-                    _query_insights_threadsafe,
-                    project.name, query_text, 15, 7, True,
-                )
-            elif project.ai_insights:
-                insights_list = await asyncio.to_thread(
-                    _query_insights_ai_threadsafe, project.name, content,
-                )
-            else:
-                insights_list = await asyncio.to_thread(
-                    _query_insights_threadsafe,
-                    project.name, content, 10,
-                )
+        insights_list = await self._query_first_message_insights(
+            db, agent, project, content, task,
+        )
 
         # 2. Create or reuse message
         if existing_message:
@@ -3516,57 +3552,21 @@ Here are the day's conversations (with timestamps):
 
         # 3. Store insights in meta_json
         if insights_list:
-            existing_meta = {}
-            if msg.meta_json:
-                try:
-                    existing_meta = json.loads(msg.meta_json)
-                except (json.JSONDecodeError, ValueError):
-                    logger.warning("_prepare_dispatch: corrupt meta_json for msg %s, resetting", msg.id)
-            existing_meta["insights"] = insights_list
-            msg.meta_json = json.dumps(existing_meta)
+            self._patch_meta_json(msg, insights=insights_list)
 
         # 3b. For retry task's first message, store display_content so the
         # display file shows the user's retry feedback instead of the
         # full structured prompt sent to Claude.
-        if (source == "task" and task and task.retry_context
-                and (task.attempt_number or 0) > 1):
-            _meta = {}
-            if msg.meta_json:
-                try:
-                    _meta = json.loads(msg.meta_json)
-                except (json.JSONDecodeError, ValueError):
-                    _meta = {}
-            _meta["display_content"] = re.sub(
-                r'^User feedback:\s*', '', task.retry_context, flags=re.IGNORECASE,
-            )
-            msg.meta_json = json.dumps(_meta)
+        display_content = self._retry_display_content(task, source)
+        if display_content is not None:
+            self._patch_meta_json(msg, display_content=display_content)
 
         # 4. Build prompt (optionally wrapped with project context)
         prompt = content
         if wrap_prompt:
-            is_first = self._is_first_user_message(db, agent.id)
-            if task and is_first:
-                # Initial task dispatch: build full task body with
-                # title/description/retry context, then wrap with
-                # project context.  insights_list=[] for
-                # _build_agent_prompt since _build_task_prompt already
-                # includes them inline.
-                task_body, _ = self._build_task_prompt(
-                    task, db=None, insights_list=insights_list,
-                )
-                prompt = self._build_agent_prompt(
-                    agent, project, task_body,
-                    insights_list=[],
-                )
-            else:
-                # Follow-up message OR non-task agent: use the actual
-                # user content.  The agent already has full task context
-                # from the resumed session — resending the original task
-                # prompt would cause it to ignore the new instruction.
-                prompt = self._build_agent_prompt(
-                    agent, project, content,
-                    insights_list=insights_list,
-                )
+            prompt = self._wrap_dispatch_prompt(
+                db, agent, project, content, task, insights_list,
+            )
 
         # 5. Update agent preview
         agent.last_message_preview = content[:200]

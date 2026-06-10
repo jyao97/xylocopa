@@ -51,15 +51,68 @@ _PREVIEW_HEADERS = {
     "Cache-Control": "no-store",
 }
 
-# Injected into every served HTML document. Mirrors console.* and uncaught
-# errors to the parent frame via postMessage so the preview panel can show a
-# debug drawer. postMessage targets '*' because the sandboxed document runs
-# in an opaque origin and cannot name its parent; the parent side filters by
-# e.source === iframe.contentWindow.
+# Injected into every served HTML document. Two jobs:
+# 1. Storage shim — the opaque-origin sandbox makes localStorage/
+#    sessionStorage THROW on access, which kills apps that touch them during
+#    init (TensorBoard's feature-flag store aborts all data loading).
+#    Replace them with in-memory stand-ins before app scripts run; settings
+#    simply don't persist across reloads.
+# 2. Console capture — mirrors console.* and uncaught errors to the parent
+#    frame via postMessage for the debug drawer. postMessage targets '*'
+#    because an opaque origin cannot name its parent; the parent side
+#    filters by e.source === iframe.contentWindow.
 _CONSOLE_CAPTURE_JS = """<script>
 (function () {
   if (window.__xyConsoleHooked) return;
   window.__xyConsoleHooked = true;
+  function memStorage() {
+    var mem = {};
+    return {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+      setItem: function (k, v) { mem[k] = String(v); },
+      removeItem: function (k) { delete mem[k]; },
+      clear: function () { mem = {}; },
+      key: function (i) { var ks = Object.keys(mem); return i < ks.length ? ks[i] : null; },
+      get length() { return Object.keys(mem).length; }
+    };
+  }
+  try { void window.localStorage.length; } catch (e) {
+    try {
+      Object.defineProperty(window, "localStorage", { value: memStorage(), configurable: true });
+      Object.defineProperty(window, "sessionStorage", { value: memStorage(), configurable: true });
+    } catch (e2) {}
+  }
+  try { void document.cookie; } catch (e) {
+    try {
+      Object.defineProperty(document, "cookie", {
+        get: function () { return ""; }, set: function () {}, configurable: true
+      });
+    } catch (e2) {}
+  }
+  // Worker constructor is blocked for opaque-origin documents (script URL is
+  // cross-origin to the sandbox). Fall back to fetching the script (sync XHR
+  // — must stay synchronous to preserve constructor semantics) and booting
+  // the worker from a same-origin blob: URL. TensorBoard's chart renderer
+  // depends on this.
+  try {
+    var NativeWorker = window.Worker;
+    if (NativeWorker) {
+      var WrappedWorker = function (url, opts) {
+        try {
+          return new NativeWorker(url, opts);
+        } catch (err) {
+          var xhr = new XMLHttpRequest();
+          xhr.open("GET", url, false);
+          xhr.send(null);
+          if (xhr.status < 200 || xhr.status >= 300) throw err;
+          var blob = new Blob([xhr.responseText], { type: "text/javascript" });
+          return new NativeWorker(URL.createObjectURL(blob), opts);
+        }
+      };
+      WrappedWorker.prototype = NativeWorker.prototype;
+      window.Worker = WrappedWorker;
+    }
+  } catch (e) {}
   var MAX_LEN = 5000;
   function send(level, args) {
     var parts = [];

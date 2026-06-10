@@ -625,7 +625,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    # "null" is the literal Origin sent by sandboxed preview iframes (opaque
+    # origin) — needed so their XHR/fetch preflights (e.g. TensorBoard's
+    # custom request headers) pass. Safe: allow_credentials is False and the
+    # session JWT lives in localStorage, unreachable from an opaque origin.
+    allow_origins=CORS_ORIGINS + ["null"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

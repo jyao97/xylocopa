@@ -172,6 +172,11 @@ export default defineConfig({
     https: httpsConfig,
     host: '0.0.0.0',
     port: 3000,
+    // Vite's built-in CORS middleware answers /api OPTIONS preflights itself
+    // (and its default origin allowlist rejects the "null" origin sandboxed
+    // preview iframes send), so requests never reach the backend's CORS
+    // config. Disable it — the app is same-origin and the backend owns CORS.
+    cors: false,
     hmr: {
       // Explicit HMR config stabilises the WebSocket on mobile with self-signed certs
       protocol: httpsConfig ? 'wss' : 'ws',
@@ -188,6 +193,7 @@ export default defineConfig({
     https: httpsConfig,
     host: '0.0.0.0',
     port: 3000,
+    cors: false,  // same rationale as `server.cors` above
     proxy: {
       '/api': 'http://localhost:8080',
       '/ws': { target: 'ws://localhost:8080', ws: true },

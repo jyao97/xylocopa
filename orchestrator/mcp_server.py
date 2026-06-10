@@ -1927,8 +1927,8 @@ def webapp_present(target: str, title: str = "", description: str = "",
 
     Static-app conventions:
         - Assets and data must use RELATIVE paths (./app.js, ./data.json);
-          Vite builds need base:'./'. Simple GET fetch() works; preflighted
-          requests (JSON POST) are blocked by CORS.
+          Vite builds need base:'./'. fetch()/XHR to relative URLs works,
+          including preflighted requests.
         - Reusable viewers belong in webapps/<name>/ at the project root,
           committed to git, data alongside (webapps/<name>/data/).
         - Check webapp_list FIRST before building a new viewer.

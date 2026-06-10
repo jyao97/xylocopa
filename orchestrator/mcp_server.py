@@ -165,9 +165,13 @@ server = FastMCP(
         "need base:'./'. Reusable viewers go in webapps/<name>/ at the "
         "project root, committed to git.\n"
         "- port — a localhost service (TensorBoard, vite dev). Proxied "
-        "with the prefix stripped, so root-served apps work as-is.\n"
-        "- url — an external dashboard (e.g. wandb). Most external sites "
-        "forbid iframe embedding, so the card opens in a new tab.\n"
+        "with the prefix stripped, so root-served apps work as-is. Only "
+        "for cookie-less services: apps with login sessions (wandb local, "
+        "jupyter, grafana) break in the credential-less sandbox — present "
+        "those as url instead.\n"
+        "- url — an external or cookie-authenticated dashboard (wandb.ai, "
+        "wandb local, jupyter). Opens in a new tab with normal cookies; "
+        "most such sites forbid iframe embedding anyway.\n"
         "Check webapp_list before building a new viewer — one may already "
         "exist; re-present it with webapp_present."
     ),
@@ -1941,6 +1945,10 @@ def webapp_present(target: str, title: str = "", description: str = "",
           http.server) work unmodified.
         - The returned proxy prefix is stable — safe to reuse across
           service restarts.
+        - Cookie-less services only. The sandbox is credential-less by
+          design, so login-session apps (wandb local, jupyter, grafana)
+          render blank or hit a login wall when embedded — present those
+          as kind="url" pointing at http://<host>:<port>/... instead.
     """
     target = (target or "").strip()
     if not target:

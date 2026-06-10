@@ -66,7 +66,8 @@ def needs_rehash(stored_hash: str) -> bool:
 # Token management (custom signed payload — stdlib only)
 # ---------------------------------------------------------------------------
 
-def create_token(jwt_secret: str, expires_minutes: int | None = None) -> str:
+def create_token(jwt_secret: str, expires_minutes: int | None = None,
+                 extra_claims: dict | None = None) -> str:
     """Create a signed token with expiry.
 
     Format: base64(json_payload).base64(signature)
@@ -75,6 +76,10 @@ def create_token(jwt_secret: str, expires_minutes: int | None = None) -> str:
     handles inactivity-based lock independently by tracking user
     interactions and clearing the token after AUTH_TIMEOUT_MINUTES
     of no activity.
+
+    extra_claims merges additional payload fields (e.g. a "scope" claim for
+    preview tokens). Tokens carrying a "scope" claim are rejected by
+    verify_token — they only pass the endpoint-specific decode_token checks.
     """
     if expires_minutes is None:
         # 24-hour server-side expiry; frontend enforces the shorter
@@ -85,6 +90,8 @@ def create_token(jwt_secret: str, expires_minutes: int | None = None) -> str:
         "iat": time.time(),
         "jti": secrets.token_hex(8),
     }
+    if extra_claims:
+        payload.update(extra_claims)
     payload_bytes = base64.urlsafe_b64encode(
         json.dumps(payload).encode()
     ).rstrip(b"=")
@@ -95,12 +102,16 @@ def create_token(jwt_secret: str, expires_minutes: int | None = None) -> str:
     return payload_bytes.decode() + "." + sig_bytes.decode()
 
 
-def verify_token(token: str, jwt_secret: str) -> bool:
-    """Verify token signature and check expiry."""
+def decode_token(token: str, jwt_secret: str) -> dict | None:
+    """Verify token signature + expiry and return the payload dict, or None.
+
+    Accepts any scope — callers that handle scoped tokens (e.g. preview)
+    must check the "scope" claim themselves.
+    """
     try:
         parts = token.split(".")
         if len(parts) != 2:
-            return False
+            return None
         payload_b64, sig_b64 = parts
 
         # Verify signature
@@ -111,18 +122,28 @@ def verify_token(token: str, jwt_secret: str) -> bool:
         sig_padded = sig_b64 + "=" * (-len(sig_b64) % 4)
         actual_sig = base64.urlsafe_b64decode(sig_padded)
         if not hmac.compare_digest(expected_sig, actual_sig):
-            return False
+            return None
 
         # Check expiry
         payload_padded = payload_b64 + "=" * (-len(payload_b64) % 4)
         payload = json.loads(base64.urlsafe_b64decode(payload_padded))
         if payload.get("exp", 0) < time.time():
-            return False
+            return None
 
-        return True
+        return payload
     except (ValueError, KeyError, json.JSONDecodeError, base64.binascii.Error, UnicodeDecodeError) as e:
         logger.debug("Token validation failed: %s", type(e).__name__)
-        return False
+        return None
+
+
+def verify_token(token: str, jwt_secret: str) -> bool:
+    """Verify a full session token (signature + expiry).
+
+    Scoped tokens (e.g. scope="preview") are rejected — they ride in URLs
+    and must never grant general API access.
+    """
+    payload = decode_token(token, jwt_secret)
+    return payload is not None and not payload.get("scope")
 
 
 # ---------------------------------------------------------------------------

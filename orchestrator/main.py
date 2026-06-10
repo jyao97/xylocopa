@@ -694,7 +694,7 @@ async def hook_request_logger(request: Request, call_next):
     return response
 
 
-_AUTH_EXEMPT_PREFIXES = ("/api/auth/", "/api/health", "/api/cert", "/api/webclip", "/api/hooks/", "/api/debug/auth-diag", "/api/debug/clear-cache", "/api/debug/mem-introspect", "/api/push/ack", "/api/probe-trigger/")
+_AUTH_EXEMPT_PREFIXES = ("/api/auth/", "/api/health", "/api/cert", "/api/webclip", "/api/hooks/", "/api/debug/auth-diag", "/api/debug/clear-cache", "/api/debug/mem-introspect", "/api/push/ack", "/api/probe-trigger/", "/api/preview/t/")
 
 
 @app.middleware("http")
@@ -762,6 +762,7 @@ from routers.hooks import router as hooks_router
 from routers.agents import router as agents_router
 from routers.git import router as git_router
 from routers.files import router as files_router
+from routers.preview import router as preview_router
 from routers.push import router as push_router
 from routers.workers import router as workers_router
 from routers.logs import router as logs_router
@@ -778,6 +779,7 @@ app.include_router(hooks_router)
 app.include_router(agents_router)
 app.include_router(git_router)
 app.include_router(files_router)
+app.include_router(preview_router)
 app.include_router(push_router)
 app.include_router(workers_router)
 app.include_router(logs_router)

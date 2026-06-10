@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-10
+
+Interactive web-app preview release. Agents can now hand the user runnable deliverables — data explorers, 3D viewers, local dashboards — as tappable cards in chat, opening fullscreen in a sandboxed iframe with a built-in console drawer. Verified end-to-end with TensorBoard through the port proxy and an agent-built three.js exoplanet viewer on iPhone.
+
+### Added
+
+- **Web-app cards in chat.** New `webapp_present` / `webapp_list` MCP tools post `kind="webapp"` card messages and maintain a per-project registry (new `webapps` table) so later agents can find and reuse existing viewers. Cards are tool-driven only; plain-text `.html` paths no longer render run cards. (6c868bb1, bb5433e5)
+- **Static app serving.** `/api/preview/t/{token}/{project}/{path}` serves project files for preview with a path-embedded, preview-scoped 12 h token, so relative subresources (`./app.js`, `./data.json`) authenticate without cookies. Responses carry a CSP `sandbox` header and `Access-Control-Allow-Origin: *`; served HTML gets an injected script that mirrors `console.*` and uncaught errors to the panel's debug drawer. (35fa749f)
+- **Localhost port proxy.** `/api/preview/p/{sig}/{project}/{port}/{path}` reverse-proxies registered local services (TensorBoard, dev servers) with a stable HMAC capability prefix, WebSocket relay with subprotocol passthrough, a registered-port allowlist, and the orchestrator's own port denied. Cookie-session apps (wandb local, jupyter) are documented as `url` cards instead — the sandbox is credential-less by design. (6c868bb1, 41bc3c08)
+- **Sandbox compatibility shims.** Injected into served/proxied HTML: in-memory `localStorage`/`sessionStorage` and no-op `document.cookie` (opaque-origin access throws otherwise), and a `Worker` wrapper that falls back to sync-XHR + blob URL when URL construction is blocked — required for TensorBoard's worker-based chart renderer. (bd2f85cb)
+- README feature entry with a phone screenshot of the preview panel. (6763dbb5)
+
+### Fixed
+
+- Status signals only emit on genuinely-new turns, preventing re-fired side effects on replayed history. (3adba714)
+- Drift audits exclude intentionally-unimported turns, removing false-positive purge warnings. (89c9e1d6)
+
+### Changed
+
+- **Auth: scoped tokens are rejected as session tokens.** `verify_token` now refuses any token carrying a `scope` claim, so a leaked preview URL can never grant API access; `decode_token` returns the verified payload for endpoint-specific checks. (35fa749f)
+- **CORS: the literal `null` origin is allowed** (sandboxed iframes send it) with `allow_credentials=False`, and vite's own CORS middleware is disabled so `/api` preflights reach the backend instead of being answered with a rejecting allowlist. (bd2f85cb)
+- Documentation sweep: README rewritten (351 → 213 lines, one home per fact), getting-started (en/zh) tightened, `agent-mcp-tools.md` updated with the probe and webapp domains, stale MCP tool list in ARCHITECTURE.md corrected. (20231530, 745faa4b)
+- Orchestrator refactors: lookup-or-404 helpers replace 45 boilerplate sites, shared `build_task` extracted to `task_service`, PORT/default-model constants centralized, `_utcnow` deduplicated, dead code removed. (d1b8d59f, 02d5e4c9, 8edd9d36, 9a861d5b, 1ea9fc75)
+
 ## [0.10.15] - 2026-05-14
 
 Memory-leak hunt release. Two OOMs on May 13 grew orchestrator RSS to 47.8 GB before the kernel killed the process — which took every tmux'd xylo session down with it. This release plugs five leak vectors found via a parallel multi-agent code audit, adds a `max_memory_restart` safety net so the next leak triggers a pm2 graceful-restart at 8 GB instead of a kernel global-OOM, and ships diagnostic infrastructure (size-bounded forensic log channels, a live `/api/debug/mem-introspect` endpoint, a header-pill memory-pressure indicator) so the next leak leaves a usable trail.

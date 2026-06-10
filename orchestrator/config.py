@@ -42,6 +42,12 @@ MAX_IDLE_AGENTS = int(os.getenv("MAX_IDLE_AGENTS", "20"))
 DEFAULT_CLAUDE_MODEL = "claude-opus-4-8"
 CC_MODEL = os.getenv("CC_MODEL", DEFAULT_CLAUDE_MODEL)
 
+# Model for internal claude -p summarization jobs (agent insights, retry
+# summaries, PROGRESS.md summaries, insight dedup). "sonnet" is a Claude CLI
+# alias that always resolves to the latest Sonnet — NOT the 1M-context
+# "sonnet[1m]" variant. Cheaper/faster than CC_MODEL for text-in/text-out work.
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "sonnet")
+
 # Valid model names — keep in sync with frontend MODEL_OPTIONS
 VALID_MODELS = {
     "claude-fable-5",

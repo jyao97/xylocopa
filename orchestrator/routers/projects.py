@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import case, func, update, text
 from sqlalchemy.orm import Session
 
-from config import CC_MODEL, CLAUDE_HOME, PROJECT_CONFIGS_PATH, VALID_MODELS
+from config import CC_MODEL, CLAUDE_HOME, PROJECT_CONFIGS_PATH, SUMMARY_MODEL, VALID_MODELS
 from database import SessionLocal, get_db
 from models import (
     Agent, AgentInsightSuggestion, AgentStatus, Message, MessageRole,
@@ -571,7 +571,7 @@ Here are today's conversations (with timestamps):
         _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-             "--no-session-persistence", "--model", CC_MODEL],
+             "--no-session-persistence", "--model", SUMMARY_MODEL],
             input=prompt,
             capture_output=True, text=True, timeout=600,
             cwd="/tmp",
@@ -733,7 +733,7 @@ Agent: {agent_name} | Task: {task_title}
             # Popen (not run) so cancel_insight_run can terminate the proc mid-flight.
             proc = subprocess.Popen(
                 [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-                 "--no-session-persistence", "--model", CC_MODEL],
+                 "--no-session-persistence", "--model", SUMMARY_MODEL],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, text=True,
                 cwd="/tmp",
@@ -792,8 +792,10 @@ Agent: {agent_name} | Task: {task_title}
 
         if _is_insight_cancelled(agent_id):
             return
-        if not raw_output:
-            logger.info("Claude returned empty output for agent %s summary", agent_id)
+        # CC prints the literal string "Execution error" (rc=0) when the
+        # inner API call fails — that's a failure, not a summary.
+        if not raw_output or raw_output == "Execution error":
+            logger.info("Claude returned empty/error output for agent %s summary", agent_id)
             _set_insight_status(agent_id, "failed", project_name)
             return
 
@@ -912,7 +914,7 @@ Task: {task_title}{reason_line}
         _t0 = _time.monotonic()
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-             "--no-session-persistence", "--model", CC_MODEL],
+             "--no-session-persistence", "--model", SUMMARY_MODEL],
             input=prompt,
             capture_output=True, text=True, timeout=120,
             cwd="/tmp",
@@ -932,8 +934,10 @@ Task: {task_title}{reason_line}
         _clear_generating_marker(task_id)
         return
 
-    if not summary:
-        logger.warning("Retry summary returned empty output for task %s", task_id)
+    # CC prints the literal string "Execution error" (rc=0) when the inner
+    # API call fails — don't save it as the summary.
+    if not summary or summary == "Execution error":
+        logger.warning("Retry summary returned empty/error output for task %s", task_id)
         _clear_generating_marker(task_id)
         return
 

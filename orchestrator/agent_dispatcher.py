@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from config import CC_MODEL, CLAUDE_HOME, MAX_CONCURRENT_WORKERS
+from config import CLAUDE_HOME, MAX_CONCURRENT_WORKERS, SUMMARY_MODEL
 from plat import platform as _platform
 from utils import utcnow as _utcnow, truncate as _truncate
 from database import SessionLocal
@@ -531,7 +531,7 @@ def _grep_dedup_insights(new_section: str, existing_progress: str,
     # hook returns {} for non-agent subprocesses, causing empty output).
     result = subprocess.run(
         [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-         "--no-session-persistence", "--model", CC_MODEL],
+         "--no-session-persistence", "--model", SUMMARY_MODEL],
         input=dedup_prompt,
         capture_output=True, text=True, timeout=120,
         cwd="/tmp",
@@ -2080,7 +2080,7 @@ Here are the day's conversations (with timestamps):
         # hook returns {} for non-agent subprocesses, causing empty output).
         result = subprocess.run(
             [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-             "--no-session-persistence", "--model", CC_MODEL],
+             "--no-session-persistence", "--model", SUMMARY_MODEL],
             input=prompt,
             capture_output=True, text=True, timeout=600,
             cwd="/tmp",

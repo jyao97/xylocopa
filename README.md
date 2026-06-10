@@ -52,6 +52,9 @@ Watch everything in real time, from desk or phone.
 - **Split screen**: 2/3/4 panes side by side, each navigating independently.
 - **Attention button**: draggable FAB with a cyan unread badge. Tap for the oldest unread (FIFO), long-press for split screen.
 - **Rich chat**: markdown, inline media, interactive cards for tool approvals and plan review.
+- **Interactive web apps in chat**: agents present runnable deliverables — data explorers, 3D viewers, dashboards — as tappable cards via the `webapp_present` MCP tool. Static apps and proxied localhost services (e.g. TensorBoard) open fullscreen in a credential-less sandboxed iframe, with a built-in console drawer for debugging. Full touch interaction on mobile.
+
+  <img src="docs/webapp-preview.png" alt="Agent-built 3D exoplanet explorer (6,271 planets from the NASA Exoplanet Archive) running sandboxed in chat on an iPhone" width="280">
 - **Compact chat header**: status dot next to the title, tinted Stop / Resume / OK pills on row 1; project / worktree icon-pill / Auto / Task / 4-char id pill collapsed into one tag row underneath. Hover or long-press the id pill for a `xylo id:` popover, double-click to copy; same interaction on the worktree pill.
 
   ![Chat header](docs/getting-started/12-chat-header.png)

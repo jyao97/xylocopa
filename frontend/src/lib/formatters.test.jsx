@@ -140,6 +140,23 @@ describe("extractFileAttachments", () => {
     expect(result[0].ext).toBe("tex");
   });
 
+  it("detects archive paths (.zip) as downloadable generic files", () => {
+    const text = "/home/jyao073/xylocopa-projects/random-things/ee266-final-report.zip\n\nbody";
+    const result = extractFileAttachments(text, PROJECT);
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe("file");
+    expect(result[0].ext).toBe("zip");
+  });
+
+  it("detects backtick-wrapped tarball paths (.tar.gz)", () => {
+    const text = "Packaged everything into `dist/release.tar.gz` for you.";
+    const result = extractFileAttachments(text, PROJECT);
+    expect(result).toHaveLength(1);
+    expect(result[0].path).toBe("dist/release.tar.gz");
+    expect(result[0].type).toBe("file");
+    expect(result[0].ext).toBe("gz");
+  });
+
   // --- Workspace prefix stripping ---
 
   it("strips /projects/{project}/ prefix from absolute workspace paths", () => {

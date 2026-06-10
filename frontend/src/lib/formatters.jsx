@@ -533,11 +533,11 @@ const DOC_EXTS = /\.(py|js|ts|jsx|tsx|html|css|md|txt|pdf|xlsx|xls|docx|doc|pptx
 const CSV_EXTS = /\.(csv)$/i;
 const IGNORE_EXTS = /\.(jsonl|log|json|lock)$/i;
 
-// All extensions the agent path scanner should match (media + doc)
-const AGENT_EXTS = /\.(png|jpg|jpeg|gif|svg|webp|mp4|webm|mov|csv|py|js|ts|jsx|tsx|html|css|md|txt|pdf|xlsx|xls|docx|doc|pptx|ppt|sh|bash|rb|go|rs|c|cpp|h|hpp|java|kt|swift|yaml|yml|toml|xml|sql|r|lua|pl|ex|exs|zig|nim|dart|scala|clj|hs|erl|elm|tex|bib|ply|obj|stl|glb|gltf)$/i;
+// All extensions the agent path scanner should match (media + doc + archives)
+const AGENT_EXTS = /\.(png|jpg|jpeg|gif|svg|webp|mp4|webm|mov|csv|py|js|ts|jsx|tsx|html|css|md|txt|pdf|xlsx|xls|docx|doc|pptx|ppt|sh|bash|rb|go|rs|c|cpp|h|hpp|java|kt|swift|yaml|yml|toml|xml|sql|r|lua|pl|ex|exs|zig|nim|dart|scala|clj|hs|erl|elm|tex|bib|ply|obj|stl|glb|gltf|zip|tar|gz|tgz|7z|rar)$/i;
 
 // Compiled regexes for agent path detection
-const AGENT_EXT_LIST = "png|jpg|jpeg|gif|svg|webp|mp4|webm|mov|csv|py|js|ts|jsx|tsx|html|css|md|txt|pdf|xlsx|xls|docx|doc|pptx|ppt|sh|bash|rb|go|rs|c|cpp|h|hpp|java|kt|swift|yaml|yml|toml|xml|sql|r|lua|pl|ex|exs|zig|nim|dart|scala|clj|hs|erl|elm|tex|bib|ply|obj|stl|glb|gltf";
+const AGENT_EXT_LIST = "png|jpg|jpeg|gif|svg|webp|mp4|webm|mov|csv|py|js|ts|jsx|tsx|html|css|md|txt|pdf|xlsx|xls|docx|doc|pptx|ppt|sh|bash|rb|go|rs|c|cpp|h|hpp|java|kt|swift|yaml|yml|toml|xml|sql|r|lua|pl|ex|exs|zig|nim|dart|scala|clj|hs|erl|elm|tex|bib|ply|obj|stl|glb|gltf|zip|tar|gz|tgz|7z|rar";
 const RE_MD_IMAGE = new RegExp(`!\\[.*?\\]\\((\\S+?\\.(?:${AGENT_EXT_LIST}))\\)`, "gi");
 const RE_BACKTICK = new RegExp("`([^`]*/[^`]*\\.(?:" + AGENT_EXT_LIST + "))`", "gi");
 const RE_BARE_PATH = new RegExp("(?:^|[\\s(])([^\\s()\\[\\]!]*/[^\\s()\\[\\]]+\\.(?:" + AGENT_EXT_LIST + "))(?=[\\s),\\]]|$)", "gim");

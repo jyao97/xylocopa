@@ -3,6 +3,7 @@ import { authedFetch } from "../lib/api";
 import { parseFileUrl, useBatchExists } from "../lib/mediaState";
 import MissingFileCard from "./MissingFileCard";
 import ImageLightbox from "./ImageLightbox";
+import WebAppPreview from "./WebAppPreview";
 
 // useBatchExists now takes URL strings; project this from attachment objects.
 function urlsFromAttachments(attachments) {
@@ -227,6 +228,35 @@ function DocFilePreview({ src, filename, ext, originalPath, exists, onRetry }) {
   );
 }
 
+// --- Web App Card (html file — tappable sandboxed interactive preview) ---
+
+function WebAppCard({ att, exists, onOpen, onRetry }) {
+  const filename = att.path.split("/").pop();
+  if (exists === false) return <MissingFileCard filename={filename} originalPath={att.originalPath} onRetry={onRetry} />;
+  return (
+    <div className="rounded-lg bg-elevated overflow-hidden max-w-[280px]">
+      <div
+        onClick={onOpen}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-hover transition-colors text-left cursor-pointer"
+      >
+        <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
+        </svg>
+        <div className="flex-1 min-w-0">
+          <span className="text-xs text-label truncate block">{filename}</span>
+          <span className="text-[10px] text-dim">Interactive web app</span>
+        </div>
+        <ActionButtons src={att.resolvedUrl} filename={filename} originalPath={att.originalPath} />
+        <div className="w-6 h-6 rounded-full bg-cyan-500/15 flex items-center justify-center shrink-0">
+          <svg className="w-3 h-3 ml-px text-cyan-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Generic File Card (non-media, non-doc — fallback for user uploads) ---
 
 function GenericFilePreview({ src, filename, originalPath, exists, onRetry }) {
@@ -312,6 +342,7 @@ function DocGroupCard({ docs, statMap, onRetry }) {
 
 export default function FileAttachments({ attachments, compact }) {
   const [lightbox, setLightbox] = useState(null); // { media, initialIndex } or null
+  const [webappOpen, setWebappOpen] = useState(null); // { project, path, filename } or null
   const urls = useMemo(() => urlsFromAttachments(attachments), [attachments]);
   const { statMap, refresh: refreshStat } = useBatchExists(urls);
 
@@ -319,18 +350,28 @@ export default function FileAttachments({ attachments, compact }) {
   // Per-att helper: resolves the batched stat (or treats non-project URLs as exists).
   const statFor = (att) => statMap[att.resolvedUrl] || (parseFileUrl(att.resolvedUrl) ? null : { exists: true });
 
-  // Split into media (inline) vs doc/file (groupable)
+  // Split into media (inline) vs webapp (preview card) vs doc/file (groupable)
   const mediaAtts = [];
+  const webapps = [];
   const docs = [];
   const other = [];
   for (const att of attachments) {
     if (att.type === "image" || att.type === "video") mediaAtts.push(att);
+    // Preview needs a project-file URL; html from other sources (uploads)
+    // falls through to the generic card.
+    else if (att.type === "webapp" && parseFileUrl(att.resolvedUrl)?.project) webapps.push(att);
     else if (att.type === "doc") docs.push(att);
     else other.push(att);
   }
 
+  const openWebApp = (att) => {
+    const parsed = parseFileUrl(att.resolvedUrl);
+    if (!parsed?.project) return;
+    setWebappOpen({ project: parsed.project, path: parsed.path, filename: att.path.split("/").pop() });
+  };
+
   // Unified media gallery: images and videos in one swipeable lightbox
-  const allAtts = [...mediaAtts, ...docs, ...other];
+  const allAtts = [...mediaAtts, ...webapps, ...docs, ...other];
   const galleryMedia = mediaAtts.map((att) => ({
     type: att.type,
     src: att.resolvedUrl,
@@ -350,12 +391,13 @@ export default function FileAttachments({ attachments, compact }) {
           {allAtts.map((att, idx) => {
             const filename = att.path.split("/").pop();
             const isMedia = att.type === "image" || att.type === "video";
+            const isWebApp = webapps.includes(att);
             const mediaIdx = isMedia ? mediaAtts.indexOf(att) : -1;
             return (
               <div
                 key={att.path}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-elevated text-xs max-w-[180px] cursor-pointer"
-                onClick={() => isMedia ? openLightbox(mediaIdx) : null}
+                onClick={() => isMedia ? openLightbox(mediaIdx) : isWebApp ? openWebApp(att) : null}
               >
                 {isMedia ? (
                   <img src={att.thumbUrl || att.resolvedUrl} alt="" className="chat-attachment-media w-8 h-8 rounded object-cover shrink-0" />
@@ -374,6 +416,14 @@ export default function FileAttachments({ attachments, compact }) {
             media={lightbox.media}
             initialIndex={lightbox.initialIndex}
             onClose={() => setLightbox(null)}
+          />
+        )}
+        {webappOpen && (
+          <WebAppPreview
+            project={webappOpen.project}
+            path={webappOpen.path}
+            filename={webappOpen.filename}
+            onClose={() => setWebappOpen(null)}
           />
         )}
       </div>
@@ -414,6 +464,19 @@ export default function FileAttachments({ attachments, compact }) {
           />
         );
       })}
+      {/* Web apps: tappable sandboxed preview cards */}
+      {webapps.map((att) => {
+        const stat = statFor(att);
+        return (
+          <WebAppCard
+            key={att.path}
+            att={att}
+            exists={stat ? stat.exists : null}
+            onOpen={() => openWebApp(att)}
+            onRetry={refreshStat}
+          />
+        );
+      })}
       {/* Doc files: single card if 1, grouped card if 2+ */}
       {docs.length === 1 && (() => {
         const stat = statFor(docs[0]);
@@ -450,6 +513,16 @@ export default function FileAttachments({ attachments, compact }) {
           media={lightbox.media}
           initialIndex={lightbox.initialIndex}
           onClose={() => setLightbox(null)}
+        />
+      )}
+
+      {/* Fullscreen sandboxed web-app preview */}
+      {webappOpen && (
+        <WebAppPreview
+          project={webappOpen.project}
+          path={webappOpen.path}
+          filename={webappOpen.filename}
+          onClose={() => setWebappOpen(null)}
         />
       )}
     </div>

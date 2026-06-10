@@ -247,6 +247,8 @@ export const deleteBookmark = (project, messageId) =>
   });
 export const filesExistsBatch = (items) =>
   request(`/api/files/exists-batch`, { method: "POST", body: JSON.stringify({ items }) });
+export const mintPreviewToken = (project) =>
+  request("/api/preview/token", { method: "POST", body: JSON.stringify({ project }) });
 export const fetchProjectFile = (project, path) =>
   request(`/api/projects/${e(project)}/file?path=${e(path)}`);
 export const updateProjectFile = (project, path, content) =>

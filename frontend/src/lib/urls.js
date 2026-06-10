@@ -14,6 +14,7 @@ import { getAuthToken } from "./api";
 export const API_FILES_PREFIX = "/api/files/";
 export const API_THUMBS_PREFIX = "/api/thumbs/";
 export const API_UPLOADS_PREFIX = "/api/uploads/";
+export const API_PREVIEW_PREFIX = "/api/preview/t/";
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -46,6 +47,13 @@ export function fileUrl(project, relPath) {
 export function thumbUrl(project, relPath) {
   const segments = relPath.split("/").map(encodeURIComponent).join("/");
   return withToken(`${API_THUMBS_PREFIX}${encodeURIComponent(project)}/${segments}`);
+}
+
+/** Build URL for a sandboxed web-app preview. The preview-scoped token rides
+ *  in the path (not a query param) so relative subresource refs inherit it. */
+export function previewUrl(token, project, relPath) {
+  const segments = relPath.split("/").map(encodeURIComponent).join("/");
+  return `${API_PREVIEW_PREFIX}${encodeURIComponent(token)}/${encodeURIComponent(project)}/${segments}`;
 }
 
 /** Convert an /api/files/ URL to its /api/thumbs/ equivalent. */

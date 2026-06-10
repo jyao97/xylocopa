@@ -59,7 +59,7 @@ function ConsoleDrawer({ logs, onClear }) {
  *  - direct: pass src (stable port-proxy prefix from webapp_present
  *    metadata) → used as-is, no mint.
  */
-export default function WebAppPreview({ project, path, src: directSrc, filename, onClose }) {
+export default function WebAppPreview({ project, path, src: directSrc, filename, onClose, onMinimize, hidden }) {
   const [src, setSrc] = useState(directSrc || null);
   const [error, setError] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -99,10 +99,11 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
   }, []);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    if (hidden) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") (onMinimize || onClose)(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, onMinimize, hidden]);
 
   const reload = () => {
     setLoaded(false);
@@ -111,7 +112,13 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-page" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+    // `invisible` (not unmount) when minimized — the iframe stays mounted so
+    // the app's JS/WebGL state survives and restore is instant.
+    <div
+      className={`fixed inset-0 z-50 flex flex-col bg-page ${hidden ? "invisible pointer-events-none" : ""}`}
+      aria-hidden={hidden || undefined}
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       {/* Toolbar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-divider shrink-0">
         <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -156,6 +163,18 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
             </span>
           )}
         </button>
+        {onMinimize && (
+          <button
+            type="button"
+            onClick={onMinimize}
+            title="Minimize — keeps the app running"
+            className="p-1.5 rounded hover:bg-hover transition-colors text-dim hover:text-label"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -199,12 +218,104 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
   );
 }
 
+// ---------------------------------------------------------------------------
+// Per-chat dock — keeps minimized web apps mounted so heavy apps (3DGS
+// viewers, WebGL scenes) restore instantly instead of reloading. Scoped to
+// one agent chat: navigating away or switching agents tears everything down.
+// ---------------------------------------------------------------------------
+
+const DOCK_OPEN_EVENT = "xy-webapp-dock-open";
+
+/** Ask the chat's dock to open/restore an app. Returns false if no dock for
+ *  this agent is mounted (caller falls back to a local one-shot panel). */
+function requestDockOpen(agentId, app) {
+  const detail = { agentId, app, handled: false };
+  window.dispatchEvent(new CustomEvent(DOCK_OPEN_EVENT, { detail }));
+  return detail.handled;
+}
+
+export function WebAppDock({ agentId }) {
+  const [apps, setApps] = useState([]); // [{ key, app, minimized }]
+
+  // Switching to another agent's chat counts as closing this chat.
+  useEffect(() => { setApps([]); }, [agentId]);
+
+  useEffect(() => {
+    const onOpen = (e) => {
+      if (e.detail.agentId !== agentId) return;
+      e.detail.handled = true;
+      const app = e.detail.app;
+      const key = `${app.kind}:${app.project}:${app.path || app.src}`;
+      // One fullscreen panel at a time: opening one minimizes the others.
+      setApps((prev) => prev.some((x) => x.key === key)
+        ? prev.map((x) => ({ ...x, minimized: x.key !== key }))
+        : [...prev.map((x) => ({ ...x, minimized: true })), { key, app, minimized: false }]);
+    };
+    window.addEventListener(DOCK_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(DOCK_OPEN_EVENT, onOpen);
+  }, [agentId]);
+
+  const minimize = (key) => setApps((p) => p.map((x) => (x.key === key ? { ...x, minimized: true } : x)));
+  const restore = (key) => setApps((p) => p.map((x) => ({ ...x, minimized: x.key !== key })));
+  const close = (key) => setApps((p) => p.filter((x) => x.key !== key));
+
+  const chips = apps.filter((x) => x.minimized);
+
+  return (
+    <>
+      {apps.map(({ key, app, minimized }) => (
+        <WebAppPreview
+          key={key}
+          project={app.project}
+          path={app.path}
+          src={app.src}
+          filename={app.filename}
+          hidden={minimized}
+          onMinimize={() => minimize(key)}
+          onClose={() => close(key)}
+        />
+      ))}
+      {chips.length > 0 && createPortal(
+        <div
+          className="fixed left-3 z-40 flex flex-wrap gap-2 max-w-[calc(100vw-24px)]"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)" }}
+        >
+          {chips.map(({ key, app }) => (
+            <div
+              key={key}
+              onClick={() => restore(key)}
+              title="Restore app"
+              className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-full bg-elevated border border-divider shadow-card cursor-pointer hover:bg-hover transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
+              </svg>
+              <span className="text-xs text-label max-w-[120px] truncate">{app.filename}</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); close(key); }}
+                title="Close app"
+                className="p-0.5 rounded-full hover:bg-hover text-dim hover:text-label"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 /**
  * Chat bubble for kind="webapp" messages (posted by the MCP webapp_present
  * tool). metadata.webapp = { kind, target, project, title, description,
  * src? } — src is the stable proxy prefix (port) or external URL (url).
  */
-export function WebAppCardBubble({ message }) {
+export function WebAppCardBubble({ message, agentId }) {
   const [open, setOpen] = useState(false);
   const app = message.metadata?.webapp || {};
   const isUrl = app.kind === "url";
@@ -217,9 +328,18 @@ export function WebAppCardBubble({ message }) {
   const handleOpen = () => {
     if (isUrl) {
       window.open(app.target, "_blank", "noopener,noreferrer");
-    } else {
-      setOpen(true);
+      return;
     }
+    const spec = {
+      kind: app.kind,
+      project: app.project,
+      path: app.kind === "static" ? app.target : undefined,
+      src: app.kind === "port" ? app.src : undefined,
+      filename: label,
+    };
+    // Prefer the chat's dock (minimizable, state survives); fall back to a
+    // local one-shot panel if no dock is mounted.
+    if (!requestDockOpen(agentId, spec)) setOpen(true);
   };
 
   return (

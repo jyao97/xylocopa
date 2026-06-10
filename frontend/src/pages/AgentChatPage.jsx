@@ -65,7 +65,7 @@ class SafeMarkdown extends Component {
   }
 }
 import FileAttachments from "../components/FilePreview";
-import { WebAppCardBubble } from "../components/WebAppPreview";
+import { WebAppCardBubble, WebAppDock } from "../components/WebAppPreview";
 import BookmarkNotePrompt from "../components/BookmarkNotePrompt";
 import ImageLightbox from "../components/ImageLightbox";
 import {
@@ -1201,7 +1201,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
 
   // Web app cards posted via the MCP webapp_present tool
   if (message.kind === "webapp" && message.metadata?.webapp) {
-    return <WebAppCardBubble message={message} />;
+    return <WebAppCardBubble message={message} agentId={agentId} />;
   }
 
   const isUser = message.role === "USER";
@@ -5137,6 +5137,10 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         messageId={noteForBookmarkId}
         onClose={() => setNoteForBookmarkId(null)}
       />
+      {/* Per-chat web-app dock: minimized previews stay mounted (instant
+          restore for heavy apps); unmounting this page or switching agents
+          tears them all down. */}
+      <WebAppDock agentId={id} />
     </div>
   );
 }

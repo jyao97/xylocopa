@@ -121,6 +121,8 @@ server = FastMCP(
         "- probe:   probe_create, probe_list, probe_get, probe_update "
         "(event-driven chat wake-up; probes wake a target chat when an "
         "external webhook fires)\n"
+        "- webapp:  webapp_present, webapp_list (interactive web-app "
+        "cards in chat — see section below)\n"
         "- system:  system_health\n"
         "- aliases (kept for back-compat, prefer the domain-prefixed names): "
         "list_sessions, read_session, create_task, update_task, "
@@ -148,26 +150,26 @@ server = FastMCP(
         "save them inside the project directory so the web UI can display "
         "them. Files in /tmp/ or other external paths cannot be previewed.\n\n"
 
-        "## Interactive web apps (live preview in chat)\n"
-        "Any project-relative .html path you mention in a chat message "
-        "renders as an 'Interactive web app' card — the user taps it to run "
-        "the app fullscreen in a sandboxed iframe (mouse and touch work; "
-        "console output and errors appear in a built-in debug drawer). "
-        "Prefer this over rendering videos/images when the deliverable is "
-        "interactive: data explorers, plots with controls, 3D/point-cloud "
-        "viewers, demos, parameter playgrounds.\n"
-        "- Static files only, no dev server. Entry is an index.html that "
-        "references assets with RELATIVE paths (./app.js, ./data.json); "
-        "for bundled builds (e.g. Vite) set base: './'.\n"
-        "- Reusable viewers belong in webapps/<name>/ at the project root, "
-        "committed to git, with data files alongside (webapps/<name>/data/) "
-        "fetched via relative paths. One-off throwaway demos can live "
-        "anywhere in the project.\n"
-        "- Before building a new viewer, check webapps/ for an existing one "
-        "to reuse or extend.\n"
-        "- Limitations: simple GET fetch() works; preflighted requests "
-        "(JSON POST) are blocked. Uncaught sync exceptions show as muted "
-        "'Script error' — log failures via console.error for full detail."
+        "## Interactive web apps (webapp_present / webapp_list)\n"
+        "You can hand the user a tappable card in this chat that opens an "
+        "interactive web app fullscreen (sandboxed iframe; mouse and touch "
+        "work; console output appears in a built-in debug drawer). Call "
+        "webapp_present — file paths mentioned in plain message text do "
+        "NOT create cards. Prefer this over rendering videos/images "
+        "whenever the deliverable is interactive: data explorers, plots "
+        "with controls, 3D/point-cloud viewers, demos, training "
+        "dashboards.\n"
+        "Three kinds, auto-detected from target:\n"
+        "- static — project-relative .html entry you wrote. Assets/data "
+        "must use RELATIVE paths (./app.js, ./data.json); Vite builds "
+        "need base:'./'. Reusable viewers go in webapps/<name>/ at the "
+        "project root, committed to git.\n"
+        "- port — a localhost service (TensorBoard, vite dev). Proxied "
+        "with the prefix stripped, so root-served apps work as-is.\n"
+        "- url — an external dashboard (e.g. wandb). Most external sites "
+        "forbid iframe embedding, so the card opens in a new tab.\n"
+        "Check webapp_list before building a new viewer — one may already "
+        "exist; re-present it with webapp_present."
     ),
 )
 
@@ -1823,6 +1825,265 @@ def _lookup_agent(db: sqlite3.Connection, identifier: str) -> dict | None:
         (f"{identifier}%",),
     ).fetchone()
     return row
+
+
+# ---------------------------------------------------------------------------
+# Web app tools — present interactive deliverables as tappable cards in chat
+# ---------------------------------------------------------------------------
+
+_WEBAPP_KINDS = ("static", "port", "url")
+
+
+def _webapp_resolve_agent(sess, agent_id: str = ""):
+    """Resolve the calling agent → (Agent, error_string).
+
+    Order: explicit agent_id → $TMUX_PANE pane match (authoritative, same
+    rationale as hook resolution — XY_AGENT_ID leaks via env inheritance
+    into unrelated panes) → $XY_AGENT_ID as fallback.
+    """
+    from models import Agent
+
+    if agent_id:
+        a = sess.get(Agent, agent_id)
+        if a is None:
+            return None, f"Error: agent {agent_id} not found."
+        return a, None
+    pane = os.environ.get("TMUX_PANE", "").strip()
+    if pane:
+        a = sess.query(Agent).filter(Agent.tmux_pane == pane).first()
+        if a is not None:
+            return a, None
+    env_id = os.environ.get(
+        "XY_AGENT_ID", os.environ.get("AHIVE_AGENT_ID", "")).strip()
+    if env_id:
+        a = sess.get(Agent, env_id)
+        if a is not None:
+            return a, None
+    return None, ("Error: could not identify the calling agent "
+                  "(no TMUX_PANE / XY_AGENT_ID match). Pass agent_id explicitly.")
+
+
+def _port_proxy_sig(project: str, port: int) -> str:
+    """Stable capability signature — mirrors routers/preview.py port_proxy_sig."""
+    import hmac
+
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT value FROM system_config WHERE key='jwt_secret'").fetchone()
+    finally:
+        conn.close()
+    secret = row["value"]
+    msg = f"preview-port:{project}:{port}".encode()
+    return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()[:32]
+
+
+def _ping_emit_message(message_id: str) -> None:
+    """Best-effort instant-refresh ping; the UI's 5s poll covers failures."""
+    import urllib.request
+
+    port = os.environ.get("PORT", "8080").strip()
+    req = urllib.request.Request(
+        f"http://localhost:{port}/api/hooks/emit-message",
+        data=json.dumps({"message_id": message_id}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=3).read()
+    except Exception as e:  # noqa: BLE001 — fire-and-forget by design
+        logger.debug("emit-message ping failed: %s", e)
+
+
+@server.tool()
+def webapp_present(target: str, title: str = "", description: str = "",
+                   kind: str = "", agent_id: str = "") -> str:
+    """Present an interactive web app as a tappable card in this chat.
+
+    The user taps the card to open the app fullscreen in a sandboxed
+    iframe (mouse + touch work; console output and uncaught errors appear
+    in a built-in debug drawer). Prefer this over rendering videos/images
+    whenever the deliverable is interactive: data explorers, plots with
+    controls, 3D/point-cloud viewers, demos, parameter playgrounds,
+    training dashboards. Plain .html paths mentioned in chat text do NOT
+    create cards — this tool is the only way to present one.
+
+    Also registers the app in the project's web-app registry (see
+    webapp_list) so future agents can find and reuse it.
+
+    Args:
+        target: One of (kind auto-detected):
+            - project-relative path to an .html entry, e.g.
+              "webapps/pointcloud-viewer/index.html"  → static app
+            - a localhost port number, e.g. "6006"    → proxied service
+              (TensorBoard, vite dev, any 127.0.0.1 HTTP server)
+            - an external URL, e.g. a wandb run page  → opens in new tab
+              (most external sites forbid iframe embedding)
+        title: Short human label shown on the card.
+        description: One-liner shown in webapp_list (what it does, what
+            data it expects).
+        kind: Override auto-detection: "static" | "port" | "url".
+        agent_id: Target chat. Defaults to the calling agent's own chat.
+
+    Static-app conventions:
+        - Assets and data must use RELATIVE paths (./app.js, ./data.json);
+          Vite builds need base:'./'. Simple GET fetch() works; preflighted
+          requests (JSON POST) are blocked by CORS.
+        - Reusable viewers belong in webapps/<name>/ at the project root,
+          committed to git, data alongside (webapps/<name>/data/).
+        - Check webapp_list FIRST before building a new viewer.
+        - Uncaught sync exceptions show as muted 'Script error' in the
+          drawer — report failures via console.error for full detail.
+
+    Port conventions:
+        - The proxy strips its prefix: the service sees root-relative
+          requests, so root-served apps (TensorBoard, python -m
+          http.server) work unmodified.
+        - The returned proxy prefix is stable — safe to reuse across
+          service restarts.
+    """
+    target = (target or "").strip()
+    if not target:
+        return "Error: target is required."
+    kind = (kind or "").strip().lower()
+    if not kind:
+        if re.match(r"^https?://", target):
+            kind = "url"
+        elif target.isdigit():
+            kind = "port"
+        else:
+            kind = "static"
+    if kind not in _WEBAPP_KINDS:
+        return f"Error: kind must be one of {_WEBAPP_KINDS}."
+
+    from urllib.parse import quote
+
+    from models import Message, MessageRole, MessageStatus, Project, WebApp
+    from utils import utcnow as _utcnow
+
+    sess = _get_write_session()
+    try:
+        agent, err = _webapp_resolve_agent(sess, agent_id)
+        if err:
+            return err
+        project = agent.project
+        proj = sess.get(Project, project)
+        if proj is None:
+            return f"Error: project {project} not found."
+
+        meta = {"kind": kind, "target": target, "project": project,
+                "title": title, "description": description}
+        hint = ""
+        if kind == "static":
+            ppath = os.path.realpath(proj.path)
+            t = target
+            if t.startswith("/"):
+                rt = os.path.realpath(t)
+                if not rt.startswith(ppath + "/"):
+                    return (f"Error: {target} is outside project {project} "
+                            f"({proj.path}) — static apps must live inside "
+                            f"the project directory.")
+                t = rt[len(ppath) + 1:]
+            target = t.lstrip("./") or t
+            meta["target"] = target
+            if not os.path.isfile(os.path.join(ppath, target)):
+                return (f"Error: {target} not found in project {project}. "
+                        f"Create the file first.")
+        elif kind == "port":
+            port = int(target)
+            if not 1024 <= port <= 65535:
+                return "Error: port must be in 1024-65535."
+            backend_port = int(os.environ.get("PORT", "8080"))
+            if port == backend_port:
+                return "Error: cannot proxy the orchestrator's own port."
+            src = f"/api/preview/p/{_port_proxy_sig(project, port)}/{quote(project)}/{port}/"
+            meta["src"] = src
+            hint = (f"\n- Stable proxy prefix: `{src}`\n"
+                    f"- Prefix is stripped when proxying — root-served apps "
+                    f"(TensorBoard, http.server) work as-is; vite dev needs "
+                    f"base:'./'.")
+        else:
+            meta["src"] = target
+
+        now = _utcnow()
+        row = sess.query(WebApp).filter_by(
+            project=project, kind=kind, target=target).first()
+        if row is None:
+            row = WebApp(project=project, kind=kind, target=target,
+                         title=title, description=description,
+                         created_by_agent=agent.id, last_presented_at=now)
+            sess.add(row)
+        else:
+            if title:
+                row.title = title
+            if description:
+                row.description = description
+            row.last_presented_at = now
+
+        label = title or (f"localhost:{target}" if kind == "port" else target)
+        msg = Message(
+            agent_id=agent.id,
+            role=MessageRole.AGENT,
+            content=f"🖥️ Web app: {label}",
+            status=MessageStatus.COMPLETED,
+            source="mcp",
+            kind="webapp",
+            jsonl_uuid=f"mcp-webapp-{os.urandom(6).hex()}",
+            meta_json=json.dumps({"webapp": meta}),
+            created_at=now,
+            completed_at=now,
+        )
+        sess.add(msg)
+        sess.commit()
+        sess.refresh(msg)
+        _ping_emit_message(msg.id)
+        return (f"Web app card posted to chat (message {msg.id}, kind={kind}).\n"
+                f"- Registered: {project} / {kind} / {target}\n"
+                f"- The user can tap the card to open it.{hint}")
+    finally:
+        sess.close()
+
+
+@server.tool()
+def webapp_list(project: str = "") -> str:
+    """List registered web apps (interactive viewers, dashboards, demos).
+
+    Check this BEFORE building a new viewer — an existing one may already
+    do the job; re-present it with webapp_present(target=...).
+
+    Args:
+        project: Project name. Empty = infer from the calling agent,
+            falling back to all projects.
+    """
+    from models import WebApp
+
+    sess = _get_write_session()
+    try:
+        q = sess.query(WebApp)
+        if not project:
+            agent, _err = _webapp_resolve_agent(sess)
+            if agent is not None:
+                project = agent.project
+        if project:
+            q = q.filter(WebApp.project == project)
+        rows = q.order_by(WebApp.last_presented_at.desc().nulls_last()).all()
+        if not rows:
+            scope = f"project `{project}`" if project else "any project"
+            return (f"No web apps registered for {scope}. "
+                    f"Present one with webapp_present.")
+        lines = [f"Found {len(rows)} web app(s)"
+                 + (f" in `{project}`" if project else "") + ":\n"]
+        for r in rows:
+            label = r.title or r.target
+            lines.append(f"- **{label}** — kind={r.kind}, target=`{r.target}`"
+                         + (f", project={r.project}" if not project else ""))
+            if r.description:
+                lines.append(f"  {r.description}")
+            if r.last_presented_at:
+                lines.append(f"  last presented: {r.last_presented_at:%Y-%m-%d %H:%M}")
+        return "\n".join(lines)
+    finally:
+        sess.close()
 
 
 # ---------------------------------------------------------------------------

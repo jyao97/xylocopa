@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from config import DEFAULT_CLAUDE_MODEL
@@ -420,6 +420,34 @@ class SessionViewEvent(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ended_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class WebApp(Base):
+    """Registry of presentable web apps — interactive deliverables agents
+    surface in chat via the MCP webapp_present tool.
+
+    kind:
+      static — agent-built static app; target is a project-relative path
+               to the entry .html, served sandboxed via /api/preview/t/
+      port   — local service (TensorBoard, vite dev) on 127.0.0.1:target,
+               reverse-proxied via /api/preview/p/
+      url    — external dashboard (e.g. wandb); opens in a new tab since
+               most external sites forbid framing
+    """
+    __tablename__ = "webapps"
+    __table_args__ = (
+        UniqueConstraint("project", "kind", "target", name="uq_webapps_target"),
+    )
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=_new_uuid)
+    project: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # "static" | "port" | "url"
+    target: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_by_agent: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_presented_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class CCSession(Base):

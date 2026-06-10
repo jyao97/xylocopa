@@ -13,16 +13,22 @@ Security model:
   can never read the app origin's localStorage (where the session JWT lives).
 """
 
+import hashlib
+import hmac
 import logging
 import mimetypes
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
+from starlette.websockets import WebSocketDisconnect
 
 from auth import create_token, decode_token, get_jwt_secret
-from database import get_db
+from config import PORT
+from database import SessionLocal, get_db
+from models import WebApp
 from route_helpers import get_project_or_404
 
 logger = logging.getLogger("orchestrator")
@@ -150,3 +156,157 @@ async def serve_preview_file(token: str, project: str, path: str,
             html = f.read().decode("utf-8", errors="replace")
         return HTMLResponse(_inject_console_capture(html), headers=_PREVIEW_HEADERS)
     return FileResponse(full_path, media_type=media_type, headers=_PREVIEW_HEADERS)
+
+
+# ---------------------------------------------------------------------------
+# Port proxy — kind="port" web apps (TensorBoard, dev servers)
+# ---------------------------------------------------------------------------
+#
+# Unlike static previews (short-lived JWT, minted per open), port proxies use
+# a stable HMAC capability signature so the prefix /api/preview/p/{sig}/...
+# never changes for a given (project, port). That lets prefix-aware services
+# be launched once with a fixed base path, and lets cards embed a permanent
+# src. Rotating the JWT secret invalidates all signatures. The proxied path
+# is forwarded with the prefix STRIPPED (upstream sees /), which matches
+# root-served apps (TensorBoard, python -m http.server, vite with base:'./').
+
+_HOP_BY_HOP = {
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade",
+}
+# Stripped from upstream responses: hop-by-hop, length/encoding (httpx hands
+# us decoded bytes), and framing headers we override with _PREVIEW_HEADERS.
+_STRIP_RESP = _HOP_BY_HOP | {
+    "content-length", "content-encoding", "content-security-policy",
+    "access-control-allow-origin", "cache-control", "x-frame-options",
+}
+
+
+def port_proxy_sig(jwt_secret: str, project: str, port: int) -> str:
+    """Stable capability signature for one (project, port) proxy prefix."""
+    msg = f"preview-port:{project}:{port}".encode()
+    return hmac.new(jwt_secret.encode(), msg, hashlib.sha256).hexdigest()[:32]
+
+
+def _check_port_proxy(db, sig: str, project: str, port: int) -> None:
+    """Validate a port-proxy request; raises HTTPException on failure."""
+    if not 1024 <= port <= 65535:
+        raise HTTPException(status_code=400, detail="Port out of range")
+    if port == PORT:
+        # Never proxy to the orchestrator itself — that would let preview
+        # content reach the API without auth.
+        raise HTTPException(status_code=403, detail="Port not allowed")
+    expected = port_proxy_sig(get_jwt_secret(db), project, port)
+    if not hmac.compare_digest(sig, expected):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    registered = db.query(WebApp).filter_by(
+        project=project, kind="port", target=str(port)).first()
+    if registered is None:
+        raise HTTPException(status_code=403, detail="Port not registered")
+
+
+@router.api_route("/api/preview/p/{sig}/{project}/{port}/{path:path}",
+                  methods=["GET", "POST", "HEAD"])
+async def proxy_preview_port(sig: str, project: str, port: int, path: str,
+                             request: Request, db: Session = Depends(get_db)):
+    """Reverse-proxy a registered localhost service for sandboxed preview."""
+    _check_port_proxy(db, sig, project, port)
+
+    upstream_url = f"http://127.0.0.1:{port}/{path}"
+    if request.url.query:
+        upstream_url += "?" + request.url.query
+    fwd_headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP
+        and k.lower() not in ("host", "authorization", "cookie")
+    }
+    body = await request.body()
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10, read=120)) as client:
+            up = await client.request(request.method, upstream_url,
+                                      headers=fwd_headers, content=body)
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502,
+                            detail=f"Nothing listening on 127.0.0.1:{port}")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Upstream error: {type(e).__name__}")
+
+    resp_headers = {
+        k: v for k, v in up.headers.items() if k.lower() not in _STRIP_RESP
+    }
+    resp_headers.update(_PREVIEW_HEADERS)
+
+    ctype = up.headers.get("content-type", "")
+    if "text/html" in ctype and request.method != "HEAD":
+        html = up.content.decode("utf-8", errors="replace")
+        return HTMLResponse(_inject_console_capture(html),
+                            status_code=up.status_code, headers=resp_headers)
+    return Response(content=up.content, status_code=up.status_code,
+                    headers=resp_headers, media_type=ctype or None)
+
+
+@router.websocket("/api/preview/p/{sig}/{project}/{port}/{path:path}")
+async def proxy_preview_port_ws(websocket: WebSocket, sig: str, project: str,
+                                port: int, path: str):
+    """Bidirectional WebSocket relay (vite HMR, live dashboards)."""
+    import asyncio
+
+    import websockets as ws_client
+
+    db = SessionLocal()
+    try:
+        _check_port_proxy(db, sig, project, port)
+    except HTTPException:
+        await websocket.close(code=4403)
+        return
+    finally:
+        db.close()
+
+    upstream_uri = f"ws://127.0.0.1:{port}/{path}"
+    query = websocket.scope.get("query_string", b"").decode()
+    if query:
+        upstream_uri += "?" + query
+    requested_protocols = [
+        p.strip() for p in
+        websocket.headers.get("sec-websocket-protocol", "").split(",") if p.strip()
+    ]
+
+    try:
+        async with ws_client.connect(
+            upstream_uri,
+            subprotocols=requested_protocols or None,
+            open_timeout=10,
+        ) as upstream:
+            await websocket.accept(subprotocol=upstream.subprotocol)
+
+            async def client_to_upstream():
+                while True:
+                    msg = await websocket.receive()
+                    if msg["type"] == "websocket.disconnect":
+                        return
+                    if msg.get("text") is not None:
+                        await upstream.send(msg["text"])
+                    elif msg.get("bytes") is not None:
+                        await upstream.send(msg["bytes"])
+
+            async def upstream_to_client():
+                async for msg in upstream:
+                    if isinstance(msg, str):
+                        await websocket.send_text(msg)
+                    else:
+                        await websocket.send_bytes(msg)
+
+            done, pending = await asyncio.wait(
+                [asyncio.create_task(client_to_upstream()),
+                 asyncio.create_task(upstream_to_client())],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+    except (OSError, ws_client.exceptions.WebSocketException, WebSocketDisconnect) as e:
+        logger.debug("port-proxy ws closed: %s", type(e).__name__)
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass

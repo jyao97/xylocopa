@@ -1828,3 +1828,31 @@ async def hook_agent_session_start(request: Request):
     logger.info("SessionStart hook: unmanaged session %s → unlinked entry (project=%s, pane=%s)",
                 session_id[:12], matched_proj.name, tmux_pane)
     return {}
+
+
+@router.post("/api/hooks/emit-message")
+async def hook_emit_message(request: Request, db: Session = Depends(get_db)):
+    """Re-emit the new_message WS signal for an MCP-inserted message.
+
+    The MCP server runs as a stdio subprocess outside this process, so it
+    writes Message rows directly to the DB and then pings this endpoint for
+    an instant UI update (the 5s poll covers the failure case). Emit-only —
+    no writes — restricted to kind="webapp" rows, so the unauthenticated
+    hook surface can at worst trigger a redundant refetch.
+    """
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return {}
+    message_id = (body.get("message_id") or "").strip() if isinstance(body, dict) else ""
+    if not message_id:
+        return {}
+    msg = db.get(Message, message_id)
+    if msg is None or msg.kind != "webapp":
+        return {}
+    agent = db.get(Agent, msg.agent_id)
+    from websocket import emit_new_message
+    await emit_new_message(msg.agent_id, msg.id,
+                           agent.name if agent else "",
+                           agent.project if agent else "")
+    return {"ok": True}

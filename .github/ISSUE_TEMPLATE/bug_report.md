@@ -8,26 +8,25 @@ assignees: ''
 
 ## Description
 
-A clear and concise description of what the bug is.
+What the bug is, in a sentence or two.
 
 ## Steps to Reproduce
 
 1. Go to '...'
 2. Click on '...'
-3. Scroll down to '...'
-4. See error
+3. See error
 
 ## Expected Behavior
 
-A clear and concise description of what you expected to happen.
+What you expected to happen.
 
 ## Actual Behavior
 
-A clear and concise description of what actually happened. Include any error messages or log output.
+What actually happened, including any error messages.
 
 ## Screenshots
 
-If applicable, add screenshots to help explain your problem.
+If applicable.
 
 ## Environment
 

@@ -130,8 +130,9 @@ is always re-fetched from the display file, **never pushed as WS payload**.
 ## MCP server, cross-session reference
 
 `orchestrator/mcp_server.py` runs as a stdio MCP server per-agent (spawned
-via `.mcp.json`). It exposes three tools: `list_sessions`, `read_session`,
-`create_task`.
+via `.mcp.json`). It exposes the agent control plane — project, task,
+session, agent, probe, webapp, and system tools; the full list and safety
+model are in [agent-mcp-tools.md](agent-mcp-tools.md).
 
 ### Which layer does the MCP server read?
 

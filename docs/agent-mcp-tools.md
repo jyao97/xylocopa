@@ -42,7 +42,7 @@ Other guarantees:
 
 ---
 
-## Tools by domain (17 canonical + 6 back-compat aliases)
+## Tools by domain (23 canonical + 6 back-compat aliases)
 
 ### project
 
@@ -79,6 +79,33 @@ Other guarantees:
 |---|---|---|
 | `agent_list(project="", status="", limit=30)` | list | List agents, ordered by last activity. Filter by project + status. |
 | `agent_get(agent_id)` | get | Full agent record: status, mode, session_id, model/effort, branch/worktree, tmux pane, task linkage, parent/subagent, unread, last-message preview. |
+
+### probe
+
+Event-driven chat wake-up: an agent registers a one-shot webhook and hands
+the URL to whatever monitors an external condition (CI, cron, a long build).
+POSTing the URL injects an envelope-wrapped message into the target chat
+and burns the token.
+
+| Tool | Verb | Effect |
+|---|---|---|
+| `probe_create(agent_id, message, expires_in_hours=24)` | create | Register a one-shot webhook; returns the trigger URL. Max 10 active per agent; max expiry 168 h. |
+| `probe_list(agent_id="", include_fired=False)` | list | Active probes, optionally including fired ones. |
+| `probe_get(probe_id)` | get | Full probe record. |
+| `probe_update(probe_id, expires_at="")` | update | Extend or shrink expiry. Setting a past time is the supported cancel path (`delete` is forbidden by the verb whitelist). |
+
+### webapp
+
+Interactive deliverables presented as tappable cards in chat. Three target
+kinds, auto-detected: `static` (project-relative .html, served in a
+credential-less sandboxed iframe), `port` (localhost service reverse-proxied,
+e.g. TensorBoard — cookie-session apps must use `url` instead), `url`
+(external dashboard, opens in a new tab).
+
+| Tool | Verb | Effect |
+|---|---|---|
+| `webapp_present(target, title="", description="", kind="", agent_id="")` | create | Post a web-app card to the calling agent's chat and upsert the project registry. For `port`, returns the stable proxy prefix. |
+| `webapp_list(project="")` | list | Registered web apps for a project (inferred from the calling agent if empty). Check before building a new viewer. |
 
 ### system
 
@@ -139,11 +166,9 @@ deliberate design conversation, not a tool addition.
 
 Standalone test script at
 [`orchestrator/test_mcp_tools.py`](../orchestrator/test_mcp_tools.py)
-sets up a temp `XYLOCOPA_ROOT`, exercises every tool's happy + error path,
-verifies alias byte-equality, and tears down. Run:
+sets up a temp `XYLOCOPA_ROOT`, exercises the project/task/session/agent/system
+tools' happy + error paths, verifies alias byte-equality, and tears down. Run:
 
 ```bash
 cd orchestrator && ../.venv/bin/python test_mcp_tools.py
 ```
-
-46 assertions across 23 tools.

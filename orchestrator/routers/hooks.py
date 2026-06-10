@@ -1836,9 +1836,9 @@ async def hook_emit_message(request: Request, db: Session = Depends(get_db)):
 
     The MCP server runs as a stdio subprocess outside this process, so it
     writes Message rows directly to the DB and then pings this endpoint for
-    an instant UI update (the 5s poll covers the failure case). Emit-only —
-    no writes — restricted to kind="webapp" rows, so the unauthenticated
-    hook surface can at worst trigger a redundant refetch.
+    an instant UI update (the 5s poll covers the failure case). Restricted
+    to kind="webapp" rows, so the unauthenticated hook surface can at worst
+    flush a display file and trigger a redundant refetch.
     """
     try:
         body = await request.json()
@@ -1851,6 +1851,14 @@ async def hook_emit_message(request: Request, db: Session = Depends(get_db)):
     if msg is None or msg.kind != "webapp":
         return {}
     agent = db.get(Agent, msg.agent_id)
+    # Flush to the display file before emitting — DB rows are invisible to
+    # the frontend until display_writer writes them, and idle/stopped agents
+    # have no sync loop running to do it for them.
+    from display_writer import flush_agent
+    try:
+        flush_agent(msg.agent_id)
+    except Exception:  # noqa: BLE001 — the WS signal is still worth sending
+        logger.exception("emit-message: flush_agent failed for %s", msg.agent_id[:8])
     from websocket import emit_new_message
     await emit_new_message(msg.agent_id, msg.id,
                            agent.name if agent else "",

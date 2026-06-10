@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { mintPreviewToken } from "../lib/api";
 import { previewUrl } from "../lib/urls";
+import { useWsEvent } from "../hooks/useWebSocket";
 
 // Sandbox WITHOUT allow-same-origin: the app runs in an opaque origin and
 // cannot read the parent's localStorage (where the session JWT lives). The
@@ -219,45 +220,58 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
 }
 
 // ---------------------------------------------------------------------------
-// Per-chat dock — keeps minimized web apps mounted so heavy apps (3DGS
-// viewers, WebGL scenes) restore instantly instead of reloading. Scoped to
-// one agent chat: navigating away or switching agents tears everything down.
+// Global dock — keeps minimized web apps mounted so heavy apps (3DGS
+// viewers, WebGL scenes) restore instantly instead of reloading. Apps
+// survive navigation; an app is torn down only when its agent fully stops
+// (agent_update → STOPPED/ERROR) or the user closes it explicitly.
 // ---------------------------------------------------------------------------
 
-const DOCK_OPEN_EVENT = "xy-webapp-dock-open";
+let _dockApps = []; // [{ key, agentId, app, minimized }]
+let _dockHostCount = 0;
+const _dockListeners = new Set();
+const _dockNotify = () => { for (const l of _dockListeners) l(_dockApps); };
 
-/** Ask the chat's dock to open/restore an app. Returns false if no dock for
- *  this agent is mounted (caller falls back to a local one-shot panel). */
-function requestDockOpen(agentId, app) {
-  const detail = { agentId, app, handled: false };
-  window.dispatchEvent(new CustomEvent(DOCK_OPEN_EVENT, { detail }));
-  return detail.handled;
+/** Open (or restore) an app in the global dock. Returns false when no host
+ *  is mounted — caller falls back to a local one-shot panel. */
+function dockOpenApp(agentId, app) {
+  if (_dockHostCount === 0) return false;
+  const key = `${agentId}:${app.kind}:${app.project}:${app.path || app.src}`;
+  // One fullscreen panel at a time: opening one minimizes the others.
+  _dockApps = _dockApps.some((x) => x.key === key)
+    ? _dockApps.map((x) => ({ ...x, minimized: x.key !== key }))
+    : [..._dockApps.map((x) => ({ ...x, minimized: true })), { key, agentId, app, minimized: false }];
+  _dockNotify();
+  return true;
 }
 
-export function WebAppDock({ agentId }) {
-  const [apps, setApps] = useState([]); // [{ key, app, minimized }]
-
-  // Switching to another agent's chat counts as closing this chat.
-  useEffect(() => { setApps([]); }, [agentId]);
+export function WebAppDockHost() {
+  const [apps, setApps] = useState(_dockApps);
 
   useEffect(() => {
-    const onOpen = (e) => {
-      if (e.detail.agentId !== agentId) return;
-      e.detail.handled = true;
-      const app = e.detail.app;
-      const key = `${app.kind}:${app.project}:${app.path || app.src}`;
-      // One fullscreen panel at a time: opening one minimizes the others.
-      setApps((prev) => prev.some((x) => x.key === key)
-        ? prev.map((x) => ({ ...x, minimized: x.key !== key }))
-        : [...prev.map((x) => ({ ...x, minimized: true })), { key, app, minimized: false }]);
+    _dockHostCount += 1;
+    const listener = (a) => setApps(a);
+    _dockListeners.add(listener);
+    setApps(_dockApps);
+    return () => {
+      _dockHostCount -= 1;
+      _dockListeners.delete(listener);
     };
-    window.addEventListener(DOCK_OPEN_EVENT, onOpen);
-    return () => window.removeEventListener(DOCK_OPEN_EVENT, onOpen);
-  }, [agentId]);
+  }, []);
 
-  const minimize = (key) => setApps((p) => p.map((x) => (x.key === key ? { ...x, minimized: true } : x)));
-  const restore = (key) => setApps((p) => p.map((x) => ({ ...x, minimized: x.key !== key })));
-  const close = (key) => setApps((p) => p.filter((x) => x.key !== key));
+  // An agent that fully stops takes its mounted apps with it. IDLE is the
+  // normal between-turns state and must not tear anything down.
+  useWsEvent((event) => {
+    if (event.type !== "agent_update") return;
+    const { agent_id: aid, status } = event.data || {};
+    if ((status === "STOPPED" || status === "ERROR") && _dockApps.some((x) => x.agentId === aid)) {
+      _dockApps = _dockApps.filter((x) => x.agentId !== aid);
+      _dockNotify();
+    }
+  });
+
+  const minimize = (key) => { _dockApps = _dockApps.map((x) => (x.key === key ? { ...x, minimized: true } : x)); _dockNotify(); };
+  const restore = (key) => { _dockApps = _dockApps.map((x) => ({ ...x, minimized: x.key !== key })); _dockNotify(); };
+  const close = (key) => { _dockApps = _dockApps.filter((x) => x.key !== key); _dockNotify(); };
 
   const chips = apps.filter((x) => x.minimized);
 
@@ -337,9 +351,9 @@ export function WebAppCardBubble({ message, agentId }) {
       src: app.kind === "port" ? app.src : undefined,
       filename: label,
     };
-    // Prefer the chat's dock (minimizable, state survives); fall back to a
-    // local one-shot panel if no dock is mounted.
-    if (!requestDockOpen(agentId, spec)) setOpen(true);
+    // Prefer the global dock (minimizable, survives navigation); fall back
+    // to a local one-shot panel if no host is mounted.
+    if (!dockOpenApp(agentId, spec)) setOpen(true);
   };
 
   return (

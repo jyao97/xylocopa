@@ -65,7 +65,7 @@ class SafeMarkdown extends Component {
   }
 }
 import FileAttachments from "../components/FilePreview";
-import { WebAppCardBubble, WebAppDock } from "../components/WebAppPreview";
+import { WebAppCardBubble } from "../components/WebAppPreview";
 import BookmarkNotePrompt from "../components/BookmarkNotePrompt";
 import ImageLightbox from "../components/ImageLightbox";
 import {
@@ -5137,10 +5137,6 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         messageId={noteForBookmarkId}
         onClose={() => setNoteForBookmarkId(null)}
       />
-      {/* Per-chat web-app dock: minimized previews stay mounted (instant
-          restore for heavy apps); unmounting this page or switching agents
-          tears them all down. */}
-      <WebAppDock agentId={id} />
     </div>
   );
 }

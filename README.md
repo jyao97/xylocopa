@@ -33,7 +33,7 @@ One click turns a task into an agent: pick a model (Opus/Sonnet/Haiku), optional
 
 A mobile-first PWA with split screen (up to 4 panes) and an attention button that always takes you to the oldest unread agent. The chat renders markdown, inline media, LaTeX, and interactive cards for tool approvals and plan review.
 
-Agents can also hand you runnable deliverables: the `webapp_present` MCP tool posts a card that opens a static web app or a proxied localhost service (TensorBoard, dev servers) fullscreen in a sandboxed iframe, with a console drawer for debugging. Panels minimize to a per-chat dock — the app keeps running and restores instantly — and everything closes with the chat. Touch interaction works on mobile.
+Agents can also hand you runnable deliverables: the `webapp_present` MCP tool posts a card that opens a static web app or a proxied localhost service (TensorBoard, dev servers) fullscreen in a sandboxed iframe, with a console drawer for debugging. Panels minimize to a dock and keep running while you browse — restore is instant — and are torn down when their agent stops. Touch interaction works on mobile.
 
 <img src="docs/webapp-preview.png" alt="Agent-built 3D exoplanet explorer (6,271 planets from the NASA Exoplanet Archive) running sandboxed in chat on an iPhone" width="280">
 

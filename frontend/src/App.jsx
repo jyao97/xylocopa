@@ -11,6 +11,7 @@ import usePageVisible from "./hooks/usePageVisible";
 import { MonitorProvider } from "./contexts/MonitorContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
+import { WebAppDockHost } from "./components/WebAppPreview";
 import { UnreadProvider, useUnread } from "./contexts/UnreadContext";
 import { AgentsProvider } from "./contexts/AgentsContext";
 import { FoldersProvider } from "./contexts/FoldersContext";
@@ -646,6 +647,9 @@ export default function App() {
                 <FoldersProvider>
                 <InboxTasksProvider>
                   <AppChrome themeProps={themeProps} />
+                  {/* Global web-app dock: minimized previews survive
+                      navigation; torn down when their agent fully stops. */}
+                  <WebAppDockHost />
                 </InboxTasksProvider>
                 </FoldersProvider>
                 </AgentsProvider>

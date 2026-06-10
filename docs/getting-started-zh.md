@@ -4,7 +4,7 @@
 >
 > English: [getting-started.md](getting-started.md)
 
-这份文档针对刚装完 Xylocopa（[安装步骤](../README.md#host-setup)）但不知道接下来该怎么用的新人。它**不**重复 README 里的功能列表，而是回答每个新用户都会卡住的三个问题：
+这份文档针对刚装完 Xylocopa（[安装步骤](../README.md#getting-started)）但不知道接下来该怎么用的新人。它**不**重复 README 里的功能列表，而是回答每个新用户都会卡住的三个问题：
 
 1. **任务输入框底下那排按钮都是啥？**
 2. **Inbox / Project / Task / Agent / Session 这几个词都什么意思，互相怎么配合？**

@@ -4,7 +4,7 @@
 >
 > 中文版：[getting-started-zh.md](getting-started-zh.md)
 
-This guide is for people who just installed Xylocopa (see the [host setup](../README.md#host-setup) in README if you haven't) and want to understand what to actually do with it. It does **not** repeat the feature list, for that, read the README. It answers the three questions every new user hits:
+This guide is for people who just installed Xylocopa (see the [host setup](../README.md#getting-started) in README if you haven't) and want to understand what to actually do with it. It does **not** repeat the feature list, for that, read the README. It answers the three questions every new user hits:
 
 1. **What are all those buttons in the task-input panel?**
 2. **What's the difference between Inbox, Project, Task, Agent, and Session, and how do they fit together?**

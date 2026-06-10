@@ -50,11 +50,17 @@ function ConsoleDrawer({ logs, onClear }) {
 }
 
 /**
- * Fullscreen sandboxed preview of an agent-built web app, with a console
- * drawer fed by the capture script the backend injects into served HTML.
+ * Fullscreen sandboxed preview of an agent web app, with a console drawer
+ * fed by the capture script the backend injects into served HTML.
+ *
+ * Two source modes:
+ *  - static: pass project + path → a preview-scoped token is minted and the
+ *    iframe loads /api/preview/t/{token}/...
+ *  - direct: pass src (stable port-proxy prefix from webapp_present
+ *    metadata) → used as-is, no mint.
  */
-export default function WebAppPreview({ project, path, filename, onClose }) {
-  const [src, setSrc] = useState(null);
+export default function WebAppPreview({ project, path, src: directSrc, filename, onClose }) {
+  const [src, setSrc] = useState(directSrc || null);
   const [error, setError] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [showConsole, setShowConsole] = useState(false);
@@ -65,6 +71,10 @@ export default function WebAppPreview({ project, path, filename, onClose }) {
 
   // Mint a preview-scoped token, then point the iframe at the path-token URL.
   useEffect(() => {
+    if (directSrc) {
+      setSrc(directSrc);
+      return undefined;
+    }
     let cancelled = false;
     mintPreviewToken(project)
       .then(({ token }) => {
@@ -74,7 +84,7 @@ export default function WebAppPreview({ project, path, filename, onClose }) {
         if (!cancelled) setError(e.message || "Failed to start preview");
       });
     return () => { cancelled = true; };
-  }, [project, path]);
+  }, [project, path, directSrc]);
 
   // Console messages from the sandboxed iframe (opaque origin → filter by source).
   useEffect(() => {
@@ -186,5 +196,71 @@ export default function WebAppPreview({ project, path, filename, onClose }) {
       {showConsole && <ConsoleDrawer logs={logs} onClear={() => setLogs([])} />}
     </div>,
     document.body
+  );
+}
+
+/**
+ * Chat bubble for kind="webapp" messages (posted by the MCP webapp_present
+ * tool). metadata.webapp = { kind, target, project, title, description,
+ * src? } — src is the stable proxy prefix (port) or external URL (url).
+ */
+export function WebAppCardBubble({ message }) {
+  const [open, setOpen] = useState(false);
+  const app = message.metadata?.webapp || {};
+  const isUrl = app.kind === "url";
+  const label = app.title
+    || (app.kind === "port" ? `localhost:${app.target}` : (app.target || "").split("/").pop());
+  const sub = isUrl ? app.target
+    : app.kind === "port" ? `local service · port ${app.target}`
+    : app.target;
+
+  const handleOpen = () => {
+    if (isUrl) {
+      window.open(app.target, "_blank", "noopener,noreferrer");
+    } else {
+      setOpen(true);
+    }
+  };
+
+  return (
+    <div className="flex justify-start my-2" data-msg-id={message.id} data-msg-type="webapp">
+      <div
+        onClick={handleOpen}
+        className="rounded-2xl rounded-bl-md bg-surface shadow-card overflow-hidden max-w-[min(85%,20rem)] cursor-pointer hover:bg-hover transition-colors"
+      >
+        <div className="flex items-center gap-2.5 px-4 py-3">
+          <svg className="w-5 h-5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <span className="text-sm text-label truncate block">{label}</span>
+            <span className="text-xs text-dim truncate block">{sub}</span>
+            {app.description && (
+              <span className="text-xs text-dim/80 mt-0.5 line-clamp-2 block">{app.description}</span>
+            )}
+          </div>
+          {isUrl ? (
+            <svg className="w-4 h-4 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+            </svg>
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-cyan-500/15 flex items-center justify-center shrink-0">
+              <svg className="w-3.5 h-3.5 ml-px text-cyan-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
+      {open && !isUrl && (
+        <WebAppPreview
+          project={app.project}
+          path={app.kind === "static" ? app.target : undefined}
+          src={app.kind === "port" ? app.src : undefined}
+          filename={label}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
   );
 }

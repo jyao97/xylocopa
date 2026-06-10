@@ -65,6 +65,7 @@ class SafeMarkdown extends Component {
   }
 }
 import FileAttachments from "../components/FilePreview";
+import { WebAppCardBubble } from "../components/WebAppPreview";
 import BookmarkNotePrompt from "../components/BookmarkNotePrompt";
 import ImageLightbox from "../components/ImageLightbox";
 import {
@@ -1196,6 +1197,11 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   // Sub-agent task notifications get their own collapsible bubble
   if (message.metadata?.task_notification || (message.content || "").trimStart().startsWith("<task-notification>")) {
     return <SubAgentBubble message={message} project={project} />;
+  }
+
+  // Web app cards posted via the MCP webapp_present tool
+  if (message.kind === "webapp" && message.metadata?.webapp) {
+    return <WebAppCardBubble message={message} />;
   }
 
   const isUser = message.role === "USER";

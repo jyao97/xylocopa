@@ -529,7 +529,6 @@ function resolveFileUrl(rawPath, defaultProject) {
 // File extension groups
 const IMAGE_EXTS = /\.(png|jpg|jpeg|gif|svg|webp)$/i;
 const VIDEO_EXTS = /\.(mp4|webm|mov)$/i;
-const WEBAPP_EXTS = /\.html?$/i;
 const DOC_EXTS = /\.(py|js|ts|jsx|tsx|html|css|md|txt|pdf|xlsx|xls|docx|doc|pptx|ppt|sh|bash|rb|go|rs|c|cpp|h|hpp|java|kt|swift|yaml|yml|toml|xml|sql|r|lua|pl|ex|exs|zig|nim|dart|scala|clj|hs|erl|elm|tex|bib)$/i;
 const CSV_EXTS = /\.(csv)$/i;
 const IGNORE_EXTS = /\.(jsonl|log|json|lock)$/i;
@@ -555,9 +554,6 @@ export function stripAttachmentTags(text) {
 function classifyExt(filename) {
   if (IMAGE_EXTS.test(filename)) return "image";
   if (VIDEO_EXTS.test(filename)) return "video";
-  // Before DOC_EXTS — .html is also a doc ext, but renders as a runnable
-  // web-app preview card instead of a collapsible source card.
-  if (WEBAPP_EXTS.test(filename)) return "webapp";
   if (CSV_EXTS.test(filename)) return "csv";
   if (DOC_EXTS.test(filename)) return "doc";
   return "file";

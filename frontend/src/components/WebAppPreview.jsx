@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { mintPreviewToken } from "../lib/api";
 import { previewUrl } from "../lib/urls";
 import { useWsEvent } from "../hooks/useWebSocket";
+import WebAppDock from "./WebAppDock";
 
 // Sandbox WITHOUT allow-same-origin: the app runs in an opaque origin and
 // cannot read the parent's localStorage (where the session JWT lives). The
@@ -289,37 +290,7 @@ export function WebAppDockHost() {
           onClose={() => close(key)}
         />
       ))}
-      {chips.length > 0 && createPortal(
-        <div
-          className="fixed left-3 z-40 flex flex-wrap gap-2 max-w-[calc(100vw-24px)]"
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)" }}
-        >
-          {chips.map(({ key, app }) => (
-            <div
-              key={key}
-              onClick={() => restore(key)}
-              title="Restore app"
-              className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-full bg-elevated border border-divider shadow-card cursor-pointer hover:bg-hover transition-colors"
-            >
-              <svg className="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
-              </svg>
-              <span className="text-xs text-label max-w-[120px] truncate">{app.filename}</span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); close(key); }}
-                title="Close app"
-                className="p-0.5 rounded-full hover:bg-hover text-dim hover:text-label"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
+      <WebAppDock chips={chips} onRestore={restore} onClose={close} />
     </>
   );
 }

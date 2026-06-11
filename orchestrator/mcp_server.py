@@ -1917,7 +1917,10 @@ def webapp_present(target: str, title: str = "", description: str = "",
     create cards — this tool is the only way to present one.
 
     Also registers the app in the project's web-app registry (see
-    webapp_list) so future agents can find and reuse it.
+    webapp_list) so future agents can discover and reuse the viewer
+    code. Port apps are NOT reusable as live services: the server
+    process is killed when the presenting agent stops, and presenting
+    a port transfers registry ownership to the caller.
 
     Args:
         target: One of (kind auto-detected):
@@ -1949,6 +1952,11 @@ def webapp_present(target: str, title: str = "", description: str = "",
           http.server) work unmodified.
         - The returned proxy prefix is stable — safe to reuse across
           service restarts.
+        - Launch your OWN server on a FREE port (a bind failure means
+          taken — pick another; ports in webapp_list may be dead, the
+          registry outlives processes). Never present a port whose
+          service another agent is still running: the process dies
+          when ITS presenting agent stops.
         - Cookie-less services only. The sandbox is credential-less by
           design, so login-session apps (wandb local, jupyter, grafana)
           render blank or hit a login wall when embedded — present those
@@ -2030,6 +2038,11 @@ def webapp_present(target: str, title: str = "", description: str = "",
                 row.title = title
             if description:
                 row.description = description
+            # Last presenter owns the process: ports get recycled, and the
+            # reaper kills by creator — without this transfer, a new server
+            # launched on a previously-registered port would be reaped as
+            # an orphan of the old (stopped) creator.
+            row.created_by_agent = agent.id
             row.last_presented_at = now
 
         label = title or (f"localhost:{target}" if kind == "port" else target)
@@ -2060,8 +2073,11 @@ def webapp_present(target: str, title: str = "", description: str = "",
 def webapp_list(project: str = "") -> str:
     """List registered web apps (interactive viewers, dashboards, demos).
 
-    Check this BEFORE building a new viewer — an existing one may already
-    do the job; re-present it with webapp_present(target=...).
+    Check this BEFORE building a new viewer — the CODE may already exist
+    (webapps/<name>/). static entries can be re-presented as-is; for port
+    entries launch a FRESH instance on a free port and present that — a
+    port's process dies with its presenting agent, so never point a card
+    at another agent's live port.
 
     Args:
         project: Project name. Empty = infer from the calling agent,

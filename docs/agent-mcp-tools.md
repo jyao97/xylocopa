@@ -106,7 +106,9 @@ Lifecycle: a `port` app's server process belongs to the presenting agent and
 is killed when that agent stops (plus a startup sweep for orphans) — see
 `orchestrator/webapp_reaper.py`. Agents must launch their own instance on a
 free port; reuse viewer *code* (`webapps/<name>/`), never another agent's
-live port. Registry rows are an append-only catalog and survive the process.
+live port. Presenting a port transfers registry ownership to the latest
+presenter (ports get recycled — the reaper kills by current owner). Registry
+rows are an append-only catalog and survive the process.
 
 | Tool | Verb | Effect |
 |---|---|---|

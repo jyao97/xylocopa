@@ -102,6 +102,12 @@ credential-less sandboxed iframe), `port` (localhost service reverse-proxied,
 e.g. TensorBoard — cookie-session apps must use `url` instead), `url`
 (external dashboard, opens in a new tab).
 
+Lifecycle: a `port` app's server process belongs to the presenting agent and
+is killed when that agent stops (plus a startup sweep for orphans) — see
+`orchestrator/webapp_reaper.py`. Agents must launch their own instance on a
+free port; reuse viewer *code* (`webapps/<name>/`), never another agent's
+live port. Registry rows are an append-only catalog and survive the process.
+
 | Tool | Verb | Effect |
 |---|---|---|
 | `webapp_present(target, title="", description="", kind="", agent_id="")` | create | Post a web-app card to the calling agent's chat and upsert the project registry. For `port`, returns the stable proxy prefix. |

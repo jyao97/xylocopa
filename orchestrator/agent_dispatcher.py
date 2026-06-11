@@ -2357,6 +2357,14 @@ Here are the day's conversations (with timestamps):
 
         agent.status = AgentStatus.STOPPED
 
+        # Port web apps die with their presenting agent (one live instance
+        # per agent by design — see webapp_reaper module docstring).
+        try:
+            from webapp_reaper import reap_agent_webapps
+            reap_agent_webapps(db, agent.id)
+        except Exception:
+            logger.exception("webapp reaper failed for agent %s", agent.id[:8])
+
         if fail_executing:
             executing_msgs = db.query(Message).filter(
                 Message.agent_id == agent.id,
@@ -2452,6 +2460,13 @@ Here are the day's conversations (with timestamps):
         self._clear_agent_pane(db, agent, kill_tmux=kill_tmux)
 
         agent.status = AgentStatus.ERROR
+
+        # Port web apps die with their presenting agent (see webapp_reaper).
+        try:
+            from webapp_reaper import reap_agent_webapps
+            reap_agent_webapps(db, agent.id)
+        except Exception:
+            logger.exception("webapp reaper failed for agent %s", agent.id[:8])
 
         if fail_executing:
             for m in db.query(Message).filter(

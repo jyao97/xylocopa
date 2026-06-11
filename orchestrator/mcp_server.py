@@ -172,8 +172,12 @@ server = FastMCP(
         "- url — an external or cookie-authenticated dashboard (wandb.ai, "
         "wandb local, jupyter). Opens in a new tab with normal cookies; "
         "most such sites forbid iframe embedding anyway.\n"
-        "Check webapp_list before building a new viewer — one may already "
-        "exist; re-present it with webapp_present."
+        "Lifecycle: a port app belongs to the agent that presents it — its "
+        "server process is killed when that agent stops. Always launch your "
+        "OWN instance on a free port; never point a card at a port another "
+        "agent registered. Reuse viewer CODE, not live services: check "
+        "webapp_list / webapps/<name>/ for an existing viewer before "
+        "building a new one, then start a fresh instance of it."
     ),
 )
 

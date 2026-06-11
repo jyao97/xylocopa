@@ -379,6 +379,18 @@ async def lifespan(app: FastAPI):
     agent_dispatch_task = asyncio.create_task(agent_dispatcher.run())
     logger.info("Dispatcher started")
 
+    # Reap port-webapp processes orphaned by agents that stopped while the
+    # server was down (or before reap-on-stop existed).
+    try:
+        from webapp_reaper import reap_orphan_webapps
+        _db_reap = SessionLocal()
+        try:
+            reap_orphan_webapps(_db_reap)
+        finally:
+            _db_reap.close()
+    except Exception:
+        logger.exception("startup webapp orphan sweep failed")
+
     # Start session cache loop
     from session_cache import run_session_cache_loop
     session_cache_task = asyncio.create_task(

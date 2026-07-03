@@ -43,10 +43,13 @@ DEFAULT_CLAUDE_MODEL = "claude-opus-4-8"
 CC_MODEL = os.getenv("CC_MODEL", DEFAULT_CLAUDE_MODEL)
 
 # Model for internal claude -p summarization jobs (agent insights, retry
-# summaries, PROGRESS.md summaries, insight dedup). "sonnet" is a Claude CLI
-# alias that always resolves to the latest Sonnet — NOT the 1M-context
-# "sonnet[1m]" variant. Cheaper/faster than CC_MODEL for text-in/text-out work.
-SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "sonnet")
+# summaries, PROGRESS.md summaries, insight dedup). Pinned to the explicit
+# "claude-sonnet-5" id (standard 200K tier, NOT the "[1m]" variant) rather
+# than the bare "sonnet" CLI alias: the alias resolves through the inherited
+# ANTHROPIC_DEFAULT_SONNET_MODEL env var, which once mis-resolved to a
+# 1M-context model and failed insight generation with "Usage credits
+# required for 1M context". Cheaper/faster than CC_MODEL for text-in/text-out.
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "claude-sonnet-5")
 
 # Valid model names — keep in sync with frontend MODEL_OPTIONS
 VALID_MODELS = {
@@ -54,6 +57,7 @@ VALID_MODELS = {
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-4-6",
+    "claude-sonnet-5",
     "claude-sonnet-4-6",
     "claude-haiku-4-5-20251001",
 }

@@ -503,7 +503,7 @@ def task_create(
       model:
         - claude-haiku-4-5-20251001  → trivial scripts, single-file edits,
                                        no cross-module reasoning needed
-        - claude-sonnet-4-6           → most implementation work: bug fixes,
+        - claude-sonnet-5             → most implementation work: bug fixes,
                                        small features, refactors with clear
                                        scope, frontend tweaks
         - claude-opus-4-6             → architectural decisions, multi-file
@@ -630,7 +630,7 @@ def task_update(
         project: New project name. Must exist in the Project table.
             Empty = leave unchanged.
         model: New Claude model id (claude-haiku-4-5-20251001 |
-            claude-sonnet-4-6 | claude-opus-4-6 | claude-opus-4-7 |
+            claude-sonnet-5 | claude-opus-4-6 | claude-opus-4-7 |
             claude-opus-4-8 | claude-fable-5).
             Empty = leave unchanged.
         effort: New effort level (low|medium|high|xhigh|max).

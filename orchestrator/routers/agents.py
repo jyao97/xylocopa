@@ -54,7 +54,7 @@ logger = logging.getLogger("orchestrator")
 
 _MODEL_TO_ALIAS = {
     "claude-opus-4-6": "opus",
-    "claude-sonnet-4-6": "sonnet",
+    "claude-sonnet-5": "sonnet",
 }
 
 def _model_for_cli(model: str) -> str:

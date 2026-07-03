@@ -214,7 +214,7 @@ def create_tmux_claude_session(
     # Sonnet to standard 200K instead of [1m], otherwise every Sonnet agent fails
     # to launch. Re-add the [1m] suffix here if/when Sonnet 1M becomes available.
     env_setup += ' && export ANTHROPIC_DEFAULT_OPUS_MODEL="claude-opus-4-6[1m]"'
-    env_setup += ' && export ANTHROPIC_DEFAULT_SONNET_MODEL="claude-sonnet-4-6"'
+    env_setup += ' && export ANTHROPIC_DEFAULT_SONNET_MODEL="claude-sonnet-5"'
     if agent_id:
         env_setup += f" && export XY_AGENT_ID={agent_id} && export AHIVE_AGENT_ID={agent_id}"
     _sp.run(["tmux", "send-keys", "-t", pane_id, env_setup, "Enter"],

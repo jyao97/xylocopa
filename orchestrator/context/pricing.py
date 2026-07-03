@@ -29,7 +29,8 @@ PRICING: dict[str, dict[str, float]] = {
     # --- Opus 4 / 4.1 (legacy $15/$75) ---
     "claude-opus-4-1":   {"input": 15.00, "cache_create_5m": 18.75, "cache_create_1h": 30.00, "cache_read": 1.50, "output": 75.00},
     "claude-opus-4":     {"input": 15.00, "cache_create_5m": 18.75, "cache_create_1h": 30.00, "cache_read": 1.50, "output": 75.00},
-    # --- Sonnet 4.x ($3/$15) ---
+    # --- Sonnet 5 / 4.x ($3/$15) ---
+    "claude-sonnet-5":   {"input": 3.00,  "cache_create_5m": 3.75,  "cache_create_1h":  6.00, "cache_read": 0.30, "output": 15.00},
     "claude-sonnet-4-6": {"input": 3.00,  "cache_create_5m": 3.75,  "cache_create_1h":  6.00, "cache_read": 0.30, "output": 15.00},
     "claude-sonnet-4-5": {"input": 3.00,  "cache_create_5m": 3.75,  "cache_create_1h":  6.00, "cache_read": 0.30, "output": 15.00},
     "claude-sonnet-4":   {"input": 3.00,  "cache_create_5m": 3.75,  "cache_create_1h":  6.00, "cache_read": 0.30, "output": 15.00},

@@ -9,9 +9,9 @@
 
 <p align="center"><img src="docs/hero.png" alt="Xylocopa — Many projects. One attention." width="640"></p>
 
-Xylocopa is a task management system for running many [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents across many projects. You capture tasks and make decisions, agents do the work in parallel, and the system keeps the history and the lessons. The workflow follows [GTD](https://gettingthingsdone.com/what-is-gtd/), with agents as the executor.
+Xylocopa is a to-do list that runs your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. You capture tasks and make decisions — from your phone if you like — agents do the work in parallel across your projects, and the system keeps the history and the lessons. The workflow follows [GTD](https://gettingthingsdone.com/what-is-gtd/), with agents as the executor.
 
-Named after [Xylocopa caerulea](https://en.wikipedia.org/wiki/Xylocopa_caerulea), the blue carpenter bee. If you find it useful, a star helps others find it.
+Named after [Xylocopa caerulea](https://en.wikipedia.org/wiki/Xylocopa_caerulea), the blue carpenter bee — *xylocopa* (zy-LOCK-uh-puh) is Greek for "wood-cutter". If you find it useful, a star helps others find it.
 
 | <img src="docs/pwa/inbox.png" alt="Inbox" width="220"> | <img src="docs/pwa/projects.png" alt="Projects" width="220"> | <img src="docs/pwa/agents.png" alt="Agents" width="220"> |
 |:---:|:---:|:---:|
@@ -57,7 +57,7 @@ Lessons accumulate in a per-project `PROGRESS.md` that you can edit in the UI; r
 
 Plain `claude` works for one-off sessions. It frays once several run in parallel, across projects, over days: you lose track of which agent needs input, old sessions are hard to find, and every retry starts from scratch.
 
-Xylocopa is the task, attention, and memory layer around the same CLI. It launches the `claude` you already use inside tmux on your machine, so your CLAUDE.md files, project setup, and credentials carry over. The only new dependencies are tmux and, for remote access, a VPN such as Tailscale.
+Xylocopa is the task, attention, and memory layer around the same CLI. It launches the `claude` you already use inside tmux on your machine, so your CLAUDE.md files, project setup, and credentials carry over. The only new dependencies are tmux and, for remote access, a VPN such as Tailscale. And it's a server plus PWA rather than a desktop app: install it once on the machine where your code lives, then drive it from any browser — including the one in your pocket.
 
 The design assumes agents miss. Stopping a bad attempt produces a summary; the next attempt picks it up; durable lessons land in per-project memory rather than dying with the session.
 
@@ -130,7 +130,7 @@ Claude Code's own support for Amazon Bedrock, Google Vertex AI, and gateways lik
 curl -fsSL https://raw.githubusercontent.com/jyao97/xylocopa/master/setup.sh | bash
 ```
 
-The installer clones into `~/xylocopa-main`, prompts for your projects directory, default model, optional OpenAI key, and ports, then writes `.env`, generates SSL certs, installs dependencies, and starts the services. To clone manually instead:
+The installer clones into `~/xylocopa-main`, prompts for your projects directory, default model, optional OpenAI key, and ports, then writes `.env`, generates SSL certs, installs dependencies, and starts the services. Every setting lives in `.env`; [`.env.example`](.env.example) is the annotated reference. To clone manually instead:
 
 ```bash
 git clone https://github.com/jyao97/xylocopa.git ~/xylocopa-main

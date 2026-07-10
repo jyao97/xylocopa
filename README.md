@@ -16,8 +16,8 @@ Named after [Xylocopa caerulea](https://en.wikipedia.org/wiki/Xylocopa_caerulea)
 | <img src="docs/pwa/inbox.png" alt="Inbox" width="220"> | <img src="docs/pwa/projects.png" alt="Projects" width="220"> | <img src="docs/pwa/agents.png" alt="Agents" width="220"> |
 |:---:|:---:|:---:|
 | Inbox | Projects | Agents |
-| <img src="docs/pwa/chat-insights.png" alt="Chat with Progress Insights" width="220"> | <img src="docs/pwa/git.png" alt="Git" width="220"> | <img src="docs/pwa/monitor.png" alt="Monitor" width="220"> |
-| Chat | Git | Monitor |
+| <img src="docs/pwa/chat-insights.png" alt="Chat with Progress Insights" width="220"> | <img src="docs/webapp-preview.png" alt="Interactive artifact — agent-built 3D exoplanet explorer running sandboxed in chat" width="220"> | <img src="docs/pwa/monitor.png" alt="Monitor" width="220"> |
+| Chat | Interactive artifact | Monitor |
 
 ## The Loop
 
@@ -33,9 +33,7 @@ One click turns a task into an agent: pick a model (Opus/Sonnet/Haiku), optional
 
 A mobile-first PWA with split screen (up to 4 panes) and an attention button that always takes you to the oldest unread agent. The chat renders markdown, inline media, LaTeX, and interactive cards for tool approvals and plan review.
 
-Agents can also hand you runnable deliverables: the `webapp_present` MCP tool posts a card that opens a static web app or a proxied localhost service (TensorBoard, dev servers) fullscreen in a sandboxed iframe, with a console drawer for debugging. Panels minimize to a dock and keep running while you browse — restore is instant — and are torn down when their agent stops. Touch interaction works on mobile.
-
-<img src="docs/webapp-preview.png" alt="Agent-built 3D exoplanet explorer (6,271 planets from the NASA Exoplanet Archive) running sandboxed in chat on an iPhone" width="280">
+An agent's deliverable doesn't have to be a diff. Think artifacts, but self-hosted: the `webapp_present` MCP tool posts a card that opens the agent's work fullscreen in a sandboxed iframe — a static web app it built, or a proxied localhost service (TensorBoard, dev servers) — with a console drawer for debugging. Panels minimize to a dock and keep running while you browse — restore is instant — and are torn down when their agent stops. Touch interaction works on mobile: the interactive-artifact screenshot up top is an agent-built 3D explorer of 6,271 planets from the NASA Exoplanet Archive, running sandboxed in chat on an iPhone.
 
 Every agent runs in a tmux session you can attach to from a terminal, and CLI sessions show up in the web app — sync is two-way.
 
@@ -69,7 +67,7 @@ The design assumes agents miss. Stopping a bad attempt produces a summary; the n
 | **Task management** | Inbox with drag-to-reorder, voice input, quick capture, draft persistence, per-project organization, retry with auto-summarization. |
 | **Agent control** | Start/stop/resume (re-sync to existing tmux, or relaunch via `claude --resume`). Per-agent model selection, timeouts, permission modes. Batch dispatch. Context retrieval from past sessions at dispatch. Cross-session reference over MCP: agents read each other's curated display files at ~54× fewer tokens than raw JSONL. Subagent sessions surfaced in a Task → Xylo → CC → Sub-session hierarchy. |
 | **Chat** | Markdown, code blocks, tables, inline media, LaTeX. Plan approve/reject and tool-confirmation cards. Context-usage pill with a per-category breakdown read from the session JSONL. Per-agent lifetime cost (per-model pricing, cache-tier split). |
-| **Web-app preview** | Agents present interactive deliverables as tappable cards (`webapp_present`): static apps served sandboxed, localhost services reverse-proxied (HTTP + WebSocket), external dashboards linked. Credential-less iframe sandbox; injected console capture feeds a debug drawer. |
+| **Interactive artifacts** | Agents present runnable deliverables as tappable cards (`webapp_present`): static apps served sandboxed, localhost services reverse-proxied (HTTP + WebSocket), external dashboards linked. Credential-less iframe sandbox; injected console capture feeds a debug drawer. |
 | **Monitoring** | Split screen, real-time WebSocket updates, system monitor (disk, memory, GPU, tokens), weekly progress stats. |
 | **Mobile PWA** | Home Screen install on iOS/Android with push and voice. E-ink display mode (high-contrast rendering, two-finger swipe to page-scroll) for e-paper readers. |
 | **CLI sync** | Two-way: CLI sessions appear in the web app; web sessions resume from the CLI via `tmux attach -t xy-<id>`. |

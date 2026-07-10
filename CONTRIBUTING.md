@@ -45,7 +45,7 @@ cd frontend && npm install && cd ..
 cp .env.example .env
 # Edit .env — at minimum set HOST_PROJECTS_DIR
 
-# Generate self-signed SSL certs (see README.md for full instructions)
+# Generate self-signed SSL certs (./setup.sh does this for you; manual equivalent:)
 mkdir -p certs
 LAN_IP=$(hostname -I | awk '{print $1}')
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \

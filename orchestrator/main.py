@@ -211,7 +211,7 @@ async def lifespan(app: FastAPI):
     # Ensure a tmux server is running before any agent resume/launch.
     #
     # Root cause (confirmed May 2026): tmux servers forked from pm2's
-    # systemd cgroup (system.slice/pm2-jyao073.service) are killed by
+    # systemd cgroup (system.slice/pm2-<user>.service) are killed by
     # systemd at cold boot.  The fix is a dedicated user service
     # (xylocopa-tmux.service) that starts the tmux server with
     # exit-empty=off in the user slice, isolated from pm2's cgroup.

@@ -72,7 +72,9 @@ Desktop.ini
 # Internal tracking
 PROGRESS.md
 PLAN-*.md
+TODO.md
 filter-callbacks.py
+verification-*
 
 # Dev artifacts
 *.sqlite3
@@ -84,3 +86,4 @@ frontend/vite.demo.config.js
 screenshots/
 .tmp/
 tools/pw-debug/
+webapps/

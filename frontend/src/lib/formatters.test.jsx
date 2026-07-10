@@ -133,7 +133,7 @@ describe("extractFileAttachments", () => {
   });
 
   it("detects bare LaTeX source paths (.tex)", () => {
-    const text = "/home/jyao073/xylocopa-projects/random-things/ee266_proposal_v2.tex\n\nbody";
+    const text = "/home/user/xylocopa-projects/random-things/ee266_proposal_v2.tex\n\nbody";
     const result = extractFileAttachments(text, PROJECT);
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe("doc");
@@ -141,7 +141,7 @@ describe("extractFileAttachments", () => {
   });
 
   it("detects archive paths (.zip) as downloadable generic files", () => {
-    const text = "/home/jyao073/xylocopa-projects/random-things/ee266-final-report.zip\n\nbody";
+    const text = "/home/user/xylocopa-projects/random-things/ee266-final-report.zip\n\nbody";
     const result = extractFileAttachments(text, PROJECT);
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe("file");

@@ -15,12 +15,12 @@ import glob
 from collections import Counter, defaultdict
 from datetime import datetime
 
-PROJECT_ROOT = "/home/jyao073/xylocopa"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 
 SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-04-30 11:44:00"
 REPORT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
-    "/home/jyao073/xylocopa-projects/xylocopa/logs",
+    LOGS_DIR,
     f"ghost_probe_report_{datetime.now().strftime('%Y-%m-%d_%H%M')}.md",
 )
 

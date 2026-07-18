@@ -11,17 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.12.0] - 2026-07-18
 
+Interactive web terminal release. The chat header gains a terminal icon that attaches straight to the agent's live tmux session from any browser — phone included — over a new WebSocket PTY bridge. Also fixes CLI-session discovery misclassifying Claude Code's internal daemon workers as adoptable sessions.
+
 ### Added
 
--
+- **Web terminal (tmux attach) in chat.** A terminal icon in the chat header opens a full-screen xterm.js overlay attached to the agent's tmux session via the new `/ws/terminal/{agent_id}` endpoint: a server-side PTY runs a dedicated `tmux attach` client, binary frames carry PTY output, JSON messages carry input/resize/ping. Closing the overlay only detaches that client — the session keeps running. `window-size latest` is set on attach so a phone-sized client doesn't shrink the desktop tmux view. Touch devices get an Esc/Tab/sticky-Ctrl/arrows key bar; visualViewport handling keeps the prompt above the soft keyboard; xterm.js loads lazily (~300 KB chunk) only when the terminal is opened; the overlay respects the iOS safe-area top inset. (87350f55, 905e5ef5, fbbe190a)
 
 ### Fixed
 
--
+- **CLI-session discovery no longer flags Claude-internal workers.** Claude Code's daemon architecture (bg-pty hosts, `--fork-session` compact workers, subagents) runs pane-less claude processes whose SessionStart hooks look like a user CLI started outside tmux; they surfaced as adoptable "not in tmux" entries, and adopting one would kill a live internal worker and resume its session in a spurious tmux session. The hook now walks /proc lineage of the process owning the session id (exact argv-token match against a claude binary) — XY_AGENT_ID environment or daemon/bg-pty-host ancestry marks the session internal and skips the entry; `source="fork"` is never adoptable. (f670641d)
 
 ### Changed
 
--
+- **Queued/scheduled message editing moved to the composer.** "Modify" on a queued or scheduled bubble loads the text into the bottom input bar instead of an inline bubble textarea, so the text stays visible above the mobile keyboard while editing. (29fa52f1)
 
 ## [0.11.0] - 2026-06-10
 

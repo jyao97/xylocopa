@@ -1,0 +1,324 @@
+/**
+ * TerminalOverlay — full-screen interactive terminal attached to an agent's
+ * tmux session (Termius-style). Bridges xterm.js to /ws/terminal/{agentId};
+ * closing the overlay only detaches the web tmux client — the session and
+ * the Claude process inside it keep running.
+ *
+ * Protocol (mirrors orchestrator/routers/terminal.py):
+ *   send: {type:"input", data} | {type:"resize", cols, rows}
+ *   recv: binary PTY bytes | {type:"exit"} | {type:"error", message}
+ *
+ * Mobile: a key bar (Esc/Tab/sticky-Ctrl/arrows) covers what soft keyboards
+ * lack; visualViewport resize shrinks the overlay above the keyboard.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, RotateCw } from "lucide-react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
+import { getAuthToken } from "../lib/api";
+
+const TOUCH_DEVICE =
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
+const TERM_THEME = {
+  background: "#0d1117",
+  foreground: "#c9d1d9",
+  cursor: "#58a6ff",
+  cursorAccent: "#0d1117",
+  selectionBackground: "#264f78",
+};
+
+const STATUS_META = {
+  connecting: { color: "#d29922", label: "Connecting…" },
+  connected: { color: "#3fb950", label: "Connected" },
+  disconnected: { color: "#f85149", label: "Disconnected" },
+  exited: { color: "#8b949e", label: "Detached" },
+  error: { color: "#f85149", label: "Error" },
+};
+
+// Escape sequences for the mobile key bar
+const KEYS = [
+  { label: "Esc", seq: "\x1b" },
+  { label: "Tab", seq: "\t" },
+  { label: "Ctrl", ctrl: true },
+  { label: "←", seq: "\x1b[D" },
+  { label: "↓", seq: "\x1b[B" },
+  { label: "↑", seq: "\x1b[A" },
+  { label: "→", seq: "\x1b[C" },
+];
+
+export default function TerminalOverlay({ agentId, agentName, onClose }) {
+  const rootRef = useRef(null);
+  const mountRef = useRef(null);
+  const termRef = useRef(null);
+  const fitRef = useRef(null);
+  const wsRef = useRef(null);
+  const unmountedRef = useRef(false);
+  const ctrlArmedRef = useRef(false);
+  const [status, setStatus] = useState("connecting");
+  const [errMsg, setErrMsg] = useState("");
+  const [ctrlArmed, setCtrlArmed] = useState(false);
+
+  const armCtrl = (on) => {
+    ctrlArmedRef.current = on;
+    setCtrlArmed(on);
+  };
+
+  // Fit terminal to container and propagate the new grid to the PTY
+  const doFit = useCallback(() => {
+    try {
+      fitRef.current?.fit();
+    } catch {
+      return;
+    }
+    const t = termRef.current;
+    const ws = wsRef.current;
+    if (t && ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "resize", cols: t.cols, rows: t.rows }));
+    }
+  }, []);
+
+  const sendInput = useCallback((data) => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "input", data }));
+    }
+  }, []);
+
+  const connect = useCallback(() => {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const token = getAuthToken();
+    const url =
+      `${proto}//${window.location.host}/ws/terminal/${encodeURIComponent(agentId)}` +
+      (token ? `?token=${encodeURIComponent(token)}` : "");
+    setStatus("connecting");
+    setErrMsg("");
+    const ws = new WebSocket(url);
+    ws.binaryType = "arraybuffer";
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setStatus("connected");
+      doFit();
+      termRef.current?.focus();
+    };
+    ws.onmessage = (ev) => {
+      if (typeof ev.data === "string") {
+        let m;
+        try {
+          m = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (m.type === "exit") setStatus("exited");
+        else if (m.type === "error") {
+          setStatus("error");
+          setErrMsg(m.message || "Connection error");
+        }
+        return;
+      }
+      termRef.current?.write(new Uint8Array(ev.data));
+    };
+    ws.onclose = () => {
+      if (unmountedRef.current) return;
+      // Keep the more specific exited/error state if already set
+      setStatus((s) => (s === "exited" || s === "error" ? s : "disconnected"));
+    };
+  }, [agentId, doFit]);
+
+  const reconnect = useCallback(() => {
+    try {
+      wsRef.current?.close();
+    } catch {}
+    termRef.current?.reset();
+    connect();
+  }, [connect]);
+
+  // Mount: create terminal, wire input, connect, observe resizes
+  useEffect(() => {
+    unmountedRef.current = false;
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: window.innerWidth < 640 ? 13 : 14,
+      fontFamily:
+        "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+      theme: TERM_THEME,
+      scrollback: 2000,
+    });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    termRef.current = term;
+    fitRef.current = fit;
+    term.open(mountRef.current);
+    try {
+      fit.fit();
+    } catch {}
+
+    term.onData((d) => {
+      let out = d;
+      if (ctrlArmedRef.current) {
+        if (d.length === 1) {
+          const c = d.toUpperCase().charCodeAt(0);
+          if (c >= 64 && c <= 95) out = String.fromCharCode(c & 0x1f);
+        }
+        ctrlArmedRef.current = false;
+        setCtrlArmed(false);
+      }
+      sendInput(out);
+    });
+
+    connect();
+
+    // Container resize (rotation, split view) → refit
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(doFit);
+    });
+    ro.observe(mountRef.current);
+
+    // Soft keyboard: shrink overlay to the visual viewport so the prompt
+    // stays visible above the keyboard
+    const vv = window.visualViewport;
+    const onVV = () => {
+      if (rootRef.current) {
+        const h = Math.round(vv.height);
+        rootRef.current.style.height =
+          h < window.innerHeight - 30 ? `${h}px` : "";
+      }
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(doFit);
+    };
+    vv?.addEventListener("resize", onVV);
+
+    return () => {
+      unmountedRef.current = true;
+      vv?.removeEventListener("resize", onVV);
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+      try {
+        wsRef.current?.close();
+      } catch {}
+      term.dispose();
+      termRef.current = null;
+    };
+  }, [connect, doFit, sendInput]);
+
+  const handleKeyButton = (key) => {
+    if (key.ctrl) {
+      armCtrl(!ctrlArmedRef.current);
+      return;
+    }
+    if (ctrlArmedRef.current && key.seq.length === 1) {
+      // e.g. Ctrl+Tab is meaningless here, but Ctrl+letter via bar stays consistent
+      const c = key.seq.toUpperCase().charCodeAt(0);
+      sendInput(c >= 64 && c <= 95 ? String.fromCharCode(c & 0x1f) : key.seq);
+      armCtrl(false);
+      return;
+    }
+    sendInput(key.seq);
+  };
+
+  const meta = STATUS_META[status] || STATUS_META.connecting;
+  const showBanner = status === "disconnected" || status === "exited" || status === "error";
+
+  return createPortal(
+    <div
+      ref={rootRef}
+      className="fixed inset-x-0 top-0 h-full z-[120] flex flex-col"
+      style={{ background: "#0d1117" }}
+    >
+      {/* iOS zooms into focused inputs with font-size < 16px; xterm's hidden
+          helper textarea triggers that. Scoped override while overlay is open. */}
+      <style>{`.xterm-helper-textarea { font-size: 16px !important; }`}</style>
+
+      {/* Header */}
+      <div className="shrink-0 h-11 flex items-center gap-2 px-2 border-b border-white/10">
+        <button
+          type="button"
+          onClick={onClose}
+          title="Close (detach — session keeps running)"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/10 transition-colors"
+        >
+          <ArrowLeft className="w-4.5 h-4.5" strokeWidth={2} />
+        </button>
+        <span
+          className="w-2 h-2 rounded-full shrink-0"
+          style={{
+            background: meta.color,
+            animation: status === "connecting" ? "pulse 1.2s ease-in-out infinite" : "none",
+          }}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-zinc-200 truncate leading-tight">
+            {agentName || "Terminal"}
+          </div>
+          <div className="text-[10px] text-zinc-500 leading-tight">
+            tmux · {meta.label}
+          </div>
+        </div>
+        <div className="text-[10px] text-zinc-600 pr-1 text-right shrink-0">
+          close = detach only
+        </div>
+      </div>
+
+      {/* Terminal */}
+      <div className="flex-1 min-h-0 relative pl-2 pt-1" style={{ background: "#0d1117" }}>
+        <div ref={mountRef} className="absolute inset-0 pl-2 pt-1" />
+        {showBanner && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
+            <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl border border-white/10 bg-[#161b22]">
+              <div className="text-sm text-zinc-300">
+                {status === "error"
+                  ? errMsg || "Connection error"
+                  : status === "exited"
+                    ? "tmux client detached"
+                    : "Connection lost"}
+              </div>
+              <button
+                type="button"
+                onClick={reconnect}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-cyan-600/90 hover:bg-cyan-500 text-white text-sm transition-colors"
+              >
+                <RotateCw className="w-3.5 h-3.5" strokeWidth={2} />
+                Reconnect
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile key bar */}
+      {TOUCH_DEVICE && (
+        <div
+          className="shrink-0 flex items-stretch gap-1 px-1.5 pt-1 border-t border-white/10"
+          style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
+        >
+          {KEYS.map((k) => (
+            <button
+              key={k.label}
+              type="button"
+              // pointerdown + preventDefault keeps focus (and the soft
+              // keyboard) on the terminal while tapping bar keys
+              onPointerDown={(e) => {
+                e.preventDefault();
+                handleKeyButton(k);
+              }}
+              className={`flex-1 h-9 rounded-md text-[13px] font-medium transition-colors ${
+                k.ctrl && ctrlArmed
+                  ? "bg-cyan-600 text-white"
+                  : "bg-white/5 text-zinc-300 active:bg-white/15"
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}

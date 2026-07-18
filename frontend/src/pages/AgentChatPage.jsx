@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, Component } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, Component, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
-import { Bell, BellOff, Hourglass } from "lucide-react";
+import { Bell, BellOff, Hourglass, SquareTerminal } from "lucide-react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   fetchAgent,
@@ -38,6 +38,8 @@ import {
 import ProjectFileModal from "../components/ProjectFileModal";
 import FloatingTaskCard from "../components/FloatingTaskCard";
 import ProjectBrowserModal from "../components/ProjectBrowserModal";
+// Lazy: pulls in xterm.js (~300KB) only when the terminal is opened
+const TerminalOverlay = lazy(() => import("../components/TerminalOverlay"));
 import { relativeTime, renderMarkdown, extractFileAttachments, stripAttachmentTags } from "../lib/formatters";
 import { serverNow } from "../lib/serverTime";
 import { uploadUrl } from "../lib/urls";
@@ -2702,6 +2704,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
   const nameInputRef = useRef(null);
   const [fileModal, setFileModal] = useState(null); // "CLAUDE.md" | "PROGRESS.md" | null
   const [showBrowser, setShowBrowser] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
   const [fileExists, setFileExists] = useState({ "CLAUDE.md": null, "PROGRESS.md": null });
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [showIdPopover, setShowIdPopover] = useState(false);
@@ -4493,6 +4496,14 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
             <div className="shrink-0 flex items-center -mr-1">
               <button
                 type="button"
+                onClick={() => setShowTerminal(true)}
+                title="Terminal (attach to tmux session)"
+                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-300 hover:bg-input transition-colors"
+              >
+                <SquareTerminal className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
                   if (syncRefreshing) return;
                   setSyncRefreshing(true);
@@ -5114,6 +5125,15 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         />
       )}
 
+      {showTerminal && (
+        <Suspense fallback={null}>
+          <TerminalOverlay
+            agentId={id}
+            agentName={agent?.name}
+            onClose={() => setShowTerminal(false)}
+          />
+        </Suspense>
+      )}
       {showBrowser && agent && (
         <ProjectBrowserModal
           project={agent.project}

@@ -1502,8 +1502,12 @@ def _internal_worker_lineage(session_id: str) -> str | None:
     descends from a managed agent; a ``claude daemon`` / ``bg-pty-host`` /
     ``--bg-spare`` ancestor means a daemon worker. Neither is adoptable.
 
-    Returns a short reason string, or None when nothing internal is found
-    (any /proc read race fails open to the old behavior).
+    Returns ``{"reason": str, "agent_id": str | None,
+    "resumed_session": str | None}`` — *agent_id* is the XY_AGENT_ID found
+    in the lineage, *resumed_session* the session id this process resumes
+    (``--fork-session --resume <jsonl>``: daemon-side auto-compact forks the
+    agent's own conversation onto a new id). Returns None when nothing
+    internal is found (any /proc read race fails open to the old behavior).
     """
     sid = session_id.strip()
     if not sid:
@@ -1513,6 +1517,7 @@ def _internal_worker_lineage(session_id: str) -> str | None:
     except OSError:
         return None
     start = None
+    start_argv: list[bytes] = []
     sid_b = sid.encode()
     for pid in pids:
         try:
@@ -1526,15 +1531,31 @@ def _internal_worker_lineage(session_id: str) -> str | None:
         # sender's own shell), whose environment then misclassifies.
         if argv and b"claude" in argv[0] and sid_b in argv:
             start = pid
+            start_argv = argv
             break
     if start is None:
         return None
+
+    resumed = None
+    if b"--fork-session" in start_argv and b"--resume" in start_argv:
+        try:
+            target = start_argv[start_argv.index(b"--resume") + 1].decode()
+            base = os.path.basename(target)
+            resumed = base[:-6] if base.endswith(".jsonl") else base
+        except (IndexError, UnicodeDecodeError):
+            pass
+
+    def _result(reason: str, agent_id: str | None) -> dict:
+        return {"reason": reason, "agent_id": agent_id, "resumed_session": resumed}
+
     pid = start
     for _ in range(20):  # bounded ancestor walk
         try:
             with open(f"/proc/{pid}/environ", "rb") as f:
-                if b"XY_AGENT_ID=" in f.read():
-                    return f"managed-agent lineage via pid {start}"
+                for entry in f.read().split(b"\0"):
+                    if entry.startswith(b"XY_AGENT_ID="):
+                        agent = entry[len(b"XY_AGENT_ID="):].decode("utf-8", "ignore").strip()
+                        return _result(f"managed-agent lineage via pid {start}", agent or None)
         except OSError:
             pass
         try:
@@ -1543,7 +1564,7 @@ def _internal_worker_lineage(session_id: str) -> str | None:
         except OSError:
             cmd = b""
         if b"bg-pty-host" in cmd or b"daemon run" in cmd or b"--bg-spare" in cmd:
-            return f"claude-daemon worker via pid {pid}"
+            return _result(f"claude-daemon worker via pid {pid}", None)
         try:
             with open(f"/proc/{pid}/stat") as f:
                 ppid = int(f.read().rsplit(") ", 1)[-1].split()[1])
@@ -1846,12 +1867,43 @@ async def hook_agent_session_start(request: Request):
             # Claude-internal workers (daemon bg-pty hosts, fork-session
             # compact workers, subagents) are pane-less by construction —
             # never offer them for adoption.
-            internal = ("fork-session" if source == "fork"
-                        else _internal_worker_lineage(session_id))
+            internal = _internal_worker_lineage(session_id)
+            if internal is None and source == "fork":
+                internal = {"reason": "fork-session", "agent_id": None,
+                            "resumed_session": None}
             if internal:
+                # Daemon-side auto-compact forks a managed agent's OWN
+                # conversation onto a new session id (--fork-session
+                # --resume <current jsonl>) with no agent header. That fork
+                # IS the agent's continuation — rotate the agent onto it so
+                # chat sync follows the live JSONL instead of tailing the
+                # frozen pre-compact file forever.
+                rot_agent_id = internal.get("agent_id")
+                resumed = internal.get("resumed_session")
+                if rot_agent_id and resumed and session_id != resumed:
+                    rot_agent = _db.get(Agent, rot_agent_id)
+                    if rot_agent and rot_agent.session_id == resumed:
+                        ad_rot = getattr(request.app.state, "agent_dispatcher", None)
+                        if ad_rot:
+                            rotated = ad_rot._rotate_agent_session(
+                                rot_agent_id, session_id, matched_proj.path,
+                                worktree=rot_agent.worktree,
+                            )
+                            if rotated:
+                                ad_rot.wake_sync(rot_agent_id)
+                                logger.info(
+                                    "SessionStart hook: fork of agent %s current session %s — rotated to %s (%s)",
+                                    rot_agent_id[:8], resumed[:12],
+                                    session_id[:12], internal.get("reason"),
+                                )
+                                return {}
+                            logger.warning(
+                                "SessionStart hook: fork rotation failed for agent %s → %s",
+                                rot_agent_id[:8], session_id[:12],
+                            )
                 logger.info(
                     "SessionStart hook: session %s in project %s is Claude-internal (%s) — not adoptable, skipping rejected entry",
-                    session_id[:12], matched_proj.name, internal,
+                    session_id[:12], matched_proj.name, internal.get("reason"),
                 )
                 return {}
             from agent_dispatcher import _write_rejected_unlinked_entry

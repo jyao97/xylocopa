@@ -228,7 +228,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
   return createPortal(
     <div
       ref={rootRef}
-      className="fixed inset-x-0 top-0 h-full z-[120] flex flex-col"
+      className="fixed inset-x-0 top-0 h-full z-[120] flex flex-col safe-area-pt"
       style={{ background: "#0d1117" }}
     >
       {/* iOS zooms into focused inputs with font-size < 16px; xterm's hidden
@@ -267,7 +267,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
 
       {/* Terminal */}
       <div className="flex-1 min-h-0 relative pl-2 pt-1" style={{ background: "#0d1117" }}>
-        <div ref={mountRef} className="absolute inset-0 pl-2 pt-1" />
+        <div ref={mountRef} className="absolute inset-0 pl-2 pr-1 pt-1" />
         {showBanner && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
             <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl border border-white/10 bg-[#161b22]">

@@ -1486,6 +1486,75 @@ async def get_pending_permissions(agent_id: str, request: Request):
     return pm.get_pending(agent_id)
 
 
+def _internal_worker_lineage(session_id: str) -> str | None:
+    """Classify a pane-less session as Claude-internal rather than user-run.
+
+    Claude Code's daemon architecture (``bg-pty-host`` workers,
+    ``--fork-session`` compact/summary workers, Agent-tool subagents) runs
+    real claude processes with no tmux pane and no agent header, so their
+    SessionStart hooks look exactly like a user CLI started outside tmux —
+    and used to surface as adoptable "not in tmux" entries. Adopting one
+    would kill a live internal worker and resume its session in a fresh
+    tmux session (phantom sessions "out of nowhere").
+
+    Walk /proc for the live process carrying this session id, then inspect
+    it and its ancestors: XY_AGENT_ID in the environment means the tree
+    descends from a managed agent; a ``claude daemon`` / ``bg-pty-host`` /
+    ``--bg-spare`` ancestor means a daemon worker. Neither is adoptable.
+
+    Returns a short reason string, or None when nothing internal is found
+    (any /proc read race fails open to the old behavior).
+    """
+    sid = session_id.strip()
+    if not sid:
+        return None
+    try:
+        pids = [int(d) for d in os.listdir("/proc") if d.isdigit()]
+    except OSError:
+        return None
+    start = None
+    sid_b = sid.encode()
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                argv = f.read().split(b"\0")
+        except OSError:
+            continue
+        # Exact argv-token match only: a claude binary invoked with this
+        # session id as its own argument. Substring matching would catch
+        # unrelated processes that merely mention the id (e.g. the hook
+        # sender's own shell), whose environment then misclassifies.
+        if argv and b"claude" in argv[0] and sid_b in argv:
+            start = pid
+            break
+    if start is None:
+        return None
+    pid = start
+    for _ in range(20):  # bounded ancestor walk
+        try:
+            with open(f"/proc/{pid}/environ", "rb") as f:
+                if b"XY_AGENT_ID=" in f.read():
+                    return f"managed-agent lineage via pid {start}"
+        except OSError:
+            pass
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                cmd = f.read().replace(b"\0", b" ")
+        except OSError:
+            cmd = b""
+        if b"bg-pty-host" in cmd or b"daemon run" in cmd or b"--bg-spare" in cmd:
+            return f"claude-daemon worker via pid {pid}"
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                ppid = int(f.read().rsplit(") ", 1)[-1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+        if ppid <= 1:
+            break
+        pid = ppid
+    return None
+
+
 @router.post("/api/hooks/agent-session-start")
 async def hook_agent_session_start(request: Request):
     """Receive SessionStart hook from Claude Code agents.
@@ -1774,6 +1843,17 @@ async def hook_agent_session_start(request: Request):
         # adopt it (the design requires claude to be in a tmux pane on
         # this orchestrator's tmux server).
         if not tmux_pane:
+            # Claude-internal workers (daemon bg-pty hosts, fork-session
+            # compact workers, subagents) are pane-less by construction —
+            # never offer them for adoption.
+            internal = ("fork-session" if source == "fork"
+                        else _internal_worker_lineage(session_id))
+            if internal:
+                logger.info(
+                    "SessionStart hook: session %s in project %s is Claude-internal (%s) — not adoptable, skipping rejected entry",
+                    session_id[:12], matched_proj.name, internal,
+                )
+                return {}
             from agent_dispatcher import _write_rejected_unlinked_entry
             _write_rejected_unlinked_entry(
                 session_id=session_id,

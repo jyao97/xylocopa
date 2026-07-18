@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-18
+
+### Added
+
+-
+
+### Fixed
+
+-
+
+### Changed
+
+-
+
 ## [0.11.0] - 2026-06-10
 
 Interactive web-app preview release. Agents can now hand the user runnable deliverables — data explorers, 3D viewers, local dashboards — as tappable cards in chat, opening fullscreen in a sandboxed iframe with a built-in console drawer. Verified end-to-end with TensorBoard through the port proxy and an agent-built three.js exoplanet viewer on iPhone.

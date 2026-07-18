@@ -58,6 +58,13 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
   const wsRef = useRef(null);
   const unmountedRef = useRef(false);
   const ctrlArmedRef = useRef(false);
+  // Auto-reconnect bookkeeping: tmux keeps the session alive server-side,
+  // so a dropped socket (phone lock, backgrounded PWA, network blip) can
+  // silently re-attach. serverEnded = clean exit/error → manual only.
+  const retriesRef = useRef(0);
+  const reconnectTimerRef = useRef(null);
+  const pendingVisRef = useRef(false);
+  const serverEndedRef = useRef(false);
   const [status, setStatus] = useState("connecting");
   const [errMsg, setErrMsg] = useState("");
   const [ctrlArmed, setCtrlArmed] = useState(false);
@@ -96,11 +103,14 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
       (token ? `?token=${encodeURIComponent(token)}` : "");
     setStatus("connecting");
     setErrMsg("");
+    serverEndedRef.current = false;
     const ws = new WebSocket(url);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
 
     ws.onopen = () => {
+      retriesRef.current = 0;
+      pendingVisRef.current = false;
       setStatus("connected");
       doFit();
       termRef.current?.focus();
@@ -113,8 +123,11 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
         } catch {
           return;
         }
-        if (m.type === "exit") setStatus("exited");
-        else if (m.type === "error") {
+        if (m.type === "exit") {
+          serverEndedRef.current = true;
+          setStatus("exited");
+        } else if (m.type === "error") {
+          serverEndedRef.current = true;
           setStatus("error");
           setErrMsg(m.message || "Connection error");
         }
@@ -123,9 +136,23 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
       termRef.current?.write(new Uint8Array(ev.data));
     };
     ws.onclose = () => {
-      if (unmountedRef.current) return;
-      // Keep the more specific exited/error state if already set
-      setStatus((s) => (s === "exited" || s === "error" ? s : "disconnected"));
+      if (unmountedRef.current || serverEndedRef.current) return;
+      if (document.hidden) {
+        // Backgrounded — reconnect the moment we're visible again
+        pendingVisRef.current = true;
+        setStatus("disconnected");
+        return;
+      }
+      if (retriesRef.current < 3) {
+        retriesRef.current += 1;
+        setStatus("connecting");
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          if (!unmountedRef.current) reconnectRef.current?.();
+        }, 800 * retriesRef.current);
+      } else {
+        setStatus("disconnected");
+      }
     };
   }, [agentId, doFit]);
 
@@ -136,6 +163,8 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
     termRef.current?.reset();
     connect();
   }, [connect]);
+  const reconnectRef = useRef(null);
+  reconnectRef.current = reconnect;
 
   // Mount: create terminal, wire input, connect, observe resizes
   useEffect(() => {
@@ -194,8 +223,39 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
     };
     vv?.addEventListener("resize", onVV);
 
+    // Keepalive: mobile networks and proxies drop idle sockets; the
+    // backend answers {"type":"pong"} and the traffic keeps NAT mappings
+    // warm while the terminal is just being read.
+    const keepalive = setInterval(() => {
+      const w = wsRef.current;
+      if (w?.readyState === WebSocket.OPEN) {
+        w.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 25000);
+
+    // Coming back from background: iOS suspends the socket; re-attach
+    // immediately instead of showing a stale screen + manual button.
+    const onVis = () => {
+      if (document.hidden || unmountedRef.current || serverEndedRef.current) return;
+      const w = wsRef.current;
+      const dead =
+        pendingVisRef.current ||
+        !w ||
+        w.readyState === WebSocket.CLOSED ||
+        w.readyState === WebSocket.CLOSING;
+      if (dead) {
+        pendingVisRef.current = false;
+        retriesRef.current = 0;
+        reconnectRef.current?.();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     return () => {
       unmountedRef.current = true;
+      document.removeEventListener("visibilitychange", onVis);
+      clearInterval(keepalive);
+      clearTimeout(reconnectTimerRef.current);
       vv?.removeEventListener("resize", onVV);
       ro.disconnect();
       cancelAnimationFrame(raf);

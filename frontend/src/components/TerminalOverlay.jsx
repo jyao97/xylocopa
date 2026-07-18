@@ -209,19 +209,26 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
     });
     ro.observe(mountRef.current);
 
-    // Soft keyboard: shrink overlay to the visual viewport so the prompt
-    // stays visible above the keyboard
+    // Soft keyboard: pin the pane to the *visual* viewport — shrink to its
+    // height AND translate by its offsetTop. iOS scrolls the page to keep
+    // the focused input visible, so height alone leaves a strip of the
+    // underlying app peeking out right above the keyboard.
     const vv = window.visualViewport;
     const onVV = () => {
-      if (rootRef.current) {
+      if (rootRef.current && vv) {
         const h = Math.round(vv.height);
-        rootRef.current.style.height =
-          h < window.innerHeight - 30 ? `${h}px` : "";
+        const shrunk = h < window.innerHeight - 30;
+        rootRef.current.style.height = shrunk ? `${h}px` : "";
+        rootRef.current.style.transform =
+          shrunk && vv.offsetTop > 1
+            ? `translateY(${Math.round(vv.offsetTop)}px)`
+            : "";
       }
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(doFit);
     };
     vv?.addEventListener("resize", onVV);
+    vv?.addEventListener("scroll", onVV);
 
     // Keepalive: mobile networks and proxies drop idle sockets; the
     // backend answers {"type":"pong"} and the traffic keeps NAT mappings
@@ -257,6 +264,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
       clearInterval(keepalive);
       clearTimeout(reconnectTimerRef.current);
       vv?.removeEventListener("resize", onVV);
+      vv?.removeEventListener("scroll", onVV);
       ro.disconnect();
       cancelAnimationFrame(raf);
       try {
@@ -286,14 +294,20 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
   const showBanner = status === "disconnected" || status === "exited" || status === "error";
 
   return createPortal(
+    // Outer backdrop never resizes: even while the inner pane is being
+    // shrunk/translated around the soft keyboard, the app underneath can
+    // never peek through.
     <div
-      ref={rootRef}
-      className="fixed inset-x-0 top-0 h-full z-[120] flex flex-col safe-area-pt"
+      className="fixed inset-0 z-[120] overflow-hidden"
       style={{ background: "#0d1117" }}
     >
       {/* iOS zooms into focused inputs with font-size < 16px; xterm's hidden
           helper textarea triggers that. Scoped override while overlay is open. */}
       <style>{`.xterm-helper-textarea { font-size: 16px !important; }`}</style>
+      <div
+        ref={rootRef}
+        className="absolute inset-x-0 top-0 h-full flex flex-col safe-area-pt"
+      >
 
       {/* Header */}
       <div className="shrink-0 h-11 flex items-center gap-2 px-2 border-b border-white/10">
@@ -378,6 +392,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
           ))}
         </div>
       )}
+      </div>
     </div>,
     document.body
   );

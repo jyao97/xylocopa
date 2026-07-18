@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glass Diag — backdrop-filter 设备诊断</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fafafa; color: #111;
+    font: 14px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 60px; }
+  h1 { font-size: 18px; margin: 8px 0 2px; }
+  h2 { font-size: 15px; margin: 26px 0 6px; }
+  p.hint { margin: 4px 0 10px; color: #555; font-size: 13px; }
+  .stripes {
+    position: relative; height: 150px; border-radius: 12px; overflow: hidden;
+    background: repeating-linear-gradient(90deg, #000 0 9px, #fff 9px 18px);
+  }
+  .stripes.v2 { background:
+    repeating-linear-gradient(45deg, #d22 0 12px, #fff 12px 24px, #16f 24px 36px, #fff 36px 48px); }
+  .bar { position: absolute; left: 12px; right: 12px; border-radius: 14px; }
+  /* replica: app .glass-bar (current) */
+  .bar.glass { top: 12px; height: 58px;
+    background: rgba(230,233,238,0.68);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%); }
+  /* replica: old .glass-bar-nav (pre-v0.9.8, removed) */
+  .bar.nav { bottom: 12px; height: 58px;
+    background: rgba(240,242,245,0.35);
+    backdrop-filter: blur(48px) saturate(180%);
+    -webkit-backdrop-filter: blur(48px) saturate(180%); }
+  .bar > span { position: absolute; top: 4px; left: 10px; font-size: 11px;
+    background: #fff; color: #c00; padding: 0 4px; border-radius: 4px; }
+  .expect { display: flex; gap: 10px; margin-top: 8px; font-size: 12.5px; }
+  .expect > div { flex: 1; border-radius: 8px; padding: 6px 9px; }
+  .expect .ok  { background: #e7f5ec; color: #135c2e; }
+  .expect .bad { background: #fdecec; color: #8f1d1d; }
+  /* motion test */
+  .motion { position: relative; height: 130px; border-radius: 12px; overflow: hidden; background: #fff; border: 1px solid #ddd; }
+  .mover { position: absolute; top: 0; bottom: 0; width: 90px;
+    background: repeating-linear-gradient(0deg, #111 0 10px, #ff0 10px 20px);
+    animation: sweep 2.6s linear infinite alternate; }
+  @keyframes sweep { from { left: 0; } to { left: calc(100% - 90px); } }
+  .motion .bar.glass { top: 36px; height: 58px; }
+  /* scroll test */
+  .scrollwrap { position: relative; height: 200px; border-radius: 12px; overflow: hidden; border: 1px solid #ddd; }
+  .scroller { height: 100%; overflow-y: scroll; -webkit-overflow-scrolling: touch; background: #fff; }
+  .scroller .row { padding: 9px 12px; border-bottom: 1px solid #eee; font-size: 13px; white-space: nowrap; }
+  .scrollwrap .bar.glass { top: auto; bottom: 10px; }
+  #fps { font-variant-numeric: tabular-nums; font-weight: 600; }
+  pre#report { background: #fff; border: 1px solid #ddd; border-radius: 10px;
+    padding: 10px; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap;
+    word-break: break-all; user-select: all; }
+  button { font: inherit; padding: 8px 16px; border-radius: 10px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer; }
+  button:active { background: #eee; }
+  .note { font-size: 12px; color: #777; }
+  .nosupport { display: none; background: #fdecec; color: #8f1d1d;
+    padding: 8px 12px; border-radius: 8px; margin: 10px 0; }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .nosupport { display: block; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔍 Glass Diag — backdrop-filter 设备诊断</h1>
+  <p class="hint">在"毛玻璃失效"的设备上打开本页,按下面三个测试逐项目视判断,最后把底部报告复制发回即可。本页不依赖 App 代码,纯静态。</p>
+  <div class="nosupport">此浏览器在解析层就不支持 backdrop-filter(@supports 为否)—— App 会自动用不透明底色,不属于"半透明但没模糊"的失效模式。</div>
+
+  <h2>测试 1 · 静态模糊</h2>
+  <p class="hint">两个色条分别复刻 App 的 .glass-bar(上)和旧版 .glass-bar-nav(下)。</p>
+  <div class="stripes">
+    <div class="bar glass"><span>glass-bar α.68 blur28</span></div>
+    <div class="bar nav"><span>old glass-bar-nav α.35 blur48</span></div>
+  </div>
+  <div class="expect">
+    <div class="ok">✅ 正常:色条内的条纹糊成均匀一片,看不出黑白边界</div>
+    <div class="bad">❌ 失效:透过色条仍能看到清晰的黑白条纹</div>
+  </div>
+
+  <h2>测试 2 · 运动内容(合成器实时重采样)</h2>
+  <p class="hint">黄黑块自动往返。观察它穿过玻璃条时:模糊是否连续跟随?有无闪烁、残影、或穿过瞬间变清晰?当前渲染帧率:<span id="fps">–</span> fps</p>
+  <div class="motion v2">
+    <div class="mover"></div>
+    <div class="bar glass"><span>moving content under glass</span></div>
+  </div>
+
+  <h2>测试 3 · 滚动内容(聊天页输入条的真实场景)</h2>
+  <p class="hint">手动快速滚动列表,观察底部玻璃条:滚动中是否出现未模糊的字透出来、闪烁或整条变透明?</p>
+  <div class="scrollwrap stripes v2">
+    <div class="scroller" id="scroller"></div>
+    <div class="bar glass"><span>sticky bar over scroller</span></div>
+  </div>
+
+  <h2>环境报告</h2>
+  <p class="hint">采集浏览器/GPU 环境(无法从 JS 直接读出"模糊是否真的渲染了",所以上面必须目视判断)。</p>
+  <pre id="report">collecting…</pre>
+  <button id="copy">📋 复制报告</button> <span class="note" id="copied"></span>
+</main>
+<script>
+(function () {
+  // scroll test rows
+  var sc = document.getElementById('scroller');
+  var rows = '';
+  for (var i = 1; i <= 60; i++) {
+    rows += '<div class="row">' + i + ' — The quick brown fox 敏捷的棕色狐狸跳过懒狗 0123456789</div>';
+  }
+  sc.innerHTML = rows;
+
+  // fps meter (2s rolling)
+  var frames = 0, last = performance.now();
+  function tick(t) {
+    frames++;
+    if (t - last >= 2000) {
+      document.getElementById('fps').textContent = (frames / ((t - last) / 1000)).toFixed(0);
+      frames = 0; last = t;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // environment report
+  var info = {};
+  info.time = new Date().toISOString();
+  info.ua = navigator.userAgent;
+  var m = info.ua.match(/(Chrome|CriOS|Firefox|Version)\/([\d.]+)/);
+  info.engine_version = m ? m[1] + ' ' + m[2] : '?';
+  info.supports_backdrop = !!(window.CSS && (CSS.supports('backdrop-filter', 'blur(1px)') ||
+    CSS.supports('-webkit-backdrop-filter', 'blur(1px)')));
+  try {
+    var el = document.querySelector('.bar.glass');
+    var cs = getComputedStyle(el);
+    info.computed_backdrop = cs.backdropFilter || cs.webkitBackdropFilter || 'none';
+  } catch (e) { info.computed_backdrop = 'err'; }
+
+  function glProbe(type, opts) {
+    try {
+      var c = document.createElement('canvas');
+      var gl = c.getContext(type, opts);
+      if (!gl) return null;
+      var d = gl.getExtension('WEBGL_debug_renderer_info');
+      return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : ('' + gl.getParameter(gl.RENDERER));
+    } catch (e) { return 'err:' + e.message; }
+  }
+  info.webgl_renderer = glProbe('webgl') || glProbe('experimental-webgl') || 'NO WEBGL';
+  // failIfMajorPerformanceCaveat=true → null means "only software GL available"
+  info.webgl_hw = glProbe('webgl', { failIfMajorPerformanceCaveat: true }) ? 'hardware' : 'software-or-none';
+  info.webgl2 = glProbe('webgl2') ? true : false;
+
+  var mqs = ['(update: slow)', '(update: fast)', '(monochrome)',
+    '(prefers-reduced-transparency: reduce)', '(prefers-reduced-motion: reduce)',
+    '(forced-colors: active)', '(hover: hover)', '(pointer: coarse)'];
+  info.media = {};
+  mqs.forEach(function (q) { try { info.media[q] = matchMedia(q).matches; } catch (e) {} });
+
+  info.dpr = window.devicePixelRatio;
+  info.screen = screen.width + 'x' + screen.height + '@' + screen.colorDepth + 'bit';
+  info.viewport = innerWidth + 'x' + innerHeight;
+  info.hardware_concurrency = navigator.hardwareConcurrency;
+  if (navigator.deviceMemory) info.device_memory_gb = navigator.deviceMemory;
+
+  function render() {
+    document.getElementById('report').textContent = JSON.stringify(info, null, 1);
+  }
+  render();
+  if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(
+      ['platform', 'platformVersion', 'model', 'fullVersionList', 'architecture'])
+      .then(function (v) { info.ua_data = v; render(); })
+      .catch(function () {});
+  }
+
+  document.getElementById('copy').onclick = function () {
+    var txt = document.getElementById('report').textContent;
+    function done() { document.getElementById('copied').textContent = '已复制 ✓'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var r = document.createRange(); r.selectNodeContents(document.getElementById('report'));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      try { document.execCommand('copy'); done(); } catch (e) {}
+    }
+  };
+})();
+</script>
+</body>
+</html>

@@ -1175,7 +1175,7 @@ function AgentTextSegment({ text, project }) {
   );
 }
 
-function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSendNow, agentId, onRefresh, queuePosition, queueTotal, contentOverride, toolEntries, openMenuMsgId, setOpenMenuMsgId, bookmarkedSet, onAfterBookmark }) {
+function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSendNow, onStartEdit, editingMessageId, agentId, onRefresh, queuePosition, queueTotal, contentOverride, toolEntries, openMenuMsgId, setOpenMenuMsgId, bookmarkedSet, onAfterBookmark }) {
   if (message.kind === "tool_activity") {
     return null;
   }
@@ -1238,18 +1238,15 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
       setLocalShowActions(open);
     }
   };
-  const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(message.content);
   const [copied, setCopied] = useState(false);
   const [inlineLightbox, setInlineLightbox] = useState(null); // { media, initialIndex }
   const bookmarkActive = !!(bookmarkedSet && message?.id && bookmarkedSet.has(message.id));
   const bubbleToast = useToast();
   const lastTapRef = useRef(0);
   const touchStartYRef = useRef(0);
-  const editTextareaRef = useRef(null);
   const markdownRef = useRef(null);
-  const containerRef = useRef(null);
-  const handleEditSaveRef = useRef(null);
+  // This bubble's content is currently loaded in the composer for editing.
+  const isBeingEdited = !!editingMessageId && editingMessageId === message.id;
 
   // Handle click on inline markdown images to open lightbox
   const handleMarkdownClick = useCallback((e) => {
@@ -1263,36 +1260,6 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     const media = allImgs.map((el) => ({ type: "image", src: el.src, filename: el.alt || "" }));
     setInlineLightbox({ media, initialIndex: Math.max(0, index) });
   }, []);
-
-  // Auto-focus textarea when editing starts (useEffect runs after DOM commit).
-  // Sizing is handled by the grid-mirror trick in the render — no JS height
-  // measurement needed.
-  useEffect(() => {
-    if (editing && editTextareaRef.current) {
-      const ta = editTextareaRef.current;
-      ta.focus();
-      const len = ta.value.length;
-      try { ta.setSelectionRange(len, len); } catch (_) {}
-    }
-  }, [editing]);
-
-  // Click outside the bubble (or its action popover) commits the edit.
-  // Picker portal carries [data-card] and is whitelisted so picking a
-  // schedule time doesn't accidentally save+close.
-  useEffect(() => {
-    if (!editing) return;
-    const handler = (e) => {
-      if (containerRef.current?.contains(e.target)) return;
-      if (e.target.closest?.("[data-card]")) return;
-      handleEditSaveRef.current?.();
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [editing]);
 
   // Action menu visibility rules for the two-stage delete model:
   //   queued/scheduled → Copy / Modify / Delete (+ Send Now for scheduled)
@@ -1373,26 +1340,14 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     setShowActions(false);
     onSendNow?.(message.id);
   };
+  // Modify → hand the message to the composer (edit-in-input-bar). The
+  // bottom bar sits above the mobile keyboard (bottom: var(--kb-h)), so
+  // the text stays visible while editing — unlike the old inline-bubble
+  // textarea, which the keyboard covered on phones.
   const handleEdit = () => {
     setShowActions(false);
-    setEditContent(message.content);
-    setEditing(true);
+    onStartEdit?.(message);
   };
-  const handleEditSave = () => {
-    const trimmed = editContent.trim();
-    if (trimmed && trimmed !== message.content) {
-      onUpdateMessage?.(message.id, { content: trimmed });
-    }
-    setEditing(false);
-  };
-  const handleEditCancel = () => {
-    setEditing(false);
-    setEditContent(message.content);
-  };
-  // Keep a stable ref to the latest save so the document mousedown listener
-  // (bound once on `editing` change) always sees the latest editContent
-  // from closure without rebinding on every keystroke.
-  handleEditSaveRef.current = handleEditSave;
 
   const attachments = useMemo(() => {
     const base = extractFileAttachments(message.content, project, message.role, message.metadata);
@@ -1430,7 +1385,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} my-2`}>
-      <div ref={containerRef} className={`max-w-[min(85%,30rem)] min-w-0 relative ${isUser ? "flex flex-col items-end" : ""}`}>
+      <div className={`max-w-[min(85%,30rem)] min-w-0 relative ${isUser ? "flex flex-col items-end" : ""}`}>
         <div className={isUser ? "flex items-center gap-2 max-w-full" : undefined}>
         {isUndeliveredTimedOut && (
           <div className="flex-shrink-0 text-red-400" title="Message not delivered — Claude may not have received this">
@@ -1452,51 +1407,19 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                       ? "bg-red-600/40 text-white/70 rounded-br-md"
                       : "bg-cyan-600 text-white rounded-br-md"
               : "bg-surface shadow-card text-body rounded-bl-md"
-          } ${canModify ? "select-none" : ""} overflow-hidden`}
+          } ${canModify ? "select-none" : ""} ${isBeingEdited ? "ring-2 ring-white/70" : ""} overflow-hidden`}
           onDoubleClick={handleDoubleClick}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onTouchCancel={handleTouchEnd}
         >
           {isUser ? (
-            editing ? (
-              // Grid mirror: invisible <div> sizes the bubble to the
-              // content's natural width (same as the markdown render),
-              // and the <textarea> overlays it. Both share grid cell
-              // 1/1, so the textarea inherits the div's auto-sized
-              // width AND height — no JS measurement, no rows fallback,
-              // and view↔edit wrap exactly the same.
-              <div className="grid">
-                <div
-                  aria-hidden
-                  className="text-sm break-words chat-bubble-content invisible whitespace-pre-wrap"
-                  style={{ gridArea: "1 / 1", lineHeight: "1.5", fontFamily: "inherit" }}
-                >
-                  {editContent + "\n"}
-                </div>
-                <textarea
-                  ref={editTextareaRef}
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") { e.preventDefault(); handleEditCancel(); }
-                    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleEditSave(); }
-                  }}
-                  rows={1}
-                  className={`bg-transparent border-0 p-0 m-0 text-sm text-white resize-none focus:outline-none chat-bubble-content ${
-                    isScheduled ? "placeholder-amber-200/50" : "placeholder-cyan-200/50"
-                  }`}
-                  style={{ gridArea: "1 / 1", overflow: "hidden", lineHeight: "1.5", fontFamily: "inherit" }}
-                />
+            displayContent && (
+              <div className="text-sm user-md break-words chat-bubble-content">
+                <SafeMarkdown fallback={displayContent}>
+                  {renderMarkdown(displayContent, project)}
+                </SafeMarkdown>
               </div>
-            ) : (
-              displayContent && (
-                <div className="text-sm user-md break-words chat-bubble-content">
-                  <SafeMarkdown fallback={displayContent}>
-                    {renderMarkdown(displayContent, project)}
-                  </SafeMarkdown>
-                </div>
-              )
             )
           ) : (
             <div className="text-sm break-words chat-bubble-content" ref={markdownRef} onClick={handleMarkdownClick}>
@@ -1626,38 +1549,10 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
         {!isUser && message.metadata?.interactive?.length > 0 && (
           <InteractiveBubbles metadata={message.metadata} agentId={agentId} onAnswered={onRefresh} messageContent={message.content} project={project} />
         )}
-        {/* Action popover — gated by message status (two-stage delete model).
-            While `editing`, the popover stays open and swaps to the inline
-            edit controls (✓ save, ✗ cancel, plus 📅 reschedule for
-            scheduled messages). Click outside the bubble auto-saves. */}
-        {(showActions || editing) && (
+        {/* Action popover — gated by message status (two-stage delete model). */}
+        {showActions && (
           <div className="absolute top-0 right-0 -translate-y-full mb-1 z-50">
             <div className="bg-surface border border-divider rounded-xl shadow-lg overflow-hidden flex">
-              {editing ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleEditSave}
-                    title="Save (Cmd+Enter)"
-                    className="px-3 py-2 text-emerald-400 hover:bg-emerald-600/10 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleEditCancel}
-                    title="Cancel (Esc)"
-                    className="px-3 py-2 text-red-400 hover:bg-red-600/10 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </>
-              ) : (
-                <>
               {canSendNow && (
                 <button
                   type="button"
@@ -1751,8 +1646,6 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-                </>
-              )}
             </div>
           </div>
         )}
@@ -1950,8 +1843,14 @@ import SkillPickerPanel from "../components/SkillPickerPanel";
 
 // --- Chat Input ---
 
-function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledReason, isBusy, tmuxMode, onEscape, escapeUrgent, escapeAvailable = true, escapeDisabled = false, scrollButton, kbOpen = false }) {
+function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledReason, isBusy, tmuxMode, onEscape, escapeUrgent, escapeAvailable = true, escapeDisabled = false, scrollButton, kbOpen = false, editingMessage, onEditSave, onEditCancel }) {
   const [text, setText] = useDraft(agentId ? `chat:${agentId}` : null, "");
+  // Edit mode: a queued/scheduled message's content is loaded here instead
+  // of the bubble (the composer sits above the mobile keyboard, the bubble
+  // doesn't). The localStorage draft in `text` is untouched — it comes back
+  // when the edit is saved or cancelled.
+  const isEditing = !!editingMessage;
+  const [editText, setEditText] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [skillsDismissed, setSkillsDismissed] = useState(false);
   const [escCooldown, setEscCooldown] = useState(false);
@@ -1959,7 +1858,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
   const skillPickerRef = useRef(null);
 
   // Slash-trigger: text is `/` followed by 0+ non-space chars (no spaces yet)
-  const slashMatch = (text || "").match(/^\/(\S*)$/);
+  const slashMatch = isEditing ? null : (text || "").match(/^\/(\S*)$/);
   const skillQuery = slashMatch ? slashMatch[1] : "";
   const showSkills = !!slashMatch && !skillsDismissed;
 
@@ -2039,7 +1938,21 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     if (!el) return;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
-  }, [text]);
+  }, [text, editText]);
+
+  // Entering edit mode (or switching to another message's edit): seed the
+  // textarea with the message content and focus it, caret at end.
+  useEffect(() => {
+    if (!editingMessage) return;
+    setEditText(editingMessage.content || "");
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.focus();
+      requestAnimationFrame(() => {
+        try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch { /* ignore */ }
+      });
+    }
+  }, [editingMessage?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup blob URLs on unmount (only revoke actual blob: URLs, not server URLs)
   useEffect(() => {
@@ -2168,6 +2081,14 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     }
   }, [text, attachments, onSendLater, setText, buildMessageText, clearAttachments]);
 
+  // Commit an edit — parent updates the queued/scheduled message and
+  // clears editingMessage, which drops the composer back to the draft.
+  const handleEditSaveClick = useCallback(() => {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+    onEditSave?.(trimmed);
+  }, [editText, onEditSave]);
+
   // Refs so the upload-complete effect always calls the latest version
   // without depending on handleSend/handleSchedule (which change on every
   // keystroke because they capture `text`).
@@ -2243,9 +2164,10 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isEditing) return; // file intake belongs to the draft, not an edit
     dragCountRef.current++;
     if (e.dataTransfer?.types?.includes("Files")) setDragOver(true);
-  }, []);
+  }, [isEditing]);
 
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
@@ -2264,11 +2186,13 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     e.stopPropagation();
     dragCountRef.current = 0;
     setDragOver(false);
+    if (isEditing) return;
     const files = Array.from(e.dataTransfer?.files || []);
     if (files.length > 0) addFiles(files);
-  }, [addFiles]);
+  }, [addFiles, isEditing]);
 
   const handlePaste = useCallback((e) => {
+    if (isEditing) return; // plain-text paste still works natively
     const items = e.clipboardData?.items;
     if (!items) return;
     const files = [];
@@ -2282,7 +2206,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
       e.preventDefault();
       addFiles(files);
     }
-  }, [addFiles]);
+  }, [addFiles, isEditing]);
 
   const removeAttachment = useCallback((id) => {
     setAttachments((prev) => {
@@ -2293,6 +2217,11 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
   }, []);
 
   const handleKeyDown = (e) => {
+    if (isEditing) {
+      if (e.key === "Escape") { e.preventDefault(); onEditCancel?.(); return; }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSaveClick(); }
+      return;
+    }
     if (showSkills && skillPickerRef.current?.hasItems()) {
       if (e.key === "ArrowDown") { e.preventDefault(); skillPickerRef.current.next(); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); skillPickerRef.current.prev(); return; }
@@ -2316,11 +2245,14 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     }
   };
 
-  const canType = !disabled || isBusy;
+  // Editing bypasses the disabled gate — updating a pre-sent message hits
+  // the DB, not the agent, so it works even when the composer is disabled.
+  const canType = !disabled || isBusy || isEditing;
   const anyUploading = attachments.some((a) => a.uploading);
   const anyFailed = attachments.some((a) => a.error);
   const hasContent = text.trim() || attachments.some((a) => a.uploadedPath);
   const sendDisabled = (disabled && !isBusy) || !hasContent || anyUploading || anyFailed;
+  const saveDisabled = !editText.trim();
 
   // No-op: keyboard dismiss handled by App-level focusout micro-scroll
   const handleBlur = useCallback(() => {}, []);
@@ -2346,14 +2278,36 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
             <span className="text-sm font-medium text-cyan-400">Drop files here</span>
           </div>
         )}
+        {/* Edit-mode banner: pencil + original snippet + cancel ✕ */}
+        {isEditing && (
+          <div className="flex items-center gap-2 px-2 pt-1">
+            <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <div className="flex-1 min-w-0 border-l-2 border-cyan-500/60 pl-2">
+              <p className="text-[11px] font-medium text-cyan-400 leading-tight">Editing message</p>
+              <p className="text-xs text-dim truncate leading-tight">{editingMessage.content}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onEditCancel}
+              title="Cancel edit (Esc)"
+              className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-dim hover:text-heading hover:bg-input transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          value={isEditing ? editText : text}
+          onChange={(e) => (isEditing ? setEditText(e.target.value) : setText(e.target.value))}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onBlur={handleBlur}
-          placeholder={tmuxMode ? "Send via tmux..." : isBusy ? "Send (queued until ready)..." : disabled ? disabledReason : "Type a message..."}
+          placeholder={isEditing ? "Edit message..." : tmuxMode ? "Send via tmux..." : isBusy ? "Send (queued until ready)..." : disabled ? disabledReason : "Type a message..."}
           disabled={!canType}
           rows={2}
           className="w-full min-h-[48px] max-h-[180px] rounded-xl bg-transparent px-3 py-2 text-sm text-heading placeholder-hint resize-none focus:outline-none transition-colors disabled:opacity-50"
@@ -2363,8 +2317,8 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
             {voice.refining ? "Refining..." : voice.streamingText}
           </div>
         )}
-        {/* Attachment preview chips */}
-        {attachments.length > 0 && (
+        {/* Attachment preview chips (hidden while editing — they belong to the draft) */}
+        {!isEditing && attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-1">
             {attachments.map((att, i) => (
               <div key={att.id} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs max-w-[160px] cursor-pointer ${att.error ? "bg-red-500/15 ring-1 ring-red-500/30" : "bg-elevated"}`}
@@ -2413,7 +2367,8 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
         )}
         <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.yaml,.yml,.xml,.log,.zip,.tar,.gz" multiple className="hidden" onChange={handleFileSelect} />
         <div className="flex items-center gap-1.5 px-1">
-          {/* Attach button */}
+          {/* Attach button (hidden while editing — edits are text-only) */}
+          {!isEditing && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -2424,7 +2379,9 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
+          )}
           <div className="flex-1 min-w-0 flex items-center justify-end gap-1.5">
+            {!isEditing && (<>
             {voice.recording && voice.remainingSeconds != null && (
               <span className={`text-xs font-semibold tabular-nums ${voice.remainingSeconds <= 10 ? "text-red-400" : "text-red-500"}`}>
                 {voice.remainingSeconds >= 60
@@ -2439,9 +2396,10 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
               micError={voice.micError}
               onToggle={voice.toggleRecording}
             />
+            </>)}
           </div>
           {/* Escape button — sends Esc to tmux (always visible for tmux agents, disabled when stopped/error) */}
-          {onEscape && (
+          {!isEditing && onEscape && (
             <button
               type="button"
               onClick={handleEscape}
@@ -2461,6 +2419,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
             </button>
           )}
           {/* Send later (clock) button */}
+          {!isEditing && (
           <div className="relative">
             <button
               type="button"
@@ -2485,7 +2444,25 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
               />
             )}
           </div>
-          {/* Send button */}
+          )}
+          {/* Send button — becomes a save (✓) button in edit mode */}
+          {isEditing ? (
+            <button
+              type="button"
+              onClick={handleEditSaveClick}
+              disabled={saveDisabled}
+              title="Save edit"
+              className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                saveDisabled
+                  ? "bg-elevated text-dim cursor-not-allowed"
+                  : "bg-cyan-500 hover:bg-cyan-400 text-white"
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          ) : (
           <button
             type="button"
             onClick={handleSend}
@@ -2500,6 +2477,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
             </svg>
           </button>
+          )}
         </div>
       </div>
       {showSkills && (
@@ -2553,6 +2531,19 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     () => [...sentMessages, ...preSentMessages],
     [sentMessages, preSentMessages],
   );
+  // Composer-based edit of a queued/scheduled message: {id, content} while
+  // active. The bubble gets a highlight ring and ChatInput swaps into edit
+  // mode (the old inline-bubble textarea was covered by the mobile keyboard).
+  const [editingMessage, setEditingMessage] = useState(null);
+  // Auto-exit edit mode when the message leaves the editable pre-sent zone
+  // (stop hook dispatched it, it was cancelled elsewhere, or chat switched).
+  useEffect(() => {
+    if (!editingMessage) return;
+    const stillEditable = preSentMessages.some(
+      (m) => m.id === editingMessage.id && (m.status === "queued" || m.status === "scheduled"),
+    );
+    if (!stillEditable) setEditingMessage(null);
+  }, [preSentMessages, editingMessage]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   // Focus-slice mode: when initial load was a focus_id slice, the right
@@ -4046,6 +4037,18 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     }
   };
 
+  // Composer-based edit flow for queued/scheduled messages.
+  const handleStartEditMessage = (message) => {
+    setEditingMessage({ id: message.id, content: message.content });
+  };
+  const handleSaveMessageEdit = async (content) => {
+    if (!editingMessage) return;
+    const { id: msgId, content: original } = editingMessage;
+    setEditingMessage(null);
+    if (content !== original) await handleUpdateMessage(msgId, { content });
+  };
+  const handleCancelMessageEdit = () => setEditingMessage(null);
+
   const handleRetryFailed = async (failedId) => {
     const msg = failedMessages.find((m) => m.id === failedId);
     if (!msg) return;
@@ -4845,10 +4848,10 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                     </div>
                   ))}
                   {queued.map((msg, idx) => (
-                    <div key={msg.id} data-msg-id={msg.id} data-msg-type="queued_msg"><ChatBubble message={msg} project={agent.project} onCancelMessage={handleCancelMessage} onUpdateMessage={handleUpdateMessage} onSendNow={handleSendNow} agentId={id} onRefresh={refreshMessages} queuePosition={idx + 1} queueTotal={queued.length} openMenuMsgId={openMenuMsgId} setOpenMenuMsgId={setOpenMenuMsgId} bookmarkedSet={bookmarkedSet} onAfterBookmark={handleAfterBookmark} /></div>
+                    <div key={msg.id} data-msg-id={msg.id} data-msg-type="queued_msg"><ChatBubble message={msg} project={agent.project} onCancelMessage={handleCancelMessage} onUpdateMessage={handleUpdateMessage} onSendNow={handleSendNow} onStartEdit={handleStartEditMessage} editingMessageId={editingMessage?.id} agentId={id} onRefresh={refreshMessages} queuePosition={idx + 1} queueTotal={queued.length} openMenuMsgId={openMenuMsgId} setOpenMenuMsgId={setOpenMenuMsgId} bookmarkedSet={bookmarkedSet} onAfterBookmark={handleAfterBookmark} /></div>
                   ))}
                   {scheduled.map((msg) => (
-                    <div key={msg.id} data-msg-id={msg.id} data-msg-type="scheduled_msg"><ChatBubble message={msg} project={agent.project} onCancelMessage={handleCancelMessage} onUpdateMessage={handleUpdateMessage} onSendNow={handleSendNow} agentId={id} onRefresh={refreshMessages} openMenuMsgId={openMenuMsgId} setOpenMenuMsgId={setOpenMenuMsgId} bookmarkedSet={bookmarkedSet} onAfterBookmark={handleAfterBookmark} /></div>
+                    <div key={msg.id} data-msg-id={msg.id} data-msg-type="scheduled_msg"><ChatBubble message={msg} project={agent.project} onCancelMessage={handleCancelMessage} onUpdateMessage={handleUpdateMessage} onSendNow={handleSendNow} onStartEdit={handleStartEditMessage} editingMessageId={editingMessage?.id} agentId={id} onRefresh={refreshMessages} openMenuMsgId={openMenuMsgId} setOpenMenuMsgId={setOpenMenuMsgId} bookmarkedSet={bookmarkedSet} onAfterBookmark={handleAfterBookmark} /></div>
                   ))}
                 </>
               );
@@ -4892,6 +4895,9 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
         project={agent?.project}
         onSend={handleSend}
         onSendLater={handleSendLater}
+        editingMessage={editingMessage}
+        onEditSave={handleSaveMessageEdit}
+        onEditCancel={handleCancelMessageEdit}
         disabled={isStarting || isStopped || isError}
         disabledReason={disabledReason}
         isBusy={!hasTmux && isExecuting}

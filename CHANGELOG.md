@@ -11,17 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.12.1] - 2026-07-18
 
-### Added
-
--
+Patch release hardening the v0.12.0 web terminal on mobile and fixing a chat-sync stall introduced by Claude Code's daemon-side auto-compact.
 
 ### Fixed
 
--
-
-### Changed
-
--
+- **Chat sync survives daemon-side auto-compact.** Claude Code's daemon can compact a managed agent's conversation by forking it onto a new session id (`--fork-session --resume <current jsonl>`) with no agent header in the SessionStart hook; the orchestrator kept tailing the frozen pre-compact JSONL and the agent's chat silently stopped updating. The internal-worker classifier now surfaces the lineage `XY_AGENT_ID` and the resumed session parsed from argv, and when a fork resumes exactly an agent's current session the hook performs the same rotation as the in-process compact path and wakes sync. Verified live: replaying the fork hook rotated the stuck agent and imported the 60 missed messages. (321db643)
+- **Terminal overlay auto-reconnects.** iOS suspends the WebSocket whenever the PWA is backgrounded, which previously left a stale frozen screen and a manual Reconnect button. Returning to the app now re-attaches immediately (visibilitychange), foreground drops retry up to 3× with backoff, and a 25 s ping keeps NAT/proxy idle timeouts away. Clean exits and errors still require manual reconnect. (5edcbbca)
+- **No app bleed-through when the soft keyboard opens.** iOS scrolls the page to keep the focused input visible, so shrinking the overlay to `visualViewport.height` alone exposed a strip of the underlying chat page above the keyboard. The terminal pane now pins to the visual viewport (height + `translateY(offsetTop)`, tracking both resize and scroll) inside a full-screen backdrop that never resizes. (23b001d8)
 
 ## [0.12.0] - 2026-07-18
 

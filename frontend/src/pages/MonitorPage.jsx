@@ -234,6 +234,14 @@ function TokenUsageSection({ tokenUsage, onRefresh }) {
                 detail={`${tokenUsage.weekly.utilization ?? 0}% — resets ${formatResetTime(tokenUsage.weekly.resets_at)}`}
               />
             )}
+            {(tokenUsage.weekly_scoped || []).map((m) => (
+              <UsageBar
+                key={m.label}
+                label={`Weekly (${m.label})`}
+                pct={m.utilization ?? 0}
+                detail={`${m.utilization ?? 0}% — resets ${formatResetTime(m.resets_at)}`}
+              />
+            ))}
           </>
         )}
       </div>

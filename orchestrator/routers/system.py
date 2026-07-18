@@ -1172,6 +1172,25 @@ async def token_usage():
             "resets_at": seven_day.get("resets_at"),
         }
 
+    # Model-scoped weekly buckets (e.g. Fable) only appear in the newer
+    # `limits` array — the legacy top-level fields (seven_day_opus, ...) are
+    # null for these accounts.
+    scoped = []
+    for lim in data.get("limits") or []:
+        if lim.get("kind") != "weekly_scoped":
+            continue
+        model = (lim.get("scope") or {}).get("model") or {}
+        label = model.get("display_name")
+        if not label:
+            continue
+        scoped.append({
+            "label": label,
+            "utilization": lim.get("percent"),
+            "resets_at": lim.get("resets_at"),
+        })
+    if scoped:
+        result["weekly_scoped"] = scoped
+
     _token_usage_cache["data"] = result
     _token_usage_cache["ts"] = now
     return result

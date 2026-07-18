@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-07-18
+
+### Added
+
+-
+
+### Fixed
+
+-
+
+### Changed
+
+-
+
 ## [0.12.0] - 2026-07-18
 
 Interactive web terminal release. The chat header gains a terminal icon that attaches straight to the agent's live tmux session from any browser — phone included — over a new WebSocket PTY bridge. Also fixes CLI-session discovery misclassifying Claude Code's internal daemon workers as adoptable sessions.

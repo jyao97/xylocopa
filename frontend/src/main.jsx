@@ -26,8 +26,8 @@ prefetchHeavyChunks();
 // The former Linux-desktop blacklist (d8e9a3b) was removed 2026-07: Chrome
 // 146 verifiably renders backdrop-filter in every compositing mode incl.
 // pure software (on-device repro: /glass-diag.html). Residual unknown
-// engines degrade safely — .glass-bar-nav uses alpha ≥.75 so a dropped blur
-// reads as a near-solid wash, not see-through glass.
+// engines degrade safely — .glass-bar-nav uses alpha ≥.65 so a dropped blur
+// reads as a washed-out surface, not see-through glass.
 (function tagGlassCapability() {
   try {
     const ua = navigator.userAgent || "";

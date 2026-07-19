@@ -60,7 +60,7 @@
 
 /* Translucent glass surfaces (opt-in via @supports below):
    .glass-bar     — login card, bot icon, small FABs (light frost, alpha ~.7)
-   .glass-bar-nav — bottom nav + text input bars (heavy frost, alpha ≥.75).
+   .glass-bar-nav — bottom nav + text input bars (frost, alpha ≥.65).
    The heavy alpha is the readability floor: if an engine parses
    backdrop-filter but silently fails to render the blur, the bar degrades
    to a near-solid wash instead of see-through glass.
@@ -80,11 +80,11 @@
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
     --color-glass: rgba(230,233,238,0.68);
-    --color-glass-nav: rgba(240,242,245,0.75);
+    --color-glass-nav: rgba(240,242,245,0.65);
   }
   .dark {
     --color-glass: rgba(30,41,59,0.7);
-    --color-glass-nav: rgba(40,50,70,0.78);
+    --color-glass-nav: rgba(40,50,70,0.68);
   }
 }
 
@@ -1129,10 +1129,10 @@ svg text { font-family: inherit; }
     backdrop-filter: blur(28px) saturate(190%);
     box-shadow: 0 6px 32px rgba(0,0,0,0.15), inset 0 0.5px 0 var(--color-glass-edge);
   }
-  /* Glass bar nav — heavy frost (bottom nav + text inputs). Alpha ≥.75 keeps
-     the bar near-solid if an engine ever drops the blur, so readability can't
-     regress to the old bleed-through failure. Blur stays ≤16px: cheaper on
-     weak GPUs than the old 48px, per perf guidance for persistent surfaces. */
+  /* Glass bar nav — frost (bottom nav + text inputs). Alpha ≥.65 keeps a
+     dropped blur degrading to a washed-out surface, not the old see-through
+     bleed-through. Blur stays ≤16px: cheaper on weak GPUs than the old 48px,
+     per perf guidance for persistent surfaces. */
   .glass-bar-nav {
     background: var(--color-glass-nav);
     border: 1px solid var(--color-glass-edge);

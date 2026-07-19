@@ -18,32 +18,23 @@ setupFrameLogger();
 // Suspense "Loading..." fallback.
 prefetchHeavyChunks();
 
-// Mark non-mobile Linux and e-ink Android tablets as glass-incapable for
-// `.glass-bar` (translucent login card, bot icon, small FABs): backdrop-filter
-// parses on these platforms but the GPU compositor frequently fails to render
-// the blur, so content underneath bleeds through. `.glass-bar-nav` is already
-// opaque for everyone so it doesn't need this fallback.
+// Mark e-ink devices as glass-incapable: `html.no-glass` pins .glass-bar and
+// .glass-bar-nav opaque + blur-free (see index.css). Their vendor-forked
+// engines often parse backdrop-filter without rendering the blur, and e-ink
+// panels can't display it anyway.
 //
-// CAVEAT — best-effort, not authoritative. Real glass rendering depends on
-// the GPU compositor / driver / OS-level accessibility settings, none of
-// which can be reliably sniffed from the browser. Devices that slip past
-// this check and still fail to render the blur will show translucent rgba
-// surfaces *without* any blur — content underneath bleeds through and the
-// "glass" ends up looking almost fully transparent. Known slip-throughs:
-//   - Mac Chrome with hardware acceleration disabled
-//   - Mac Chrome with macOS "Reduce transparency" accessibility on
-//   - Windows Chrome on weaker integrated GPUs
-//   - New e-ink devices with UA strings not matching the regex below
-// `.glass-bar-nav` stays opaque-always for exactly this reason; do not
-// expand translucent glass to more persistent surfaces without a similar
-// opt-out.
+// The former Linux-desktop blacklist (d8e9a3b) was removed 2026-07: Chrome
+// 146 verifiably renders backdrop-filter in every compositing mode incl.
+// pure software (on-device repro: /glass-diag.html). Residual unknown
+// engines degrade safely — .glass-bar-nav uses alpha ≥.75 so a dropped blur
+// reads as a near-solid wash, not see-through glass.
 (function tagGlassCapability() {
   try {
     const ua = navigator.userAgent || "";
     const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
     const isLinux = /Linux/i.test(ua) && !/Android/i.test(ua);
     const isEInk = /Onyx|BOOX|Kindle|Silk|reMarkable|PocketBook|Likebook|InkPad|MEEbook|Bigme|Hisense.*ink|Meebook|iReader/i.test(ua);
-    if ((isLinux && !isMobile) || isEInk) {
+    if (isEInk) {
       document.documentElement.classList.add("no-glass");
     }
 

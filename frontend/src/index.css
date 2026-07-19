@@ -58,42 +58,78 @@
   --color-glass-edge: rgba(255,255,255,0.22);
 }
 
-/* Translucent glass only for .glass-bar (login card, bot icon, small FABs).
-   .glass-bar-nav (bottom nav + text input bars) stays opaque always — those
-   are persistent surfaces where bleed-through was a real bug across many
-   GPU configs. `html.no-glass` (set in main.jsx for Linux desktop) and
-   `@media (update: slow)` (e-ink) pin .glass-bar back to opaque too.
+/* Translucent glass surfaces (opt-in via @supports below):
+   .glass-bar     — login card, bot icon, small FABs (light frost, alpha ~.7)
+   .glass-bar-nav — bottom nav + text input bars (heavy frost, alpha ≥.75).
+   The heavy alpha is the readability floor: if an engine parses
+   backdrop-filter but silently fails to render the blur, the bar degrades
+   to a near-solid wash instead of see-through glass.
+
+   Opaque fallbacks pin both back off for:
+   - html.no-glass (e-ink UA sniff in main.jsx — vendor-forked engines)
+   - @media (update: slow) (standards-honoring e-ink)
+   - @media (prefers-reduced-transparency: reduce) (OS accessibility)
+   - html.eink (manual e-ink mode; hardened with !important further below)
 
    CAVEAT — `@supports (backdrop-filter)` only reports whether the property
-   *parses*, not whether the GPU compositor actually renders the blur. On
-   devices that pass this check but fail to render (Mac Chrome with HW accel
-   off, "Reduce transparency" on, Linux Chrome, some e-ink, some weak GPUs),
-   the translucent rgba below applies without any blur — i.e. content
-   underneath becomes ~30% visible and the "glass" looks nearly transparent.
-   The main.jsx UA sniff catches the most common cases but is not
-   comprehensive. */
+   *parses*, not whether the compositor actually renders the blur. Verified
+   2026-07 (repro page: /glass-diag.html): Chrome 146 renders it in every
+   compositing mode incl. pure software, so the residual risk is legacy or
+   vendor-forked engines — which the heavy alpha degrades safely on. The
+   former blanket Linux-desktop blacklist was removed on that evidence. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
     --color-glass: rgba(230,233,238,0.68);
+    --color-glass-nav: rgba(240,242,245,0.75);
   }
   .dark {
     --color-glass: rgba(30,41,59,0.7);
+    --color-glass-nav: rgba(40,50,70,0.78);
   }
 }
 
 html.no-glass {
   --color-glass: #e6e9ee;
+  --color-glass-nav: #f0f2f5;
 }
 html.no-glass.dark {
   --color-glass: #1e293b;
+  --color-glass-nav: #283246;
+}
+html.no-glass .glass-bar,
+html.no-glass .glass-bar-nav {
+  backdrop-filter: none;
 }
 
 @media (update: slow) {
   :root {
     --color-glass: #e6e9ee;
+    --color-glass-nav: #f0f2f5;
   }
   .dark {
     --color-glass: #1e293b;
+    --color-glass-nav: #283246;
+  }
+  /* !important: these sit before the .glass-bar/.glass-bar-nav declarations
+     below, and specificity ties would otherwise let the blur win. */
+  .glass-bar,
+  .glass-bar-nav {
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --color-glass: #e6e9ee;
+    --color-glass-nav: #f0f2f5;
+  }
+  .dark {
+    --color-glass: #1e293b;
+    --color-glass-nav: #283246;
+  }
+  .glass-bar,
+  .glass-bar-nav {
+    backdrop-filter: none !important;
   }
 }
 
@@ -250,7 +286,6 @@ html.eink :where(*) {
 html.eink .glass-bar,
 html.eink .glass-bar-nav {
   backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   background: var(--color-surface) !important;
   border: 1px solid var(--color-edge) !important;
   box-shadow: none !important;
@@ -445,7 +480,6 @@ html.eink .toast-pill {
   background: var(--color-page) !important;
   border: 1px solid var(--color-heading) !important;
   backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
 }
 html.eink .toast-pill span {
   color: var(--color-heading) !important;
@@ -1082,21 +1116,27 @@ svg text { font-family: inherit; }
   }
 
   /* Glass bar (translucent — login card, bot icon, small FABs).
-     UA-detected bad platforms (Linux desktop, e-ink) fall back to
-     opaque via --color-glass overrides above. */
+     E-ink and reduce-transparency users fall back to opaque via the
+     --color-glass overrides + backdrop-filter:none rules above. */
   .glass-bar {
     background: var(--color-glass);
     border: 1px solid var(--color-glass-edge);
+    /* Standard property ONLY — Lightning CSS (Tailwind v4 pipeline) collapses
+       a hand-written standard+`-webkit-` pair into the `-webkit-` form alone,
+       which Blink does not implement (Safari-only prefix): Chromium then gets
+       no blur at all. The pipeline auto-generates the -webkit- prefix for
+       Safari from the standard property, like its own backdrop-* utilities. */
     backdrop-filter: blur(28px) saturate(190%);
-    -webkit-backdrop-filter: blur(28px) saturate(190%);
     box-shadow: 0 6px 32px rgba(0,0,0,0.15), inset 0 0.5px 0 var(--color-glass-edge);
   }
-  /* Glass bar nav — kept opaque always (bottom nav + text inputs).
-     Translucent + backdrop-filter was unreliable on these persistent
-     surfaces across platforms; bleed-through was the bug. */
+  /* Glass bar nav — heavy frost (bottom nav + text inputs). Alpha ≥.75 keeps
+     the bar near-solid if an engine ever drops the blur, so readability can't
+     regress to the old bleed-through failure. Blur stays ≤16px: cheaper on
+     weak GPUs than the old 48px, per perf guidance for persistent surfaces. */
   .glass-bar-nav {
     background: var(--color-glass-nav);
     border: 1px solid var(--color-glass-edge);
+    backdrop-filter: blur(16px) saturate(180%);
     box-shadow: 0 4px 24px rgba(0,0,0,0.1), inset 0 0.5px 0 var(--color-glass-edge);
   }
 

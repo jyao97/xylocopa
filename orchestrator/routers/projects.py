@@ -717,9 +717,9 @@ ALWAYS respond in English regardless of the source language.
 STRICT RULES:
 1. Output ONLY numbered insights — no preamble, no explanation, no markdown fences.
 2. Focus on: architectural decisions, bug root causes & fixes, design choices, gotchas, and lessons learned.
-3. Omit routine/trivial activity. Only include things worth remembering for future work.
+3. Omit routine/trivial activity. Only include things worth remembering for future work — if an insight is obvious from reading the code or restates what the task asked for, drop it.
 4. Each insight must be self-contained — readable without the original conversation.
-5. Max 15 items. Be concise but specific — include file names, function names, concrete details.
+5. Max 8 items, ONE sentence each. Prefer fewer, denser items over many shallow ones — include file names, function names, concrete details, but no elaboration beyond the single sentence.
 6. CRITICAL — each insight must be PARALLEL and INDEPENDENT, not sequential. Do NOT write narrative steps like "First did X, then Y, finally Z". Each numbered item should be an atomic, standalone fact or lesson that can be retrieved individually. Bad: "Refactored auth module, then updated tests, then fixed CI". Good: separate items — "Auth module refactored to use middleware pattern (`auth.py`)" / "Auth test suite updated for new middleware API" / "CI config fixed: missing env var `AUTH_SECRET`".
 7. Write insights in English even if the source conversation is in another language.
 
@@ -895,12 +895,13 @@ def _generate_retry_summary_impl(agent_id: str, task_id: str,
     if incomplete_reason:
         reason_line = f"\nUser's reason for stopping: {incomplete_reason}"
 
-    prompt = f"""Summarize this agent conversation for a retry attempt. Be concise (3-5 bullet points max, under 500 chars total).
+    prompt = f"""Summarize this agent conversation for a retry attempt. The next agent starts from scratch and this summary is its ONLY window into the previous attempt — err on the side of detail (5-10 bullet points, up to ~1500 chars).
 
 Focus on:
-1. What approaches the agent tried and their outcomes
-2. What worked vs what didn't
-3. Core unsolved issues remaining
+1. What approaches the agent tried and their outcomes — name the specific files/functions touched
+2. What worked vs what didn't, with the concrete failure evidence (exact error messages, failing test names, wrong behavior observed)
+3. Root causes identified or ruled out, so the next agent doesn't re-investigate dead ends
+4. Core unsolved issues remaining and the most promising next step, if the conversation suggests one
 
 Do NOT include user feedback — that will be provided separately to the next agent.
 

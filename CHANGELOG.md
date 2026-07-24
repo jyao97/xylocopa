@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-24
+
+Model refresh release. Claude Opus 5 (released by Anthropic this month at the same $5/$25 pricing as Opus 4.8) becomes the default model for new tasks and projects, the model picker is slimmed to current tiers, the effort picker regains the missing High level, and the background summarization prompts are retuned. Also restores the frosted-glass treatment on the nav and input bars that never rendered on Chromium.
+
+### Added
+
+- **Claude Opus 5 support** (`claude-opus-5`). Wired through the full stack: model picker, backend `VALID_MODELS` validation, pricing table ($5/$25 per MTok), 1M context-window limit for the context pill, and the MCP `task_create` model-selection guidance. (62270a45, 632a66e2)
+
+### Changed
+
+- **Default model is now Opus 5** for new tasks and projects (`DEFAULT_MODEL` / `DEFAULT_CLAUDE_MODEL`). Fable 5 still leads the picker visually but stays opt-in due to ~2x cost. Tests now assert the config constant instead of a hardcoded model id. (289d1a4d)
+- **Model picker slimmed to five options** — Fable 5, Opus 5, Opus 4.6, Sonnet 5, Haiku 4.5. Opus 4.7 and 4.8 are removed from the picker but remain valid on the backend, so existing tasks/projects keep working and their tags keep proper labels via a legacy-label map. (b69ea27d, 6804a79d)
+- **Effort pickers include High again.** All four selectors (EffortSelector, NewTaskPage, QueueCard, InboxCard) offered only Low/Medium/XHigh/Max; the backend always accepted `high`. (62270a45)
+- **Summary prompts retuned.** Agent-insight extraction is tighter (max 8 items, one sentence each, drop anything obvious from the code); retry summaries are richer (5-10 bullets, ~1500 chars, with files touched, concrete failure evidence, and ruled-out dead ends) since they are the next attempt's only window into the previous one. (6ea85179)
+- **OpenAI helper calls read `OPENAI_QUICK_MODEL`** (default `gpt-4o-mini`) instead of overloading `SUMMARY_MODEL`, which now exclusively selects the Claude model for `claude -p` background jobs. (a38b5b9c)
+
+### Fixed
+
+- **Frosted glass on nav + input bars renders on Chromium.** The `backdrop-filter` treatment silently never worked; fixed the root cause, tuned glass alpha to .65 light / .68 dark, and added a standalone `/glass-diag.html` device diagnostic. (aab41a04, 579637e8, a8c89e3b)
+
 ## [0.12.1] - 2026-07-18
 
 Patch release hardening the v0.12.0 web terminal on mobile and fixing a chat-sync stall introduced by Claude Code's daemon-side auto-compact.

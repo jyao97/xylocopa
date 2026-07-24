@@ -46,7 +46,6 @@ export const AGENT_MODES = [
 export const MODEL_OPTIONS = [
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-opus-5", label: "Opus 5" },
-  { value: "claude-opus-4-8", label: "Opus 4.8" },
   { value: "claude-opus-4-6", label: "Opus 4.6" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
@@ -60,6 +59,7 @@ export const DEFAULT_MODEL = "claude-opus-5";
 // Models no longer offered in the picker but still valid on existing
 // agents/tasks — keeps their tags rendering with proper labels.
 const LEGACY_MODEL_LABELS = {
+  "claude-opus-4-8": "Opus 4.8",
   "claude-opus-4-7": "Opus 4.7",
 };
 

@@ -3466,55 +3466,71 @@ async def diverge_message(
         _safe_unlink(new_jsonl)
         raise HTTPException(status_code=500, detail=f"tmux launch failed: {e}")
 
-    # Task: created when a purpose was given or the source is task-bound.
-    # Panel attributes inherit from the source task (fallback: source agent).
-    src_task = db.get(Task, agent.task_id) if agent.task_id else None
-    new_task = None
-    if purpose or src_task:
-        title = purpose or f"Diverge: {src_task.title if src_task and src_task.title else agent.name}"
-        new_task = Task(
-            title=title[:300],
-            description=(
-                f"Diverged from agent {agent.id} ({agent.name}) "
-                f"at message {message_id}."
-            ),
-            project_name=agent.project,
-            priority=src_task.priority if src_task else 0,
-            status=TaskStatus.EXECUTING,
-            agent_id=agent_hex,
-            worktree_name=src_task.worktree_name if src_task else agent.worktree,
-            branch_name=src_task.branch_name if src_task else None,
-            model=(src_task.model if src_task else None) or agent.model,
-            effort=(src_task.effort if src_task else None) or agent.effort,
+    try:
+        new_agent = Agent(
+            id=agent_hex,
+            project=agent.project,
+            name=(purpose or f"Diverge: {agent.name}")[:200],
+            mode=agent.mode,
+            status=AgentStatus.IDLE,
+            model=agent.model,
+            effort=agent.effort,
+            worktree=agent.worktree,
             skip_permissions=agent.skip_permissions,
-            use_worktree=src_task.use_worktree if src_task else bool(agent.worktree),
-            use_tmux=True,
-            timeout_seconds=src_task.timeout_seconds if src_task else agent.timeout_seconds,
-            started_at=_utcnow(),
+            timeout_seconds=agent.timeout_seconds,
+            cli_sync=True,
+            session_id=new_sid,
+            tmux_pane=pane_id,
+            last_message_preview="Diverged conversation",
+            last_message_at=datetime.now(timezone.utc),
         )
-        db.add(new_task)
+        db.add(new_agent)
+        # Agent row must be flushed before the Task references it (agent_id
+        # FK); task_id is backfilled after — same circular-FK dance as
+        # launch_tmux_agent.
         db.flush()
 
-    new_agent = Agent(
-        id=agent_hex,
-        project=agent.project,
-        name=(purpose or f"Diverge: {agent.name}")[:200],
-        mode=agent.mode,
-        status=AgentStatus.IDLE,
-        model=agent.model,
-        effort=agent.effort,
-        worktree=agent.worktree,
-        skip_permissions=agent.skip_permissions,
-        timeout_seconds=agent.timeout_seconds,
-        cli_sync=True,
-        session_id=new_sid,
-        tmux_pane=pane_id,
-        task_id=new_task.id if new_task else None,
-        last_message_preview="Diverged conversation",
-        last_message_at=datetime.now(timezone.utc),
-    )
-    db.add(new_agent)
-    db.commit()
+        # Task: created when a purpose was given or the source is task-bound.
+        # Panel attributes inherit from the source task (fallback: source agent).
+        src_task = db.get(Task, agent.task_id) if agent.task_id else None
+        new_task = None
+        if purpose or src_task:
+            title = purpose or f"Diverge: {src_task.title if src_task and src_task.title else agent.name}"
+            new_task = Task(
+                title=title[:300],
+                description=(
+                    f"Diverged from agent {agent.id} ({agent.name}) "
+                    f"at message {message_id}."
+                ),
+                project_name=agent.project,
+                priority=src_task.priority if src_task else 0,
+                status=TaskStatus.EXECUTING,
+                agent_id=agent_hex,
+                worktree_name=src_task.worktree_name if src_task else agent.worktree,
+                branch_name=src_task.branch_name if src_task else None,
+                model=(src_task.model if src_task else None) or agent.model,
+                effort=(src_task.effort if src_task else None) or agent.effort,
+                skip_permissions=agent.skip_permissions,
+                use_worktree=src_task.use_worktree if src_task else bool(agent.worktree),
+                use_tmux=True,
+                timeout_seconds=src_task.timeout_seconds if src_task else agent.timeout_seconds,
+                started_at=_utcnow(),
+            )
+            db.add(new_task)
+            db.flush()
+            new_agent.task_id = new_task.id
+
+        db.commit()
+    except Exception:
+        # Don't leave an orphan claude pane + forked JSONL behind.
+        db.rollback()
+        logger.exception("diverge: DB registration failed, cleaning up")
+        _graceful_kill_tmux(pane_id, tmux_name)
+        _safe_unlink(new_jsonl)
+        _safe_unlink(os.path.join(session_dir, f"{new_sid}.owner"))
+        raise HTTPException(
+            status_code=500, detail="Failed to register diverged agent",
+        )
     db.refresh(new_agent)
 
     # Sync imports the truncated transcript into the new agent's messages,

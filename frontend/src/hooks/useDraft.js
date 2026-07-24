@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getVoiceDraftChannel, subscribeVoiceDraft } from "../lib/voiceStore";
+import { safeSetItem } from "../lib/safeStorage";
 
 /**
  * Persist a draft value in localStorage across navigation and refresh.
@@ -104,13 +105,13 @@ export default function useDraft(key, initialValue = "") {
       if (storageKey) {
         try {
           if (stringMode) {
-            if (next) localStorage.setItem(storageKey, next);
+            if (next) safeSetItem(storageKey, next);
             else localStorage.removeItem(storageKey);
           } else {
-            localStorage.setItem(storageKey, JSON.stringify(next));
+            safeSetItem(storageKey, JSON.stringify(next));
           }
         } catch (err) {
-          // Expected: localStorage may throw in private browsing or when quota is exceeded
+          // Expected: localStorage may throw in private browsing
           console.warn("useDraft: failed to write draft to localStorage:", err);
         }
       }

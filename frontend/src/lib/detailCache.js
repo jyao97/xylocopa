@@ -27,6 +27,15 @@
 // action completes. Background polls are not invalidations — they
 // just overwrite the entry.
 
+import { safeSetItem } from "./safeStorage";
+
+// Cap on entries written to localStorage per persisted cache. The in-memory
+// map is unbounded (session-scoped), but the persisted snapshot must not
+// grow with every agent ever seen — unbounded persistence is what filled
+// the localStorage quota ("The quota has been exceeded" on Safari) and
+// silently broke draft/voice/prefill writes.
+const MAX_PERSIST_ENTRIES = 80;
+
 function makeCache({ persistKey } = {}) {
   const store = new Map();
   let saveTimer = null;
@@ -55,9 +64,14 @@ function makeCache({ persistKey } = {}) {
     saveTimer = setTimeout(() => {
       saveTimer = null;
       try {
-        localStorage.setItem(persistKey, JSON.stringify(Object.fromEntries(store)));
+        let entries = [...store.entries()];
+        if (entries.length > MAX_PERSIST_ENTRIES) {
+          entries.sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0));
+          entries = entries.slice(0, MAX_PERSIST_ENTRIES);
+        }
+        safeSetItem(persistKey, JSON.stringify(Object.fromEntries(entries)));
       } catch {
-        // quota exceeded etc — drop silently, in-memory cache still works
+        // storage disabled etc — drop silently, in-memory cache still works
       }
     }, 300);
   }

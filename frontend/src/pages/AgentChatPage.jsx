@@ -70,6 +70,7 @@ import FileAttachments from "../components/FilePreview";
 import { WebAppCardBubble } from "../components/WebAppPreview";
 import BookmarkNotePrompt from "../components/BookmarkNotePrompt";
 import DivergePrompt from "../components/DivergePrompt";
+import { safeSetItem } from "../lib/safeStorage";
 import ImageLightbox from "../components/ImageLightbox";
 import {
   AGENT_STATUS_COLORS, AGENT_STATUS_TEXT_COLORS, modelDisplayName,
@@ -1327,7 +1328,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     // AGENT-message diverge: seed with the entered purpose (if any).
     const prefill = isUser ? (displayContent || "") : purpose;
     if (prefill) {
-      try { localStorage.setItem(`draft:chat:${agent.id}`, prefill); } catch { /* ignore */ }
+      try { safeSetItem(`draft:chat:${agent.id}`, prefill); } catch { /* ignore */ }
     }
     bubbleToast.success("Diverged");
     navigate(`/agents/${agent.id}`);
@@ -2070,7 +2071,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
             : null
         ),
       }));
-      try { localStorage.setItem(attachmentCacheKey, JSON.stringify(toCache)); } catch { /* ignore */ }
+      try { safeSetItem(attachmentCacheKey, JSON.stringify(toCache)); } catch { /* ignore */ }
     } else {
       try { localStorage.removeItem(attachmentCacheKey); } catch { /* ignore */ }
     }

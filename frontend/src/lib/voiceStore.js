@@ -1,3 +1,5 @@
+import { safeSetItem } from "./safeStorage";
+
 const DB_NAME = "xylocopa-voice";
 const DB_VERSION = 1;
 const STORE = "jobs";
@@ -78,7 +80,7 @@ export function appendVoiceDraft(storageKey, text) {
   try {
     const cur = localStorage.getItem(storageKey) || "";
     const next = cur ? cur + " " + text : text;
-    localStorage.setItem(storageKey, next);
+    safeSetItem(storageKey, next);
     const payload = { key: storageKey, value: next };
     // Same-tab fan-out (BroadcastChannel does not self-deliver).
     for (const h of _localListeners) {

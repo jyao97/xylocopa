@@ -21,7 +21,8 @@ from __future__ import annotations
 PRICING: dict[str, dict[str, float]] = {
     # --- Fable 5 ($10/$50 — flagship) ---
     "claude-fable-5":    {"input": 10.00, "cache_create_5m": 12.50, "cache_create_1h": 20.00, "cache_read": 1.00, "output": 50.00},
-    # --- Opus 4.5+ ($5/$25 — current generation) ---
+    # --- Opus 4.5+ / Opus 5 ($5/$25 — current generation) ---
+    "claude-opus-5":     {"input": 5.00,  "cache_create_5m": 6.25,  "cache_create_1h": 10.00, "cache_read": 0.50, "output": 25.00},
     "claude-opus-4-8":   {"input": 5.00,  "cache_create_5m": 6.25,  "cache_create_1h": 10.00, "cache_read": 0.50, "output": 25.00},
     "claude-opus-4-7":   {"input": 5.00,  "cache_create_5m": 6.25,  "cache_create_1h": 10.00, "cache_read": 0.50, "output": 25.00},
     "claude-opus-4-6":   {"input": 5.00,  "cache_create_5m": 6.25,  "cache_create_1h": 10.00, "cache_read": 0.50, "output": 25.00},

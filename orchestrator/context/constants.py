@@ -12,6 +12,7 @@ from __future__ import annotations
 # sessions showing inflated /context percentages".
 MODEL_LIMITS: dict[str, int] = {
     "claude-fable-5": 1_000_000,
+    "claude-opus-5": 1_000_000,
     "claude-opus-4-8": 1_000_000,
     "claude-opus-4-7": 1_000_000,
     "claude-opus-4-7-20251015": 1_000_000,

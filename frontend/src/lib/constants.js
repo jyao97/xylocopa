@@ -47,7 +47,6 @@ export const MODEL_OPTIONS = [
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-opus-5", label: "Opus 5" },
   { value: "claude-opus-4-8", label: "Opus 4.8" },
-  { value: "claude-opus-4-7", label: "Opus 4.7" },
   { value: "claude-opus-4-6", label: "Opus 4.6" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
@@ -58,11 +57,18 @@ export const MODEL_OPTIONS = [
 // (~2x cost), so new tasks default to Opus 4.8 unless the user picks Fable.
 export const DEFAULT_MODEL = "claude-opus-4-8";
 
+// Models no longer offered in the picker but still valid on existing
+// agents/tasks — keeps their tags rendering with proper labels.
+const LEGACY_MODEL_LABELS = {
+  "claude-opus-4-7": "Opus 4.7",
+};
+
 /** Map full model ID to short display name. */
 export function modelDisplayName(modelId) {
   if (!modelId) return null;
   const opt = MODEL_OPTIONS.find((m) => m.value === modelId);
   if (opt) return opt.label;
+  if (LEGACY_MODEL_LABELS[modelId]) return LEGACY_MODEL_LABELS[modelId];
   // Fallback: strip "claude-" prefix and date suffixes
   return modelId
     .replace(/^claude-/, "")

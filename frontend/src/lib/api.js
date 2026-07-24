@@ -330,6 +330,11 @@ export const updateAgent = (id, data) =>
   request(`/api/agents/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const launchTmuxAgent = (data) =>
   request("/api/agents/launch-tmux", { method: "POST", body: JSON.stringify(data) });
+export const divergeMessage = (agentId, messageId, body) =>
+  request(`/api/agents/${agentId}/messages/${messageId}/diverge`, {
+    method: "POST",
+    body: JSON.stringify(body || {}),
+  });
 export const scanAgents = () =>
   request("/api/agents/scan", { method: "POST" });
 export const wakeSyncAll = () =>

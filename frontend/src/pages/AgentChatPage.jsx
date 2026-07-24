@@ -69,6 +69,7 @@ class SafeMarkdown extends Component {
 import FileAttachments from "../components/FilePreview";
 import { WebAppCardBubble } from "../components/WebAppPreview";
 import BookmarkNotePrompt from "../components/BookmarkNotePrompt";
+import DivergePrompt from "../components/DivergePrompt";
 import ImageLightbox from "../components/ImageLightbox";
 import {
   AGENT_STATUS_COLORS, AGENT_STATUS_TEXT_COLORS, modelDisplayName,
@@ -1242,8 +1243,10 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   };
   const [copied, setCopied] = useState(false);
   const [inlineLightbox, setInlineLightbox] = useState(null); // { media, initialIndex }
+  const [showDiverge, setShowDiverge] = useState(false);
   const bookmarkActive = !!(bookmarkedSet && message?.id && bookmarkedSet.has(message.id));
   const bubbleToast = useToast();
+  const navigate = useNavigate();
   const lastTapRef = useRef(0);
   const touchStartYRef = useRef(0);
   const markdownRef = useRef(null);
@@ -1275,6 +1278,12 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
   // AGENT message. Skip pre-delivery (queued/scheduled/cancelled) and SYSTEM/
   // task-notification bubbles which already exited above.
   const canBookmark = !isPreDelivery && !!message.id && (message.role === "USER" || message.role === "AGENT");
+  // Diverge eligibility: settled USER/AGENT text messages that came through
+  // the JSONL (backend re-validates the session anchor). Interactive cards
+  // and non-text kinds have no clean fork point.
+  const canDiverge = canBookmark
+    && (!message.kind || message.kind === "text")
+    && !message.metadata?.interactive?.length;
   // `canModify` gates the action popover opening at all — anything with
   // any action button (including Copy-only) should still show the menu,
   // but keeping the name for minimal diff: open the popover for any
@@ -1304,6 +1313,24 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
     } catch (err) {
       bubbleToast.error(err?.message || "Failed to update bookmark");
     }
+  };
+  const handleDivergeOpen = (e) => {
+    e?.stopPropagation?.();
+    setShowActions(false);
+    setShowDiverge(true);
+  };
+  const handleDiverged = (agent, purpose) => {
+    setShowDiverge(false);
+    // Prefill the new chat's composer via its localStorage draft key —
+    // useDraft treats localStorage as the source of truth on mount.
+    // USER-message diverge = edit-and-resend: seed with the original text;
+    // AGENT-message diverge: seed with the entered purpose (if any).
+    const prefill = isUser ? (displayContent || "") : purpose;
+    if (prefill) {
+      try { localStorage.setItem(`draft:chat:${agent.id}`, prefill); } catch { /* ignore */ }
+    }
+    bubbleToast.success("Diverged");
+    navigate(`/agents/${agent.id}`);
   };
   // Touch end — double-tap detection. Skip if the finger moved significantly
   // (scroll gesture, not a tap).
@@ -1548,6 +1575,14 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
             onClose={() => setInlineLightbox(null)}
           />
         )}
+        {showDiverge && (
+          <DivergePrompt
+            agentId={agentId}
+            message={message}
+            onClose={() => setShowDiverge(false)}
+            onDiverged={handleDiverged}
+          />
+        )}
         {!isUser && message.metadata?.interactive?.length > 0 && (
           <InteractiveBubbles metadata={message.metadata} agentId={agentId} onAnswered={onRefresh} messageContent={message.content} project={project} />
         )}
@@ -1611,6 +1646,21 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 >
                   <svg className="w-4 h-4" fill={bookmarkActive ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                </button>
+              )}
+              {canDiverge && (
+                <button
+                  type="button"
+                  onClick={handleDivergeOpen}
+                  title="Diverge — branch a new conversation from here"
+                  className="px-3 py-2 text-cyan-500 hover:bg-cyan-600/10 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" d="M6 3v12" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path strokeLinecap="round" d="M18 9a9 9 0 01-9 9" />
                   </svg>
                 </button>
               )}

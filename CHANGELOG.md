@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-24
+
+Conversation branching release. A chat message can now be forked into a new agent that inherits the full conversation — including tool inputs/outputs and file-state context — by truncating and resuming the underlying Claude Code session transcript. Also fixes the localStorage quota exhaustion that silently dropped chat drafts and voice transcripts on long-lived installs.
+
+### Added
+
+- **Diverge conversations.** Double-tap a chat bubble → the action menu gains a split-arrows button that forks the conversation at that message into a new agent. The source session JSONL is truncated at the message, re-keyed to a fresh session id, and resumed in a new tmux pane, so the branch replays the original transcript verbatim. On an agent reply the branch keeps that reply and continues after it; on a user message the branch cuts before it and the text prefills the new chat's composer for edit-and-resend. An optional purpose becomes the new agent's name, the Task title (panel attributes inherit from the source task), and the composer prefill. Pre-compact/clear sessions are searched too, so old messages remain forkable. Forked transcripts close with a standard CC interrupt marker, so agent status converges to IDLE through the normal JSONL-derived state machine with no out-of-band writes. (f77eb067, ce487d4e, 53e23579, 9f73fb31, e86f867c, cd7905e0)
+
+### Fixed
+
+- **localStorage quota exhaustion ("The quota has been exceeded").** The persisted detail caches (agent briefs, insight suggestions) grew one entry per agent ever seen and eventually filled the origin quota — from then on chat drafts, voice transcripts, and composer prefills were silently dropped. Persisted caches are now capped at the 80 newest entries, and draft/voice/prefill writes go through a quota-safe helper that evicts advisory caches (largest first) and retries; real drafts and auth state are never evicted. (22862189)
+
 ## [0.13.0] - 2026-07-24
 
 Model refresh release. Claude Opus 5 (released by Anthropic this month at the same $5/$25 pricing as Opus 4.8) becomes the default model for new tasks and projects, the model picker is slimmed to current tiers, the effort picker regains the missing High level, and the background summarization prompts are retuned. Also restores the frosted-glass treatment on the nav and input bars that never rendered on Chromium.

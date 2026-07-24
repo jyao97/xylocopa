@@ -3533,10 +3533,34 @@ async def diverge_message(
         )
     db.refresh(new_agent)
 
-    # Sync imports the truncated transcript into the new agent's messages,
-    # so the diverged chat shows the inherited history.
+    # Import the truncated transcript synchronously so the diverged chat
+    # shows the inherited history immediately. The SyncContext is created
+    # inside the loop task, so poll briefly until the drain can run.
     ad.start_session_sync(agent_hex, new_sid, project.path, cwd=launch_cwd)
-    ad.wake_sync(agent_hex)
+    drained = False
+    for _ in range(30):
+        try:
+            if await ad._drain_session_sync(agent_hex):
+                drained = True
+                break
+        except Exception:
+            logger.exception("diverge: history drain failed for %s", agent_hex)
+            break
+        await asyncio.sleep(0.1)
+    if not drained:
+        logger.warning("diverge: initial drain did not run for agent %s", agent_hex)
+
+    # The imported history ends mid-conversation with no trailing stop
+    # signal, so the status deriver (sync_engine._derive_status_transition)
+    # flips the fresh agent to EXECUTING — but the resumed claude is idle
+    # awaiting input and will never emit a Stop hook for replayed turns.
+    # Force IDLE after the import; later re-scans dedup against the
+    # imported rows (replayed turns carry no status signal), so it sticks.
+    db.refresh(new_agent)
+    if new_agent.status != AgentStatus.IDLE:
+        new_agent.status = AgentStatus.IDLE
+        new_agent.generating_msg_id = None
+        db.commit()
 
     logger.info(
         "diverge: agent %s msg %s (%s, include=%s) → agent %s sid %s "

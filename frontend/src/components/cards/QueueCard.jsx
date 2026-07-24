@@ -9,6 +9,7 @@ const MODEL_PICKER = MODEL_OPTIONS.map(m => ({ value: m.value, label: m.label })
 const EFFORT_PICKER = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Med" },
+  { value: "high", label: "High" },
   { value: "xhigh", label: "XHigh" },
   { value: "max", label: "Max" },
 ];

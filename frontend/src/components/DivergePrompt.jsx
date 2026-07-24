@@ -49,10 +49,10 @@ export default function DivergePrompt({ agentId, message, onClose, onDiverged })
       <div className="diverge-card" onClick={(e) => e.stopPropagation()}>
         <p className="diverge-title flex items-center gap-1.5">
           <svg className="w-[18px] h-[18px] text-cyan-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" d="M6 3v12" />
-            <circle cx="18" cy="6" r="3" />
-            <circle cx="6" cy="18" r="3" />
-            <path strokeLinecap="round" d="M18 9a9 9 0 01-9 9" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 17h-8l-3.5-5H3" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7h-8l-3.5 5" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 10l3-3-3-3" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 20l3-3-3-3" />
           </svg>
           Diverge conversation
         </p>

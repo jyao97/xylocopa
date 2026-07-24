@@ -5,10 +5,25 @@ a chosen entry (located by its `uuid`), rewriting the session id on every
 line, and writing the result as a fresh `<new_sid>.jsonl` that
 `claude --resume <new_sid>` can pick up.
 
+The forked transcript ends with a standard CC interrupt marker
+("[Request interrupted by user]") — a fork IS an interruption: the
+conversation was cut at that point and waits for the user's new direction.
+The marker doubles as the idle signal for xylocopa's status derivation
+(sync parses it as kind="interrupt" → agent stays IDLE), so the state
+machine converges from JSONL truth alone with no out-of-band status write.
+
 Pure line-list functions — no filesystem access — so they are unit-testable.
 """
 
 import json
+import uuid as _uuid
+from datetime import datetime, timezone
+
+INTERRUPT_TEXT = "[Request interrupted by user]"
+
+# Entry fields inherited from the last kept entry so the marker matches the
+# surrounding transcript (CC writes these on every user entry).
+_INHERIT_FIELDS = ("cwd", "gitBranch", "version", "userType", "entrypoint")
 
 # Entry types that carry conversation turns. Everything else (attachment,
 # mode, permission-mode, ai-title, last-prompt, file-history-snapshot,
@@ -98,13 +113,52 @@ def rewrite_session_id(lines: list[str], new_session_id: str) -> list[str]:
     return out
 
 
+def make_interrupt_line(kept_lines: list[str], new_session_id: str) -> str:
+    """Build a CC-format interrupt marker entry closing the forked transcript.
+
+    Mirrors the exact shape CC writes on ESC (user entry, content list with
+    a single text block). parentUuid chains to the last kept entry that has
+    a uuid; cwd/gitBranch/version etc. are inherited from the tail so the
+    marker matches the surrounding transcript.
+    """
+    parent_uuid = None
+    inherited: dict = {}
+    for line in reversed(kept_lines):
+        entry = _parse(line)
+        if entry is None:
+            continue
+        if parent_uuid is None and entry.get("uuid"):
+            parent_uuid = entry["uuid"]
+        for f in _INHERIT_FIELDS:
+            if f not in inherited and f in entry:
+                inherited[f] = entry[f]
+        if parent_uuid and len(inherited) == len(_INHERIT_FIELDS):
+            break
+    marker = {
+        "parentUuid": parent_uuid,
+        "isSidechain": False,
+        "promptId": str(_uuid.uuid4()),
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": INTERRUPT_TEXT}],
+        },
+        "uuid": str(_uuid.uuid4()),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "sessionId": new_session_id,
+        **inherited,
+    }
+    return json.dumps(marker, ensure_ascii=False, separators=(",", ":"))
+
+
 def fork_session_lines(
     lines: list[str],
     target_uuid: str,
     include_target: bool,
     new_session_id: str,
 ) -> list[str] | None:
-    """Build the forked transcript: truncate at target, trim, rewrite sid.
+    """Build the forked transcript: truncate at target, trim, rewrite sid,
+    close with an interrupt marker.
 
     include_target=True keeps the target entry (diverge at an AGENT message:
     the reply stays, the new direction starts after it). False cuts just
@@ -120,4 +174,6 @@ def fork_session_lines(
     kept = trim_dangling_tail(kept)
     if not any((_parse(ln) or {}).get("type") in _CONVERSATIONAL_TYPES for ln in kept):
         return None
-    return rewrite_session_id(kept, new_session_id)
+    out = rewrite_session_id(kept, new_session_id)
+    out.append(make_interrupt_line(out, new_session_id))
+    return out

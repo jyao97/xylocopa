@@ -3549,18 +3549,10 @@ async def diverge_message(
         await asyncio.sleep(0.1)
     if not drained:
         logger.warning("diverge: initial drain did not run for agent %s", agent_hex)
-
-    # The imported history ends mid-conversation with no trailing stop
-    # signal, so the status deriver (sync_engine._derive_status_transition)
-    # flips the fresh agent to EXECUTING — but the resumed claude is idle
-    # awaiting input and will never emit a Stop hook for replayed turns.
-    # Force IDLE after the import; later re-scans dedup against the
-    # imported rows (replayed turns carry no status signal), so it sticks.
+    # No status write here: the forked transcript ends with an interrupt
+    # marker (session_fork), so the status deriver lands on IDLE from JSONL
+    # truth alone — same single path as a live ESC.
     db.refresh(new_agent)
-    if new_agent.status != AgentStatus.IDLE:
-        new_agent.status = AgentStatus.IDLE
-        new_agent.generating_msg_id = None
-        db.commit()
 
     logger.info(
         "diverge: agent %s msg %s (%s, include=%s) → agent %s sid %s "

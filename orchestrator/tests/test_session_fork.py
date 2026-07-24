@@ -7,8 +7,10 @@ from __future__ import annotations
 import json
 
 from session_fork import (
+    INTERRUPT_TEXT,
     find_uuid_index,
     fork_session_lines,
+    make_interrupt_line,
     rewrite_session_id,
     trim_dangling_tail,
 )
@@ -134,25 +136,52 @@ def test_rewrite_passes_through_unparseable_and_keyless():
     assert json.loads(out[1]) == {"type": "file-history-snapshot", "messageId": "m1"}
 
 
+# --- make_interrupt_line ---
+
+def test_interrupt_line_shape_and_chain():
+    kept = rewrite_session_id(_conversation(), "new-sid")
+    marker = json.loads(make_interrupt_line(kept, "new-sid"))
+    assert marker["type"] == "user"
+    assert marker["message"]["content"] == [{"type": "text", "text": INTERRUPT_TEXT}]
+    assert marker["parentUuid"] == "a4"  # last kept entry with a uuid
+    assert marker["sessionId"] == "new-sid"
+    assert marker["uuid"] and marker["uuid"] != "a4"
+    assert marker["isSidechain"] is False
+
+
 # --- fork_session_lines ---
+
+def _split_marker(out):
+    """Return (kept_uuids, marker_entry) from fork output."""
+    marker = json.loads(out[-1])
+    return _uuids(out[:-1]), marker
+
 
 def test_fork_at_agent_message_inclusive():
     out = fork_session_lines(_conversation(), "a3", True, "new-sid")
-    assert _uuids(out) == ["u1", "a1", "a2", "u-tr", "a3"]
+    kept, marker = _split_marker(out)
+    assert kept == ["u1", "a1", "a2", "u-tr", "a3"]
     assert all(json.loads(ln)["sessionId"] == "new-sid" for ln in out)
+    # transcript closes with the interrupt marker chained to the fork point
+    assert marker["message"]["content"][0]["text"] == INTERRUPT_TEXT
+    assert marker["parentUuid"] == "a3"
 
 
 def test_fork_before_user_message_exclusive():
     out = fork_session_lines(_conversation(), "u2", False, "new-sid")
     # cut before u2 → prefix ends at a3 (clean text tail, no trim needed)
-    assert _uuids(out) == ["u1", "a1", "a2", "u-tr", "a3"]
+    kept, marker = _split_marker(out)
+    assert kept == ["u1", "a1", "a2", "u-tr", "a3"]
+    assert marker["parentUuid"] == "a3"
 
 
 def test_fork_before_user_message_trims_dangling_tool_use():
     lines = [_user("u1", "q"), _assistant("a2", [_tool_use_block()]),
              _user("u2", "interrupting prompt")]
     out = fork_session_lines(lines, "u2", False, "new-sid")
-    assert _uuids(out) == ["u1"]
+    kept, marker = _split_marker(out)
+    assert kept == ["u1"]
+    assert marker["parentUuid"] == "u1"
 
 
 def test_fork_unknown_uuid_returns_none():
@@ -168,4 +197,30 @@ def test_fork_keeps_leading_metadata():
     lines = [_meta("mode"), *_conversation()]
     out = fork_session_lines(lines, "a1", True, "new-sid")
     assert _types(out)[0] == "mode"
-    assert _uuids(out)[-1] == "a1"
+    kept, marker = _split_marker(out)
+    assert kept[-1] == "a1"
+    assert marker["parentUuid"] == "a1"
+
+
+def test_fork_marker_parses_as_interrupt_turn():
+    """The whole IDLE convergence rests on the real parser classifying the
+    appended marker as kind="interrupt" (→ saw_interrupt → IDLE)."""
+    from jsonl_parser import parse_session_turns_from_lines
+    out = fork_session_lines(_conversation(), "a3", True, "new-sid")
+    turns = parse_session_turns_from_lines(out)
+    role, _content, _meta, _uuid_, kind, _ts = turns[-1]
+    assert (role, kind) == ("system", "interrupt")
+
+
+def test_fork_marker_inherits_transcript_fields():
+    lines = [_line({
+        "type": "user", "uuid": "u1", "sessionId": SID,
+        "cwd": "/proj", "gitBranch": "master", "version": "2.1.219",
+        "userType": "external", "entrypoint": "cli",
+        "message": {"role": "user", "content": "hi"},
+    }), _assistant("a1", [_text_block("t")])]
+    out = fork_session_lines(lines, "a1", True, "new-sid")
+    marker = json.loads(out[-1])
+    assert marker["cwd"] == "/proj"
+    assert marker["gitBranch"] == "master"
+    assert marker["version"] == "2.1.219"

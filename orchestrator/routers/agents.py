@@ -3298,6 +3298,247 @@ async def update_message(
     return _synthetic_message_out(agent_id, updated)
 
 
+_CC_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+    r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+@router.post(
+    "/api/agents/{agent_id}/messages/{message_id}/diverge",
+    response_model=AgentOut,
+)
+async def diverge_message(
+    agent_id: str,
+    message_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Fork the conversation at a message into a new agent.
+
+    Copies the source CC session JSONL up to the chosen message — inclusive
+    for AGENT messages (the reply stays, the new direction starts after it),
+    exclusive for USER messages (edit-and-resend semantics) — rewrites the
+    session id on every line, and launches a fresh tmux agent with
+    `claude --resume <new_sid>`. Full fidelity: tool inputs/outputs and
+    file-state context replay from the original transcript.
+
+    Body: {"purpose": str | null}. A new Task is created when a purpose is
+    given or the source agent is task-bound; its panel attributes (model,
+    effort, worktree, priority, ...) inherit from the source task/agent.
+    """
+    import shlex
+    import uuid as _uuid
+
+    from agent_dispatcher import _write_session_owner
+    from config import CLAUDE_BIN
+    from models import CCSession
+    from session_cache import session_source_dir
+    from session_fork import fork_session_lines
+
+    agent = get_agent_or_404(db, agent_id)
+    project = get_project_or_404(db, agent.project)
+    if project.archived:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot diverge agents in archived projects — activate first",
+        )
+
+    msg = db.get(Message, message_id)
+    if not msg or msg.agent_id != agent_id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if msg.role not in (MessageRole.USER, MessageRole.AGENT):
+        raise HTTPException(
+            status_code=400, detail="Only user/agent messages can be diverged",
+        )
+    # Synthetic anchors (tool-*, interactive-*, sys-*) don't map to a JSONL
+    # entry uuid; NULL means the message never echoed through the JSONL.
+    if not msg.jsonl_uuid or not _CC_UUID_RE.match(msg.jsonl_uuid):
+        raise HTTPException(
+            status_code=400,
+            detail="This message has no session anchor — cannot diverge here",
+        )
+
+    ad = getattr(request.app.state, "agent_dispatcher", None)
+    if not ad:
+        raise HTTPException(status_code=503, detail="Agent dispatcher not ready")
+
+    _check_project_capacity(db, agent.project)
+
+    body = {}
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        pass
+    purpose = (body.get("purpose") or "").strip() if isinstance(body, dict) else ""
+
+    # Candidate session dirs, paired with the cwd claude must launch in so
+    # `--resume` encodes the same project dir (worktree sessions live in the
+    # worktree-encoded dir — see resume_agent's launch_cwd handling).
+    candidates = [(session_source_dir(os.path.realpath(project.path)), project.path)]
+    if agent.worktree:
+        wt_path = os.path.join(project.path, ".claude", "worktrees", agent.worktree)
+        if os.path.isdir(wt_path):
+            candidates.append(
+                (session_source_dir(os.path.realpath(wt_path)), wt_path)
+            )
+
+    # Current session first, then rotated-out predecessors (pre-compact /
+    # pre-clear transcripts) — each JSONL is independently resumable.
+    sids = [agent.session_id] if agent.session_id else []
+    history = (
+        db.query(CCSession)
+        .filter(
+            CCSession.agent_id == agent_id,
+            CCSession.is_subagent_session == False,  # noqa: E712
+        )
+        .order_by(CCSession.started_at.desc())
+        .all()
+    )
+    sids += [r.session_id for r in history if r.session_id not in sids]
+
+    include_target = msg.role == MessageRole.AGENT
+    new_sid = str(_uuid.uuid4())
+    forked = None
+    launch_cwd = session_dir = src_path = None
+    for sid in sids:
+        for sdir, cwd in candidates:
+            path = os.path.join(sdir, f"{sid}.jsonl")
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, encoding="utf-8") as f:
+                    lines = [ln.rstrip("\n") for ln in f]
+            except OSError as e:
+                logger.warning("diverge: failed to read %s: %s", path, e)
+                continue
+            forked = fork_session_lines(lines, msg.jsonl_uuid, include_target, new_sid)
+            if forked is not None:
+                launch_cwd, session_dir, src_path = cwd, sdir, path
+                break
+        if forked is not None:
+            break
+    if forked is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not locate this message in any session file — cannot diverge",
+        )
+
+    new_jsonl = os.path.join(session_dir, f"{new_sid}.jsonl")
+    try:
+        with open(new_jsonl, "w", encoding="utf-8") as f:
+            f.write("\n".join(forked) + "\n")
+    except OSError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to write forked session file: {e}",
+        )
+
+    agent_hex = _allocate_agent_id(db)
+
+    # Pre-write .owner so the SessionStart hook binds the resumed sid to the
+    # new agent (mirrors launch_tmux_agent / convert-and-adopt).
+    try:
+        _write_session_owner(session_dir, new_sid, agent_hex)
+    except OSError as e:
+        logger.warning("diverge: pre-write .owner failed: %s", e)
+
+    cmd_parts = [CLAUDE_BIN, "--output-format", "stream-json", "--verbose"]
+    if agent.skip_permissions:
+        cmd_parts.append("--dangerously-skip-permissions")
+    if agent.model:
+        cmd_parts += ["--model", _model_for_cli(agent.model)]
+    if agent.effort:
+        cmd_parts += ["--effort", agent.effort]
+    if agent.worktree:
+        cmd_parts += ["--worktree", agent.worktree]
+    cmd_parts += ["--resume", new_sid]
+    claude_cmd = " ".join(shlex.quote(p) for p in cmd_parts)
+
+    _preflight_claude_project(project.path)
+    tmux_name = tmux_session_name(agent_hex)
+    try:
+        pane_id = await asyncio.to_thread(
+            _create_tmux_claude_session,
+            tmux_name, launch_cwd, claude_cmd, agent_hex,
+        )
+    except Exception as e:
+        logger.exception("diverge: tmux launch failed")
+        _safe_unlink(new_jsonl)
+        raise HTTPException(status_code=500, detail=f"tmux launch failed: {e}")
+
+    # Task: created when a purpose was given or the source is task-bound.
+    # Panel attributes inherit from the source task (fallback: source agent).
+    src_task = db.get(Task, agent.task_id) if agent.task_id else None
+    new_task = None
+    if purpose or src_task:
+        title = purpose or f"Diverge: {src_task.title if src_task and src_task.title else agent.name}"
+        new_task = Task(
+            title=title[:300],
+            description=(
+                f"Diverged from agent {agent.id} ({agent.name}) "
+                f"at message {message_id}."
+            ),
+            project_name=agent.project,
+            priority=src_task.priority if src_task else 0,
+            status=TaskStatus.EXECUTING,
+            agent_id=agent_hex,
+            worktree_name=src_task.worktree_name if src_task else agent.worktree,
+            branch_name=src_task.branch_name if src_task else None,
+            model=(src_task.model if src_task else None) or agent.model,
+            effort=(src_task.effort if src_task else None) or agent.effort,
+            skip_permissions=agent.skip_permissions,
+            use_worktree=src_task.use_worktree if src_task else bool(agent.worktree),
+            use_tmux=True,
+            timeout_seconds=src_task.timeout_seconds if src_task else agent.timeout_seconds,
+            started_at=_utcnow(),
+        )
+        db.add(new_task)
+        db.flush()
+
+    new_agent = Agent(
+        id=agent_hex,
+        project=agent.project,
+        name=(purpose or f"Diverge: {agent.name}")[:200],
+        mode=agent.mode,
+        status=AgentStatus.IDLE,
+        model=agent.model,
+        effort=agent.effort,
+        worktree=agent.worktree,
+        skip_permissions=agent.skip_permissions,
+        timeout_seconds=agent.timeout_seconds,
+        cli_sync=True,
+        session_id=new_sid,
+        tmux_pane=pane_id,
+        task_id=new_task.id if new_task else None,
+        last_message_preview="Diverged conversation",
+        last_message_at=datetime.now(timezone.utc),
+    )
+    db.add(new_agent)
+    db.commit()
+    db.refresh(new_agent)
+
+    # Sync imports the truncated transcript into the new agent's messages,
+    # so the diverged chat shows the inherited history.
+    ad.start_session_sync(agent_hex, new_sid, project.path, cwd=launch_cwd)
+    ad.wake_sync(agent_hex)
+
+    logger.info(
+        "diverge: agent %s msg %s (%s, include=%s) → agent %s sid %s "
+        "(%d lines from %s, task=%s)",
+        agent_id, message_id, msg.role.value, include_target, agent_hex,
+        new_sid[:12], len(forked), src_path, new_task.id if new_task else "none",
+    )
+    asyncio.ensure_future(
+        emit_agent_update(new_agent.id, new_agent.status.value, new_agent.project)
+    )
+    if new_task:
+        asyncio.ensure_future(emit_task_update(
+            new_task.id, new_task.status.value, new_task.project_name or "",
+            title=new_task.title,
+        ))
+    return AgentOut.model_validate(new_agent)
+
+
 # ---- Interactive Answer (AskUserQuestion / ExitPlanMode via tmux) ----
 
 class AnswerPayload(BaseModel):

@@ -327,7 +327,9 @@ def test_project_max_concurrent_default(db_session):
 
 
 def test_project_default_model_value(db_session):
-    """Default model should be claude-opus-4-7."""
+    """Default model should follow config.DEFAULT_CLAUDE_MODEL."""
+    from config import DEFAULT_CLAUDE_MODEL
+
     proj = Project(
         name="default-model",
         display_name="Defaults Model",
@@ -337,7 +339,7 @@ def test_project_default_model_value(db_session):
     db_session.commit()
     db_session.refresh(proj)
 
-    assert proj.default_model == "claude-opus-4-7"
+    assert proj.default_model == DEFAULT_CLAUDE_MODEL
 
 
 def test_project_create_schema_valid_names():

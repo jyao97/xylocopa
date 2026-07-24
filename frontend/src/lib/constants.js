@@ -54,8 +54,8 @@ export const MODEL_OPTIONS = [
 
 // Default model for new tasks — the latest Opus, deliberately NOT
 // MODEL_OPTIONS[0]: Fable 5 leads the picker visually but is opt-in
-// (~2x cost), so new tasks default to Opus 4.8 unless the user picks Fable.
-export const DEFAULT_MODEL = "claude-opus-4-8";
+// (~2x cost), so new tasks default to Opus 5 unless the user picks Fable.
+export const DEFAULT_MODEL = "claude-opus-5";
 
 // Models no longer offered in the picker but still valid on existing
 // agents/tasks — keeps their tags rendering with proper labels.

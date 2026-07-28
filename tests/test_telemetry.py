@@ -191,3 +191,48 @@ def test_set_enabled_writes_config(tele):
     tele.set_enabled(True)
     s = tele.get_status()
     assert s["enabled"] is True
+
+
+# ---- Locale robustness ----
+# Regression for the win32 install reporting "vunknown": on CJK-locale Windows,
+# text-mode open() without an explicit encoding decodes as GBK/Shift-JIS, and
+# the em-dash in frontend/package.json raised UnicodeDecodeError. All telemetry
+# file IO must pin encoding="utf-8" so the host locale can never decide.
+
+@pytest.fixture
+def cjk_locale_open(monkeypatch):
+    """Make text-mode open() default to cp936 (GBK) when no encoding is given,
+    as it does on a Chinese-locale Windows box."""
+    real_open = open
+
+    def _open(file, mode="r", *args, **kwargs):
+        if "b" not in str(mode) and "encoding" not in kwargs:
+            kwargs["encoding"] = "cp936"
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", _open)
+
+
+def test_version_survives_cjk_locale(tele, cjk_locale_open):
+    import json as _json
+    from pathlib import Path
+
+    pkg = Path(tele.__file__).resolve().parent.parent / "frontend" / "package.json"
+    expected = _json.loads(pkg.read_bytes())["version"]
+    assert expected != "unknown"
+    assert tele._load_version() == expected
+
+
+def test_config_opt_out_survives_cjk_locale(tele, mock_urlopen, cjk_locale_open):
+    # A non-ASCII comment in config.yaml must not break the opt-out — the
+    # decode error was swallowed and telemetry kept sending despite
+    # telemetry: false. Not all UTF-8 happens to trip GBK (CJK ideographs often
+    # decode as mojibake without raising); an em-dash before a newline does,
+    # matching the package.json failure. Guard that the content really trips it.
+    raw = "# telemetry off —\ntelemetry: false\n".encode("utf-8")
+    with pytest.raises(UnicodeDecodeError):
+        raw.decode("cp936")
+    tele.CONFIG_FILE.write_bytes(raw)
+    tele.record_heartbeat()
+    assert mock_urlopen.call_count == 0
+    assert not tele.INSTALL_ID_FILE.exists()

@@ -63,9 +63,11 @@ def _load_version() -> str:
     # Read frontend/package.json — release process bumps this on every tag,
     # so it's the single source of truth. Root package.json is the npm
     # installer's own version and can drift independently.
+    # encoding pinned: locale-default open() on CJK-locale Windows (cp936/cp932)
+    # chokes on the em-dash in "description" → version reported as "unknown".
     try:
         pkg = Path(__file__).resolve().parent.parent / "frontend" / "package.json"
-        with open(pkg) as f:
+        with open(pkg, encoding="utf-8") as f:
             return json.load(f).get("version", "unknown")
     except Exception:
         return "unknown"
@@ -87,7 +89,10 @@ def _config_disable() -> bool:
     try:
         if CONFIG_FILE.exists():
             import yaml
-            with open(CONFIG_FILE) as f:
+            # encoding pinned — a decode error here is swallowed by the except,
+            # which would silently IGNORE the user's opt-out. Never let the
+            # locale decide.
+            with open(CONFIG_FILE, encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
             if cfg.get("telemetry") is False:
                 return True
@@ -115,7 +120,7 @@ def _ensure_dirs() -> None:
 
 def _read_install_id() -> Optional[str]:
     try:
-        val = INSTALL_ID_FILE.read_text().strip()
+        val = INSTALL_ID_FILE.read_text(encoding="utf-8").strip()
         return val or None
     except FileNotFoundError:
         return None
@@ -138,7 +143,7 @@ def _ensure_install_id() -> Optional[str]:
     new_id = str(uuid.uuid4())
     try:
         _ensure_dirs()
-        INSTALL_ID_FILE.write_text(new_id)
+        INSTALL_ID_FILE.write_text(new_id, encoding="utf-8")
     except Exception:
         logger.debug("install_id write failed", exc_info=True)
         return None
@@ -227,10 +232,10 @@ def set_enabled(enabled: bool) -> dict:
         _ensure_dirs()
         cfg: dict = {}
         if CONFIG_FILE.exists():
-            with open(CONFIG_FILE) as f:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
         cfg["telemetry"] = bool(enabled)
-        with open(CONFIG_FILE, "w") as f:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f)
     except Exception:
         logger.exception("set_enabled failed")

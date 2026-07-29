@@ -2,6 +2,7 @@
 
 Channels:
   notify_at      — user-initiated reminder, always sends
+  attention      — attention-assistant job fired, always sends
   permission     — permission requests, always sends
   message        — conversational content, respects global toggle + per-agent mute + in-use
 """
@@ -34,6 +35,14 @@ def notify(
         return "SEND"
 
     if channel == "notify_at":
+        logger.info("notify: %s → SEND (always)", channel)
+        _send(title, body, url)
+        return "SEND"
+
+    if channel == "attention":
+        # An attention job exists only because the user explicitly created
+        # it, so it carries the same "always send" contract as notify_at —
+        # not gated by the global message toggle or per-agent mute.
         logger.info("notify: %s → SEND (always)", channel)
         _send(title, body, url)
         return "SEND"

@@ -3195,6 +3195,13 @@ Here are the day's conversations (with timestamps):
         # 0pre. Check scheduled tasks (notify_at reminders + dispatch_at auto-dispatch)
         self._check_scheduled_tasks(db)
 
+        # 0pre. Attention-assistant jobs. The whole feature couples to the
+        # tick through this one call: the scheduler queries an indexed
+        # next_run_at and dispatches through the trigger/action registries,
+        # so new capabilities never touch this file. Never raises.
+        from attention.scheduler import tick as _attention_tick
+        await _attention_tick(db)
+
         # 0a. Dispatch PENDING v2 tasks → create execution agents
         await self._dispatch_pending_tasks(db)
 

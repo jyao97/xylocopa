@@ -840,6 +840,7 @@ from routers.stats import router as stats_router
 from routers.bookmarks import router as bookmarks_router
 from routers.probes import router as probes_router
 from routers.terminal import router as terminal_router
+from routers.attention import router as attention_router
 
 app.include_router(auth_router)
 app.include_router(system_router)
@@ -858,3 +859,4 @@ app.include_router(stats_router)
 app.include_router(bookmarks_router)
 app.include_router(probes_router)
 app.include_router(terminal_router)
+app.include_router(attention_router)

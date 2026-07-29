@@ -523,3 +523,93 @@ class CCSession(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
     )
+
+
+class AttentionJob(Base):
+    """A single unit of work the attention assistant is holding for the user.
+
+    Deliberately ONE table for every capability rather than separate
+    "reminder" / "watcher" / "digest" tables: a job is a (trigger, action)
+    pair, and both sides are pluggable via the registries in
+    ``attention/registry.py``. Adding a capability later means registering
+    one more trigger or action — the scheduler, the API and the UI stay
+    untouched.
+
+    ``trigger_type`` selects a ``attention.triggers`` entry:
+      at      — fire once at trigger_config["at"] (ISO datetime)
+      every   — fire repeatedly on an interval / time-of-day
+      signal  — fire when a condition over named SIGNALS becomes true
+      probe   — fired externally via /api/probe-trigger (placeholder for
+                webhook-driven jobs; the Probe table owns the token)
+
+    ``action_type`` selects a ``attention.actions`` entry:
+      notify        — web push through the "attention" notify channel
+      message_agent — inject a message into an agent's chat
+      dispatch_task — create (and optionally dispatch) a Task
+      run_prompt    — one headless `claude -p` call, result pushed to user
+
+    Cost contract: the LLM runs ONCE, at creation time, to compile natural
+    language into (trigger_config, action_config). Evaluation on the
+    dispatcher tick is pure Python over indexed columns — a job costs
+    nothing to keep alive and keeps working if the LLM is unavailable.
+    """
+    __tablename__ = "attention_jobs"
+    __table_args__ = (
+        # The scheduler's only query: active jobs whose next_run_at is due.
+        Index("ix_attn_jobs_due", "status", "next_run_at"),
+        Index("ix_attn_jobs_agent", "agent_id"),
+    )
+
+    # Status values are plain strings (not an Enum) so a newly registered
+    # trigger/action can introduce states without a schema migration.
+    STATUS_ACTIVE: str = "active"
+    STATUS_PAUSED: str = "paused"
+    STATUS_DONE: str = "done"
+    STATUS_ERROR: str = "error"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=_new_uuid)
+
+    # Informational grouping for the UI only — never branched on in the
+    # scheduler. The (trigger_type, action_type) pair is the real behavior.
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="reminder")
+    # Human-readable one-liner rendered in the attention panel.
+    title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    # The user's original phrasing, kept for audit + "edit what I said".
+    source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    trigger_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    trigger_config: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    action_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    action_config: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=STATUS_ACTIVE)
+
+    # Indexed due-time. For `signal` triggers this is the next *evaluation*
+    # time (throttle), not a guaranteed fire time. NULL = never runs again.
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Edge-trigger memory for `signal` conditions. Without this, "notify me
+    # when agent X makes progress" would re-fire on every 2s tick for as
+    # long as the condition stays true. JSON blob owned by the trigger.
+    last_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    fire_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Hard stop for recurring jobs — a runaway `every`/`signal` job can't
+    # push forever. NULL = unbounded (one-shot `at` jobs set this to 1).
+    max_fires: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Optional scope. agent_id uses SET NULL (not CASCADE) so deleting an
+    # agent leaves an auditable orphan the scheduler can retire cleanly
+    # instead of silently vanishing mid-flight.
+    agent_id: Mapped[str | None] = mapped_column(
+        String(12), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True,
+    )
+    project_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False,
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

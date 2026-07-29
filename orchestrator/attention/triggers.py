@@ -99,31 +99,74 @@ def _every_step(config: dict) -> timedelta:
     return timedelta(days=1)
 
 
+def _weekdays(config: dict) -> set[int] | None:
+    """Allowed local weekdays as Python's Monday=0..Sunday=6, or None for any."""
+    raw = config.get("weekdays")
+    if not isinstance(raw, list) or not raw:
+        return None
+    days = {int(d) for d in raw if isinstance(d, (int, float)) and 0 <= int(d) <= 6}
+    return days or None
+
+
+def _local_offset() -> timedelta:
+    """local wall clock − UTC, rounded to the minute.
+
+    Recomputed on every call rather than cached so a DST boundary shifts
+    subsequent runs instead of leaving a job an hour off for six months.
+    Rounded because the two `now()` reads happen microseconds apart, and
+    that jitter would otherwise show up in every stored run time.
+    """
+    delta = datetime.now() - datetime.now(timezone.utc).replace(tzinfo=None)
+    return timedelta(minutes=round(delta.total_seconds() / 60))
+
+
+def _next_daily(daily: str, config: dict, after_local: datetime) -> datetime | None:
+    """Next local datetime matching HH:MM (and `weekdays`) strictly after `after_local`."""
+    try:
+        hh, mm = (int(x) for x in daily.split(":")[:2])
+    except (TypeError, ValueError):
+        logger.warning("attention: bad daily_at %r", daily)
+        return None
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        logger.warning("attention: out-of-range daily_at %r", daily)
+        return None
+
+    allowed = _weekdays(config)
+    candidate = after_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if candidate <= after_local:
+        candidate += timedelta(days=1)
+    # At most 7 hops to land on an allowed weekday.
+    for _ in range(7):
+        if allowed is None or candidate.weekday() in allowed:
+            return candidate
+        candidate += timedelta(days=1)
+    return None
+
+
 def _every_initial(config: dict, now: datetime) -> datetime | None:
     now = _naive(now)
     start = _parse_dt(config.get("start_at"))
     if start and start > now:
         return start
 
-    daily = config.get("daily_at")  # "HH:MM" in local server time
-    if isinstance(daily, str) and ":" in daily:
-        try:
-            hh, mm = (int(x) for x in daily.split(":")[:2])
-            # Interpret HH:MM against the server's local clock, then convert
-            # back to the naive-UTC the column stores. Users say "9am"
-            # meaning their own wall clock, not UTC.
-            local_now = datetime.now()
-            candidate_local = local_now.replace(
-                hour=hh, minute=mm, second=0, microsecond=0,
-            )
-            if candidate_local <= local_now:
-                candidate_local += timedelta(days=1)
-            offset = local_now - datetime.now(timezone.utc).replace(tzinfo=None)
-            return _naive(candidate_local - offset)
-        except (TypeError, ValueError):
+    # `daily_at` is LOCAL wall-clock: users say "9am" meaning their own
+    # clock, not UTC. Resolve against the local clock, then convert back to
+    # the naive-UTC the column stores.
+    if config.get("daily_at") is not None:
+        daily = config["daily_at"]
+        if not isinstance(daily, str) or ":" not in daily:
             logger.warning("attention: bad daily_at %r", daily)
+            return None
+        local_next = _next_daily(daily, config, datetime.now())
+        # Return None rather than falling through to the interval branch: a
+        # malformed daily_at silently becoming "24 hours from now" is a
+        # wrong schedule the user has no way to notice. None makes the API
+        # reject the job at creation time instead.
+        if local_next is None:
+            return None
+        return _naive(local_next - _local_offset())
 
-    return now + _every_step(config)
+    return (now + _every_step(config)).replace(microsecond=0)
 
 
 def _every_due(job, now: datetime, db) -> bool:
@@ -133,15 +176,29 @@ def _every_due(job, now: datetime, db) -> bool:
 def _every_advance(job, now: datetime, db) -> datetime | None:
     cfg = _config(job)
     now = _naive(now)
-    step = _every_step(cfg)
-    base = _naive(job.next_run_at) or now
-    nxt = base + step
-    # If the server was asleep/restarting for several periods, skip forward
-    # instead of replaying every missed slot as a burst of notifications.
-    if nxt <= now:
-        missed = int((now - nxt) / step) + 1
-        nxt = nxt + step * missed
     until = _parse_dt(cfg.get("until"))
+
+    if cfg.get("daily_at") is not None:
+        # Re-derive from the local clock each time so DST transitions and
+        # `weekdays` filtering both stay correct across a long-lived job.
+        daily = cfg["daily_at"]
+        local_next = (
+            _next_daily(daily, cfg, datetime.now())
+            if isinstance(daily, str) and ":" in daily else None
+        )
+        nxt = _naive(local_next - _local_offset()) if local_next else None
+    else:
+        step = _every_step(cfg)
+        base = _naive(job.next_run_at) or now
+        nxt = (base + step).replace(microsecond=0)
+        # If the server was asleep/restarting for several periods, skip
+        # forward instead of replaying every missed slot as a notification burst.
+        if nxt <= now:
+            missed = int((now - nxt) / step) + 1
+            nxt = nxt + step * missed
+
+    if nxt is None:
+        return None
     if until and nxt > until:
         return None
     return nxt
@@ -151,11 +208,15 @@ register_trigger(Trigger(
     name="every",
     description=(
         "Fire repeatedly — either every N seconds or at a fixed local "
-        "time of day. Missed periods after downtime are skipped, not replayed"
+        "time of day, optionally restricted to certain weekdays. Missed "
+        "periods after downtime are skipped, not replayed"
     ),
     config_schema=(
-        '{"interval_seconds": <int >= 60>}  OR  {"daily_at": "HH:MM"}  '
-        '(both accept optional "start_at" and "until" ISO datetimes)'
+        '{"interval_seconds": <int >= 60>}  OR  '
+        '{"daily_at": "HH:MM", "weekdays": [<optional 0=Mon..6=Sun>]}  — '
+        'daily_at is LOCAL wall-clock time, NOT UTC: write the hour the user '
+        'actually said. Weekdays-only is [0,1,2,3,4]. '
+        '(both forms accept optional "start_at" and "until" ISO-UTC datetimes)'
     ),
     initial=_every_initial,
     due=_every_due,

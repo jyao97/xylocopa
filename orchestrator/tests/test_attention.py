@@ -309,6 +309,87 @@ def test_every_skips_missed_periods_instead_of_replaying():
     assert nxt - now <= timedelta(hours=1)
 
 
+def test_daily_at_is_local_wall_clock_not_utc():
+    """`daily_at: "09:00"` must land on 09:00 LOCAL, whatever the offset.
+
+    Regression: the compiler originally UTC-converted the hour while this
+    trigger read it as local, so a "9am digest" silently scheduled itself
+    for late afternoon while the confirmation text still claimed 9am.
+    """
+    from datetime import timezone as _tz
+
+    stored = TRIGGERS["every"].initial({"daily_at": "09:00"}, datetime.utcnow())
+    assert stored is not None
+    # Reinterpret the naive-UTC column value back into local time.
+    local = stored.replace(tzinfo=_tz.utc).astimezone()
+    assert (local.hour, local.minute) == (9, 0), (
+        f"expected 09:00 local, got {local:%H:%M %Z}"
+    )
+
+
+def test_daily_at_has_no_microsecond_drift():
+    stored = TRIGGERS["every"].initial({"daily_at": "09:00"}, datetime.utcnow())
+    assert stored.second == 0 and stored.microsecond == 0
+
+
+def test_daily_at_rejects_out_of_range_hour():
+    assert TRIGGERS["every"].initial({"daily_at": "31:00"}, datetime.utcnow()) is None
+
+
+def test_weekdays_filter_lands_on_an_allowed_day():
+    """weekdays uses Monday=0..Sunday=6, matching datetime.weekday()."""
+    from datetime import timezone as _tz
+
+    for target in range(7):
+        stored = TRIGGERS["every"].initial(
+            {"daily_at": "09:00", "weekdays": [target]}, datetime.utcnow(),
+        )
+        assert stored is not None, f"no run time for weekday {target}"
+        local = stored.replace(tzinfo=_tz.utc).astimezone()
+        assert local.weekday() == target
+        assert (local.hour, local.minute) == (9, 0)
+
+
+def test_weekdays_advance_stays_within_the_filter():
+    from datetime import timezone as _tz
+
+    cfg = json.dumps({"daily_at": "09:00", "weekdays": [0, 1, 2, 3, 4]})
+    job = AttentionJob(trigger_type="every", action_type="notify",
+                       trigger_config=cfg, next_run_at=datetime.utcnow())
+    nxt = TRIGGERS["every"].advance(job, datetime.utcnow(), None)
+    local = nxt.replace(tzinfo=_tz.utc).astimezone()
+    assert local.weekday() <= 4, "advance must skip the weekend"
+
+
+def test_ignores_empty_or_bad_weekdays():
+    """A malformed weekdays list means 'any day', not 'never'."""
+    for bad in ([], "mon", [9, 12], None):
+        stored = TRIGGERS["every"].initial(
+            {"daily_at": "09:00", "weekdays": bad}, datetime.utcnow(),
+        )
+        assert stored is not None, f"weekdays={bad!r} should fall back to any day"
+
+
+def test_preview_first_run_matches_what_the_scheduler_will_use():
+    """The confirmation preview must come from the trigger, not from prose."""
+    from attention.compiler import preview_first_run
+
+    spec = {"trigger_type": "at", "trigger_config": {"at": "2026-08-01T12:00:00Z"}}
+    assert preview_first_run(spec) == "2026-08-01T12:00:00"
+
+    daily = {"trigger_type": "every", "trigger_config": {"daily_at": "09:00"}}
+    preview = preview_first_run(daily)
+    scheduled = TRIGGERS["every"].initial({"daily_at": "09:00"}, datetime.utcnow())
+    assert preview == scheduled.isoformat()
+
+
+def test_preview_returns_none_for_unschedulable_specs():
+    from attention.compiler import preview_first_run
+
+    assert preview_first_run({"trigger_type": "probe", "trigger_config": {}}) is None
+    assert preview_first_run({"trigger_type": "nope", "trigger_config": {}}) is None
+
+
 def test_every_stops_at_until():
     cfg = json.dumps({
         "interval_seconds": 3600,

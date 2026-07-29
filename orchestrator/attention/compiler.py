@@ -59,8 +59,11 @@ Schema:
 }
 
 Rules:
-1. Times are absolute ISO-8601 UTC in trigger_config. Resolve every relative
-   phrase ("in an hour", "tomorrow morning", "tonight") against NOW below.
+1. Absolute timestamps ("at", "start_at", "until") are ISO-8601 UTC. Resolve
+   every relative phrase ("in an hour", "tomorrow morning", "tonight")
+   against NOW below. The ONE exception is "daily_at", which is a LOCAL
+   wall-clock HH:MM — for "every morning at 9" write "09:00", never the UTC
+   equivalent.
 2. Prefer the simplest trigger that satisfies the request. A one-off
    reminder is "at". Something repeating is "every". "Tell me when X
    happens" is "signal".
@@ -247,6 +250,31 @@ def validate_spec(spec: dict) -> dict:
     }
 
 
+def preview_first_run(spec: dict) -> str | None:
+    """The instant this spec would actually first fire, as naive-UTC ISO.
+
+    Computed by the trigger itself rather than read out of the model's prose.
+    That distinction matters: the `confirm` sentence is generated text and can
+    disagree with the config it describes (a UTC/local mix-up in `daily_at`
+    reads as a plausible sentence while scheduling the wrong hour). The UI
+    shows THIS value, so the user is always confirming the real schedule.
+    """
+    trigger = TRIGGERS.get(spec.get("trigger_type", ""))
+    if trigger is None:
+        return None
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        first = trigger.initial(spec.get("trigger_config") or {}, now)
+    except Exception:
+        logger.warning("attention: preview failed for %s", trigger.name, exc_info=True)
+        return None
+    if first is None:
+        return None
+    if first.tzinfo is not None:
+        first = first.replace(tzinfo=None)
+    return first.isoformat()
+
+
 def _parse_iso(raw) -> datetime | None:
     if isinstance(raw, datetime):
         return raw.replace(tzinfo=None) if raw.tzinfo else raw
@@ -290,8 +318,13 @@ async def compile_request(text: str, db) -> dict:
 
     spec = validate_spec(_extract_json(out))
     spec["source_text"] = text
+    # Authoritative first-fire time, so the confirmation the user approves
+    # reflects the trigger's arithmetic rather than the model's description
+    # of it.
+    spec["preview_next_run_at"] = preview_first_run(spec)
     logger.info(
-        "attention: compiled %r → %s × %s",
+        "attention: compiled %r → %s × %s (first run %s)",
         text[:60], spec["trigger_type"], spec["action_type"],
+        spec["preview_next_run_at"],
     )
     return spec

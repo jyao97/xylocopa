@@ -386,6 +386,23 @@ def init_db():
             conn.execute(text("ALTER TABLE tasks ADD COLUMN deferred_to DATETIME"))
             conn.commit()
 
+        # Add min_interval_seconds to attention_jobs if missing. The table
+        # itself is created by create_all; this covers rows written by the
+        # first build, which had no notification cooldown.
+        if _table_columns(conn, "attention_jobs"):
+            if "min_interval_seconds" not in _table_columns(conn, "attention_jobs"):
+                conn.execute(text(
+                    "ALTER TABLE attention_jobs ADD COLUMN min_interval_seconds INTEGER"
+                ))
+                conn.commit()
+            # Backfill existing condition-driven jobs, which are the ones that
+            # could spam. 300s matches DEFAULT_SIGNAL_COOLDOWN_SECONDS.
+            conn.execute(text(
+                "UPDATE attention_jobs SET min_interval_seconds = 300 "
+                "WHERE trigger_type = 'signal' AND min_interval_seconds IS NULL"
+            ))
+            conn.commit()
+
         # Add task_id column to agents if missing
         agent_cols = _table_columns(conn, "agents")
         if "task_id" not in agent_cols:

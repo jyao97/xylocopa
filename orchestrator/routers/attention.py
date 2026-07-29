@@ -39,6 +39,11 @@ router = APIRouter(tags=["attention"])
 # client loop. Well past any plausible manual use.
 MAX_ACTIVE_JOBS = 200
 
+# Default floor between two fires of a condition-driven job. 5 minutes is
+# short enough that a genuine "the agent finished" ping still feels live, and
+# long enough that a flapping signal can't turn into a push storm.
+DEFAULT_SIGNAL_COOLDOWN_SECONDS = 300
+
 
 def _naive(dt):
     if dt is None:
@@ -65,6 +70,7 @@ class JobCreate(BaseModel):
     agent_id: str | None = None
     project_name: str | None = None
     max_fires: int | None = None
+    min_interval_seconds: int | None = None
     expires_at: datetime | None = None
 
 
@@ -74,6 +80,7 @@ class JobPatch(BaseModel):
     trigger_config: dict | None = None
     action_config: dict | None = None
     max_fires: int | None = None
+    min_interval_seconds: int | None = None
     expires_at: datetime | None = None
 
 
@@ -100,6 +107,7 @@ def _serialize(job: AttentionJob) -> dict:
         "last_fired_at": job.last_fired_at.isoformat() if job.last_fired_at else None,
         "fire_count": job.fire_count,
         "max_fires": job.max_fires,
+        "min_interval_seconds": job.min_interval_seconds,
         "last_error": job.last_error,
         "agent_id": job.agent_id,
         "project_name": job.project_name,
@@ -252,6 +260,15 @@ def create_job(body: JobCreate, db: Session = Depends(get_db)):
     if max_fires is None and not trigger.recurring:
         max_fires = 1  # one-shot triggers retire after their single fire
 
+    # Condition-driven jobs get a cooldown unless the caller set one. A watch
+    # fires on whatever the world does, so without a floor a flapping signal
+    # becomes a push storm — observed with `changed` on agent.last_message_at,
+    # which sent 8 notifications for a single agent turn. Clock-driven
+    # triggers already have an explicit period and need no floor.
+    min_interval = body.min_interval_seconds
+    if min_interval is None and trigger.name == "signal":
+        min_interval = DEFAULT_SIGNAL_COOLDOWN_SECONDS
+
     job = AttentionJob(
         kind=spec["kind"],
         title=spec["title"],
@@ -263,6 +280,7 @@ def create_job(body: JobCreate, db: Session = Depends(get_db)):
         status=AttentionJob.STATUS_ACTIVE,
         next_run_at=next_run,
         max_fires=max_fires,
+        min_interval_seconds=min_interval,
         agent_id=body.agent_id,
         project_name=body.project_name,
         expires_at=_naive(body.expires_at),
@@ -287,6 +305,8 @@ def patch_job(job_id: str, body: JobPatch, db: Session = Depends(get_db)):
         job.title = body.title
     if body.max_fires is not None:
         job.max_fires = body.max_fires
+    if body.min_interval_seconds is not None:
+        job.min_interval_seconds = body.min_interval_seconds
     if body.expires_at is not None:
         job.expires_at = _naive(body.expires_at)
 

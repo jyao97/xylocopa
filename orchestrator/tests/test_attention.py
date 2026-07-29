@@ -243,6 +243,72 @@ def test_all_group_updates_every_changed_baseline(db_session, agent):
     )
 
 
+def test_became_fires_only_on_transition_into_the_target(db_session, agent):
+    """The push-storm fix: one fire per completed turn, not per message.
+
+    `changed` on agent.last_message_at sent 8 notifications for a single
+    agent turn. The end-of-turn edge is is_generating → False, and it must
+    fire on entry only — not while the agent stays idle, and not when it
+    starts generating again.
+    """
+    memo = {}
+    cond = {"signal": "agent.is_generating", "op": "became", "value": False,
+            "agent_id": agent.id}
+
+    agent.generating_msg_id = "m1"          # mid-turn
+    db_session.commit()
+    assert evaluate(cond, db_session, memo) is False   # baseline
+    assert evaluate(cond, db_session, memo) is False   # still generating
+
+    agent.generating_msg_id = None          # stop hook fires
+    db_session.commit()
+    assert evaluate(cond, db_session, memo) is True    # the one fire
+
+    # Stays idle — must go quiet, or we are back to spamming.
+    assert evaluate(cond, db_session, memo) is False
+    assert evaluate(cond, db_session, memo) is False
+
+    # Next turn starts: leaving the target value must NOT fire.
+    agent.generating_msg_id = "m2"
+    db_session.commit()
+    assert evaluate(cond, db_session, memo) is False
+
+    # ...and completing that turn fires exactly once again.
+    agent.generating_msg_id = None
+    db_session.commit()
+    assert evaluate(cond, db_session, memo) is True
+
+
+def test_became_on_a_string_status(db_session, agent):
+    memo = {}
+    cond = {"signal": "agent.status", "op": "became", "value": "ERROR",
+            "agent_id": agent.id}
+    agent.status = AgentStatus.EXECUTING
+    db_session.commit()
+    assert evaluate(cond, db_session, memo) is False
+
+    agent.status = AgentStatus.ERROR
+    db_session.commit()
+    assert evaluate(cond, db_session, memo) is True
+    assert evaluate(cond, db_session, memo) is False, "must not repeat while in ERROR"
+
+
+def test_became_does_not_fire_on_first_sight_even_if_already_at_target(db_session, agent):
+    """Creating a watch while the condition already holds must stay silent."""
+    agent.generating_msg_id = None          # already idle
+    db_session.commit()
+    memo = {}
+    cond = {"signal": "agent.is_generating", "op": "became", "value": False,
+            "agent_id": agent.id}
+    assert evaluate(cond, db_session, memo) is False
+    assert evaluate(cond, db_session, memo) is False
+
+
+def test_became_requires_a_value():
+    with pytest.raises(ConditionError, match="requires a 'value'"):
+        validate({"signal": "agent.status", "op": "became"})
+
+
 def test_summarize_is_human_readable():
     text = summarize({"all": [
         {"signal": "agent.status", "op": "eq", "value": "IDLE"},
@@ -578,6 +644,81 @@ async def test_signal_job_persists_baseline_without_firing(db_session, agent, mo
     db_session.commit()
     assert await tick(db_session) == 0
     assert len(sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_cooldown_coalesces_a_burst(db_session, monkeypatch):
+    """min_interval_seconds is the backstop against notification spam."""
+    sent = []
+    monkeypatch.setattr("notify.notify", lambda *a, **k: sent.append(a) or "SEND")
+    job = _notify_job(
+        trigger_type="every",
+        trigger_config=json.dumps({"interval_seconds": 60}),
+        max_fires=None, min_interval_seconds=600,
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    assert await tick(db_session) == 1
+    assert len(sent) == 1
+
+    # Force it due again well inside the cooldown window.
+    job.next_run_at = datetime.utcnow() - timedelta(seconds=1)
+    db_session.commit()
+    assert await tick(db_session) == 0
+    assert len(sent) == 1, "second fire inside the cooldown must be dropped"
+
+    db_session.refresh(job)
+    assert job.status == AttentionJob.STATUS_ACTIVE
+    assert job.next_run_at is not None, "cooldown must not retire the job"
+    assert job.fire_count == 1, "a coalesced fire must not count"
+
+
+@pytest.mark.asyncio
+async def test_cooldown_allows_a_fire_once_the_window_passes(db_session, monkeypatch):
+    sent = []
+    monkeypatch.setattr("notify.notify", lambda *a, **k: sent.append(a) or "SEND")
+    job = _notify_job(
+        trigger_type="every",
+        trigger_config=json.dumps({"interval_seconds": 60}),
+        max_fires=None, min_interval_seconds=60,
+        last_fired_at=datetime.utcnow() - timedelta(seconds=300),
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    assert await tick(db_session) == 1
+    assert len(sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_signal_jobs_get_a_default_cooldown(db_session, sample_project):
+    """A watch created through the API must not be able to spam by default."""
+    from routers.attention import DEFAULT_SIGNAL_COOLDOWN_SECONDS, JobCreate, create_job
+
+    a = Agent(project=sample_project.name, name="w", status=AgentStatus.IDLE)
+    db_session.add(a)
+    db_session.commit()
+
+    out = create_job(JobCreate(
+        kind="watch", title="watch it",
+        trigger_type="signal",
+        trigger_config={"condition": {
+            "signal": "agent.is_generating", "op": "became",
+            "value": False, "agent_id": a.id,
+        }},
+        action_type="notify", action_config={"title": "t", "body": "b"},
+    ), db_session)
+    assert out["min_interval_seconds"] == DEFAULT_SIGNAL_COOLDOWN_SECONDS
+
+    # Clock-driven triggers carry their own period, so no floor is imposed.
+    out2 = create_job(JobCreate(
+        kind="reminder", title="later",
+        trigger_type="at",
+        trigger_config={"at": (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"},
+        action_type="notify", action_config={"title": "t", "body": "b"},
+    ), db_session)
+    assert out2["min_interval_seconds"] is None
 
 
 @pytest.mark.asyncio

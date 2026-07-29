@@ -598,6 +598,13 @@ class AttentionJob(Base):
     # Hard stop for recurring jobs — a runaway `every`/`signal` job can't
     # push forever. NULL = unbounded (one-shot `at` jobs set this to 1).
     max_fires: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Floor on the gap between two fires of this job, enforced by the
+    # scheduler for every trigger/action pair. This is the backstop for
+    # notification spam: even a correctly edge-triggered watch can burst if
+    # the underlying state flaps, and a mis-compiled condition should be
+    # annoying rather than unusable. Extra edges inside the window are
+    # coalesced (dropped), not queued. NULL = no floor.
+    min_interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Optional scope. agent_id uses SET NULL (not CASCADE) so deleting an

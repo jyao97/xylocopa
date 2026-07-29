@@ -268,13 +268,14 @@ def _signal_advance(job, now: datetime, db) -> datetime | None:
 register_trigger(Trigger(
     name="signal",
     description=(
-        "Fire when a JSON condition over named SIGNALS becomes true. "
-        "Use op 'changed' for progress-style watches — it is edge-triggered, "
-        "so it fires on transitions rather than continuously"
+        "Fire when a JSON condition over named SIGNALS becomes true. Use op "
+        "'became' for watches — it fires only on the transition INTO the "
+        "target value, once per event. 'changed' fires on any movement in "
+        "either direction and will spam for multi-step activity"
     ),
     config_schema=(
         '{"condition": {"signal": "<name>", "op": "eq|ne|gt|gte|lt|lte|in|'
-        'contains|changed", "value": <literal>, ...signal params}, '
+        'contains|changed|became", "value": <literal>, ...signal params}, '
         '"poll_seconds": <optional int >= 5>}  — combine leaves with '
         '{"all": [...]}, {"any": [...]}, {"not": {...}}'
     ),

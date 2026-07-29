@@ -138,6 +138,23 @@ async def _process(job: AttentionJob, now, db: Session) -> bool:
             job.status = AttentionJob.STATUS_DONE
         return False
 
+    # Cooldown, applied uniformly to every trigger/action pair. `due` has
+    # already run (so edge baselines advanced), and the surplus edge is
+    # coalesced away rather than queued — for a "tell me when it moves"
+    # watch, one notification per window is the useful behavior, and this
+    # bounds the damage from a condition that turns out to flap.
+    if job.min_interval_seconds and job.last_fired_at is not None:
+        elapsed = (now - _naive(job.last_fired_at)).total_seconds()
+        if elapsed < job.min_interval_seconds:
+            logger.debug(
+                "attention: job %s due but within cooldown (%.0fs of %ds) — coalesced",
+                job.id, elapsed, job.min_interval_seconds,
+            )
+            job.next_run_at = trigger.advance(job, now, db)
+            if job.next_run_at is None:
+                job.status = AttentionJob.STATUS_DONE
+            return False
+
     # ---- fire ----
     ran = False
     try:

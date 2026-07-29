@@ -67,11 +67,17 @@ Rules:
 2. Prefer the simplest trigger that satisfies the request. A one-off
    reminder is "at". Something repeating is "every". "Tell me when X
    happens" is "signal".
-3. For "when <agent> makes progress / responds / says something", use
-   trigger_type "signal" with op "changed" on agent.last_message_at. It is
-   edge-triggered, so it fires on each new transition.
-4. For "when <agent> finishes / is done", use signal + agent.status eq
-   "IDLE". For "when it breaks", agent.status eq "ERROR".
+3. For "when <agent> makes progress / responds / finishes / is done", use
+   trigger_type "signal" with
+     {"signal": "agent.is_generating", "op": "became", "value": false}
+   That is the end-of-turn edge and fires exactly once per completed turn.
+   Do NOT use op "changed" on agent.last_message_at for this: it fires on
+   every intermediate message inside one turn and produces a push storm.
+4. "when it breaks / errors" is
+   {"signal": "agent.status", "op": "became", "value": "ERROR"}.
+   Prefer "became" over "changed" for every user-facing watch — "changed"
+   fires on transitions in BOTH directions and on every intermediate value.
+   Reserve "changed" for genuinely any-movement requests.
 5. Only reference an agent_id / task_id / project that appears in the
    CONTEXT block. Never invent one. If the user names an agent that is not
    in CONTEXT, set "error" instead (see rule 9).

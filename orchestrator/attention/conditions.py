@@ -20,13 +20,21 @@ Operators:
     contains                 — case-insensitive substring (str signals)
     changed                  — TRUE when the signal differs from the value
                                observed on the previous evaluation
+    became                   — TRUE only on the evaluation where the signal
+                               *transitions into* `value` (rising/falling edge)
 
-`changed` is what makes "notify me when agent X makes progress" work
-without re-firing every 2 seconds. It is *edge*-triggered: state lives in
+Both `changed` and `became` are edge-triggered: state lives in
 ``AttentionJob.last_value`` (a dict keyed by signal fingerprint) which the
 evaluator reads and rewrites through the ``memo`` mapping it is handed. The
-first evaluation of a `changed` leaf only records a baseline and reports
-False — otherwise every watcher would fire once the instant it was created.
+first evaluation only records a baseline and reports False — otherwise every
+watcher would fire once the instant it was created.
+
+Prefer `became` over `changed` for anything user-facing. `changed` on
+`agent.last_message_at` looks like "notify me when the agent makes progress"
+but actually fires on every intermediate message inside a single turn — it
+sent 8 pushes for one agent turn in testing. The agent-finished-a-turn edge
+is `agent.is_generating became false` (equivalently `agent.status became
+"IDLE"`), which is exactly what the stop hook writes, once per turn.
 """
 
 from __future__ import annotations
@@ -39,7 +47,10 @@ from attention.registry import SIGNALS
 logger = logging.getLogger("orchestrator.attention")
 
 SCALAR_OPS = {"eq", "ne", "gt", "gte", "lt", "lte"}
-ALL_OPS = SCALAR_OPS | {"in", "contains", "changed"}
+# Ops that consult the previous evaluation's value and therefore need a memo
+# slot. `changed` needs no `value`; `became` does.
+EDGE_OPS = {"changed", "became"}
+ALL_OPS = SCALAR_OPS | {"in", "contains"} | EDGE_OPS
 
 MAX_DEPTH = 5
 MAX_NODES = 40
@@ -186,7 +197,7 @@ def evaluate(node, db, memo: dict) -> bool:
 
     op = node.get("op")
 
-    if op == "changed":
+    if op in EDGE_OPS:
         key = _fingerprint(node)
         current = _serialize(raw)
         had_baseline = key in memo
@@ -196,7 +207,12 @@ def evaluate(node, db, memo: dict) -> bool:
         # the moment it is created just because it has never looked before.
         if not had_baseline:
             return False
-        return current != previous
+        if op == "changed":
+            return current != previous
+        # became: only the transition INTO `value` counts. Staying at the
+        # target value must stay silent, and so must leaving it.
+        target = _serialize(node.get("value"))
+        return current != previous and current == target
 
     if raw is None:
         return False
@@ -251,4 +267,6 @@ def summarize(node) -> str:
     op = node.get("op", "?")
     if op == "changed":
         return f"{name} changes"
+    if op == "became":
+        return f"{name} becomes {node.get('value')!r}"
     return f"{name} {op} {node.get('value')!r}"

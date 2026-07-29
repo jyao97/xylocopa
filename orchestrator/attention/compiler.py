@@ -41,13 +41,11 @@ class CompileError(RuntimeError):
     """The request could not be turned into a valid job."""
 
 
-SYSTEM_RULES = """\
-You compile a user's natural-language request into ONE scheduling job for a
-developer tool called Xylocopa, which runs many Claude Code agents.
-
-Output ONLY a single JSON object. No prose, no markdown fences, no preamble.
-
-Schema:
+# The job schema and scheduling rules are shared verbatim between the two
+# prompts (one-shot /compile and conversational /chat) so a fix to a rule —
+# like the daily_at wall-clock exception — can never apply to one entry
+# path and not the other.
+JOB_SCHEMA = """\
 {
   "kind": "reminder" | "watch" | "digest" | "automation",
   "title": "<= 80 chars, imperative, what the user will see in a list",
@@ -56,9 +54,9 @@ Schema:
   "action_type": "<one of the ACTIONS below>",
   "action_config": { ... matching that action's schema ... },
   "confirm": "<one sentence, second person, stating exactly what will happen and when>"
-}
+}"""
 
-Rules:
+SCHEDULING_RULES = """\
 1. Absolute timestamps ("at", "start_at", "until") are ISO-8601 UTC. Resolve
    every relative phrase ("in an hour", "tomorrow morning", "tonight")
    against NOW below. The ONE exception is "daily_at", which is a LOCAL
@@ -79,20 +77,70 @@ Rules:
    fires on transitions in BOTH directions and on every intermediate value.
    Reserve "changed" for genuinely any-movement requests.
 5. Only reference an agent_id / task_id / project that appears in the
-   CONTEXT block. Never invent one. If the user names an agent that is not
-   in CONTEXT, set "error" instead (see rule 9).
+   CONTEXT block. Never invent one.
 6. Default action is "notify". Use "run_prompt" ONLY when the user asks for
    a summary, digest, analysis or report — it spends tokens on every fire.
 7. "kind" is for grouping in the UI only. Pick the closest label.
 8. "confirm" must be verifiable by the user at a glance and must state the
-   resolved local time in a friendly form when a time is involved.
-9. If the request is impossible with the listed capabilities, or too
-   ambiguous to compile safely, output exactly:
-   {"error": "<one short sentence explaining what you need>"}
+   resolved local time in a friendly form when a time is involved."""
+
+SYSTEM_RULES = f"""\
+You compile a user's natural-language request into ONE scheduling job for a
+developer tool called Xylocopa, which runs many Claude Code agents.
+
+Output ONLY a single JSON object. No prose, no markdown fences, no preamble.
+
+Schema:
+{JOB_SCHEMA}
+
+Rules:
+{SCHEDULING_RULES}
+9. If the user names an agent that is not in CONTEXT, or the request is
+   impossible with the listed capabilities, or too ambiguous to compile
+   safely, output exactly:
+   {{"error": "<one short sentence explaining what you need>"}}
+"""
+
+CHAT_RULES = f"""\
+You are the attention assistant of Xylocopa, a developer tool that runs many
+Claude Code agents. You appear as a small orange orb in the corner of the
+screen and talk through a tiny speech bubble. You can chat, answer questions
+about the user's agents and pending jobs, and schedule jobs (reminders,
+agent watches, digests, automations).
+
+Output ONLY a single JSON object. No prose, no markdown fences, no preamble:
+{{
+  "say": "<your reply — short, warm, at most ~200 characters, plain text>",
+  "job": null | <a job object matching the JOB SCHEMA below>
+}}
+
+JOB SCHEMA:
+{JOB_SCHEMA}
+
+Conversation rules:
+1. Mirror the user's language: if they write Chinese, "say" is Chinese.
+2. The bubble is tiny — one to two short sentences, no markdown, no lists.
+   At most one emoji.
+3. Attach a "job" ONLY when the user asked for something schedulable AND you
+   have every detail you need. "say" then restates what will happen and
+   when; the UI renders Create/Cancel buttons under it, so never ask the
+   user to type yes.
+4. If a detail is missing or ambiguous (which agent? what time?), set job to
+   null and ask ONE specific question in "say". CONTEXT lists what exists —
+   never invent an agent or project.
+5. For questions ("what can you do", "what's pending", "which agents are
+   running") answer from CAPABILITIES and CONTEXT with job null. Pending
+   jobs are listed in CONTEXT; you cannot edit or delete them — the user
+   does that from the jobs list in this bubble.
+6. Off-topic chat gets a friendly one-liner and, when natural, a nudge back
+   to what you can do. Never invent facts about the system.
+
+Scheduling rules (for the "job" object):
+{SCHEDULING_RULES}
 """
 
 
-def _build_prompt(text: str, context: str) -> str:
+def _now_block() -> str:
     now_utc = datetime.now(timezone.utc)
     now_local = datetime.now()
     tz_name = now_local.astimezone().tzname() or "local"
@@ -100,10 +148,16 @@ def _build_prompt(text: str, context: str) -> str:
         (now_local - now_utc.replace(tzinfo=None)).total_seconds() / 60,
     ))
     return (
-        f"{SYSTEM_RULES}\n"
         f"NOW (UTC):   {now_utc.replace(microsecond=0).isoformat()}\n"
         f"NOW (local): {now_local.replace(microsecond=0).isoformat()} "
-        f"({tz_name}, UTC{offset_min // 60:+03d}:{abs(offset_min) % 60:02d})\n\n"
+        f"({tz_name}, UTC{offset_min // 60:+03d}:{abs(offset_min) % 60:02d})"
+    )
+
+
+def _build_prompt(text: str, context: str) -> str:
+    return (
+        f"{SYSTEM_RULES}\n"
+        f"{_now_block()}\n\n"
         f"CAPABILITIES\n{describe_registries()}\n\n"
         f"CONTEXT\n{context or '(no agents or projects supplied)'}\n\n"
         f"USER REQUEST\n{text}\n"
@@ -138,6 +192,36 @@ def build_context(db, *, limit: int = 25) -> str:
     projects = db.query(Project.name).limit(60).all()
     if projects:
         lines.append("Projects: " + ", ".join(p[0] for p in projects))
+    return "\n".join(lines)
+
+
+def build_jobs_context(db, *, limit: int = 20) -> str:
+    """The user's pending jobs, so the chat can answer "what have I set up?".
+
+    Chat-only: the one-shot compile prompt never needs them, and keeping its
+    prompt byte-stable protects the behavior the confirm-preview tests pin.
+    """
+    from models import AttentionJob
+
+    jobs = (
+        db.query(AttentionJob)
+        .filter(AttentionJob.status.in_([
+            AttentionJob.STATUS_ACTIVE, AttentionJob.STATUS_PAUSED,
+            AttentionJob.STATUS_ERROR,
+        ]))
+        .order_by(
+            AttentionJob.next_run_at.asc().nullslast(),
+            AttentionJob.created_at.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    if not jobs:
+        return "Pending jobs: (none)"
+    lines = ["Pending jobs (title · trigger · status · next run UTC):"]
+    for j in jobs:
+        nxt = j.next_run_at.replace(microsecond=0).isoformat() if j.next_run_at else "-"
+        lines.append(f"  {j.title} · {j.trigger_type} · {j.status} · {nxt}")
     return "\n".join(lines)
 
 
@@ -334,3 +418,87 @@ async def compile_request(text: str, db) -> dict:
         spec["preview_next_run_at"],
     )
     return spec
+
+
+# ---------------------------------------------------------------------------
+# Conversational entry point
+# ---------------------------------------------------------------------------
+
+# History the model sees. Enough for a clarify → answer → confirm exchange;
+# a longer memory adds tokens per turn without adding scheduling accuracy.
+MAX_CHAT_TURNS = 16
+MAX_CHAT_CHARS = 2000
+
+
+async def chat_request(messages: list[dict], db) -> dict:
+    """One conversational turn. Returns {"say": str, "spec": dict | None}.
+
+    Same cost contract as compile_request — one Sonnet call, at interaction
+    time only — but with the recent transcript in the prompt, so "which
+    agent?" → "the camera one" works. A proposed job is validated through
+    the exact gate /compile uses; nothing here is persisted. A job that
+    fails validation degrades to conversation (the say + the validator's
+    complaint) instead of a hard error, because mid-chat a 422 would
+    read as the assistant going silent.
+    """
+    turns: list[tuple[str, str]] = []
+    for m in (messages or [])[-MAX_CHAT_TURNS:]:
+        role = "USER" if (m.get("role") == "user") else "ASSISTANT"
+        content = str(m.get("content") or "").strip()
+        if content:
+            turns.append((role, content[:MAX_CHAT_CHARS]))
+    if not turns or turns[-1][0] != "USER":
+        raise CompileError("say something first")
+
+    convo = "\n".join(f"{role}: {content}" for role, content in turns)
+    prompt = (
+        f"{CHAT_RULES}\n"
+        f"{_now_block()}\n\n"
+        f"CAPABILITIES\n{describe_registries()}\n\n"
+        f"CONTEXT\n{build_context(db)}\n{build_jobs_context(db)}\n\n"
+        f"CONVERSATION\n{convo}\n\n"
+        f"Reply with the single JSON object now.\n"
+    )
+
+    async with _COMPILE_SLOTS:
+        try:
+            rc, out, err = await asyncio.to_thread(_claude_p, prompt)
+        except subprocess.TimeoutExpired:
+            raise CompileError(
+                f"the assistant timed out after {COMPILE_TIMEOUT_SECONDS}s — try again"
+            )
+        except FileNotFoundError:
+            raise CompileError("the claude CLI is not available on this host")
+
+    if rc != 0:
+        logger.warning("attention chat failed rc=%d: %s", rc, (err or "")[:300])
+        raise CompileError("the assistant could not be reached — try again")
+
+    obj = _extract_json(out)
+    say = str(obj.get("say") or "").strip()[:600]
+    job = obj.get("job")
+
+    spec = None
+    if isinstance(job, dict):
+        try:
+            spec = validate_spec(job)
+            spec["source_text"] = turns[-1][1]
+            spec["preview_next_run_at"] = preview_first_run(spec)
+        except CompileError as exc:
+            # The model proposed something the registries reject. Surface the
+            # reason in-conversation so the user can rephrase.
+            spec = None
+            reason = str(exc)[:200]
+            say = f"{say} ({reason})" if say else reason
+
+    if not say and spec is None:
+        raise CompileError("the assistant returned nothing useful")
+    if not say:
+        say = spec.get("confirm") or "Here is what I can set up:"
+
+    logger.info(
+        "attention: chat turn (%d msgs) → say=%r spec=%s",
+        len(turns), say[:60],
+        f"{spec['trigger_type']}×{spec['action_type']}" if spec else None,
+    )
+    return {"say": say, "spec": spec}

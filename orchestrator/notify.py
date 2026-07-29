@@ -23,6 +23,7 @@ def notify(
     *,
     in_use: bool = False,
     muted: bool = False,
+    meta: dict | None = None,
 ) -> str:
     """Send a notification through the appropriate channel.
 
@@ -45,6 +46,7 @@ def notify(
         # not gated by the global message toggle or per-agent mute.
         logger.info("notify: %s → SEND (always)", channel)
         _send(title, body, url)
+        _emit_attention_ws(title, body, url, meta)
         return "SEND"
 
     if channel == "task_complete":
@@ -76,3 +78,22 @@ def notify(
 def _send(title: str, body: str, url: str) -> None:
     """Send via all backends."""
     send_push_notification(title, body, url)
+
+
+def _emit_attention_ws(title: str, body: str, url: str,
+                       meta: dict | None) -> None:
+    """Broadcast the foreground twin of an attention push.
+
+    Best-effort only: outside a running event loop (tests, the MCP process)
+    there is no WS hub to speak through, and the push above already went
+    out — so any failure here is swallowed by design.
+    """
+    try:
+        import asyncio
+
+        from websocket import emit_attention_fired
+
+        asyncio.get_running_loop()
+        asyncio.ensure_future(emit_attention_fired(title, body, url, meta))
+    except Exception:
+        pass

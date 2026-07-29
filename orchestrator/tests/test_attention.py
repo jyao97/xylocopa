@@ -731,3 +731,116 @@ async def test_tick_caps_fires_per_pass(db_session, monkeypatch):
 
     fired = await tick(db_session)
     assert fired == MAX_FIRES_PER_TICK, "a backlog must not blow the 2s cadence"
+
+
+# ---------------------------------------------------------------------------
+# Conversational chat (bubble)
+# ---------------------------------------------------------------------------
+
+def _fake_claude(reply: dict):
+    """A _claude_p stand-in returning a fixed JSON reply."""
+    return lambda prompt: (0, json.dumps(reply), "")
+
+
+@pytest.mark.asyncio
+async def test_chat_plain_reply_has_no_spec(db_session, monkeypatch):
+    from attention import compiler
+
+    monkeypatch.setattr(
+        compiler, "_claude_p", _fake_claude({"say": "I can remind you, watch agents, and send digests.", "job": None}),
+    )
+    out = await compiler.chat_request(
+        [{"role": "user", "content": "what can you do?"}], db_session,
+    )
+    assert out["spec"] is None
+    assert "remind" in out["say"]
+
+
+@pytest.mark.asyncio
+async def test_chat_job_proposal_is_validated_and_previewed(db_session, monkeypatch):
+    from attention import compiler
+
+    at = (datetime.utcnow() + timedelta(hours=2)).replace(microsecond=0)
+    monkeypatch.setattr(compiler, "_claude_p", _fake_claude({
+        "say": "Got it — I'll ping you in 2 hours.",
+        "job": {
+            "kind": "reminder", "title": "Check the build",
+            "trigger_type": "at", "trigger_config": {"at": at.isoformat() + "Z"},
+            "action_type": "notify", "action_config": {"title": "Check the build"},
+            "confirm": "I'll notify you in two hours.",
+        },
+    }))
+    out = await compiler.chat_request(
+        [{"role": "user", "content": "remind me in 2h to check the build"}],
+        db_session,
+    )
+    spec = out["spec"]
+    assert spec is not None
+    assert spec["trigger_type"] == "at"
+    # source_text is the user's words, not the model's — it is what a
+    # created job shows under "You said:".
+    assert spec["source_text"] == "remind me in 2h to check the build"
+    # preview comes from trigger arithmetic, and must match the given time
+    assert spec["preview_next_run_at"] == at.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_chat_invalid_job_degrades_to_conversation(db_session, monkeypatch):
+    from attention import compiler
+
+    monkeypatch.setattr(compiler, "_claude_p", _fake_claude({
+        "say": "Setting that up.",
+        "job": {
+            "kind": "watch", "title": "bad",
+            "trigger_type": "definitely_not_a_trigger", "trigger_config": {},
+            "action_type": "notify", "action_config": {},
+        },
+    }))
+    out = await compiler.chat_request(
+        [{"role": "user", "content": "watch the thing"}], db_session,
+    )
+    # No hard failure mid-conversation: the say survives, annotated with why
+    # the proposal was rejected, and no spec is offered for confirmation.
+    assert out["spec"] is None
+    assert "Setting that up." in out["say"]
+    assert "unknown trigger" in out["say"]
+
+
+@pytest.mark.asyncio
+async def test_chat_requires_a_final_user_turn(db_session):
+    from attention.compiler import CompileError, chat_request
+
+    with pytest.raises(CompileError):
+        await chat_request([], db_session)
+    with pytest.raises(CompileError):
+        await chat_request(
+            [{"role": "assistant", "content": "hello there"}], db_session,
+        )
+
+
+@pytest.mark.asyncio
+async def test_chat_prompt_carries_history_and_pending_jobs(db_session, monkeypatch):
+    from attention import compiler
+
+    db_session.add(_notify_job())
+    db_session.commit()
+
+    seen = {}
+
+    def spy(prompt):
+        seen["prompt"] = prompt
+        return (0, json.dumps({"say": "ok", "job": None}), "")
+
+    monkeypatch.setattr(compiler, "_claude_p", spy)
+    await compiler.chat_request([
+        {"role": "user", "content": "watch my agent"},
+        {"role": "assistant", "content": "which agent do you mean?"},
+        {"role": "user", "content": "the camera one"},
+    ], db_session)
+
+    prompt = seen["prompt"]
+    # Both sides of the exchange must reach the model — the whole point of
+    # chat over one-shot compile is that "the camera one" has context.
+    assert "which agent do you mean?" in prompt
+    assert "the camera one" in prompt
+    assert "Pending jobs" in prompt

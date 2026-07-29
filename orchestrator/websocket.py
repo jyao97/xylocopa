@@ -264,6 +264,21 @@ async def emit_system_alert(message: str, level: str = "warning"):
     })
 
 
+async def emit_attention_fired(title: str, body: str, url: str,
+                               meta: dict | None = None):
+    """An attention job fired — the in-app twin of its push notification.
+
+    The orb FAB subscribes to this and 'speaks' the message in its bubble,
+    so a foreground user gets a light in-app surface instead of (on top of)
+    the OS notification.
+    """
+    payload = {"title": title, "body": body, "url": url}
+    for key in ("job_id", "kind"):
+        if meta and meta.get(key) is not None:
+            payload[key] = meta[key]
+    await ws_manager.broadcast("attention_fired", payload)
+
+
 async def emit_agent_update(agent_id: str, status: str, project: str,
                             insight_status: str | None = None):
     # TODO: insight_status / has_pending_suggestions belong in a separate

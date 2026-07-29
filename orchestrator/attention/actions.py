@@ -74,7 +74,10 @@ async def _run_notify(job, db) -> str:
     # The user explicitly asked for this notification, so it rides the
     # "attention" channel — never suppressed by the global message toggle
     # or per-agent mute, same contract as notify_at.
-    decision = notify("attention", job.agent_id or "", title, body or title, url=url)
+    decision = notify(
+        "attention", job.agent_id or "", title, body or title, url=url,
+        meta={"job_id": job.id, "kind": job.kind},
+    )
     return f"notify {decision}"
 
 
@@ -290,7 +293,10 @@ async def _run_run_prompt(job, db) -> str:
 
     title = (cfg.get("title") or job.title or "Assistant").strip()[:120]
     url = cfg.get("url") or _default_url(job)
-    decision = notify("attention", job.agent_id or "", title, text[:400], url=url)
+    decision = notify(
+        "attention", job.agent_id or "", title, text[:400], url=url,
+        meta={"job_id": job.id, "kind": job.kind},
+    )
     return f"prompt ok ({len(text)} chars), notify {decision}"
 
 

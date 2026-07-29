@@ -25,7 +25,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import attention  # noqa: F401  — populates the registries on import
-from attention.compiler import CompileError, compile_request, validate_spec
+from attention.compiler import (
+    CompileError,
+    chat_request,
+    compile_request,
+    validate_spec,
+)
 from attention.registry import ACTIONS, SIGNALS, TRIGGERS
 from database import get_db
 from models import AttentionJob
@@ -57,6 +62,15 @@ def _naive(dt):
 
 class CompileRequest(BaseModel):
     text: str = Field(..., max_length=2000)
+
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., max_length=2000)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(..., min_length=1, max_length=32)
 
 
 class JobCreate(BaseModel):
@@ -174,6 +188,24 @@ async def compile_endpoint(body: CompileRequest, db: Session = Depends(get_db)):
     except CompileError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return {"spec": spec}
+
+
+@router.post("/api/attention/chat")
+async def chat_endpoint(body: ChatRequest, db: Session = Depends(get_db)):
+    """One turn of the bubble conversation. Persists nothing.
+
+    Returns {"say": <reply text>, "spec": <job proposal or null>}. A spec is
+    only ever a *proposal* — the bubble renders Create/Cancel under the
+    reply and POSTs /jobs on confirm, so the same review gate protects both
+    the chat path and the one-shot compile path.
+    """
+    try:
+        result = await chat_request(
+            [m.model_dump() for m in body.messages], db,
+        )
+    except CompileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return result
 
 
 # ---------------------------------------------------------------------------

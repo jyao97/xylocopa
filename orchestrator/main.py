@@ -6,6 +6,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
 
 # Clear Claude Code nesting-detection vars from the orchestrator process
 # so spawned agents don't refuse to start.
@@ -29,14 +30,15 @@ logger = logging.getLogger("orchestrator")
 
 # Frontend debug logger — writes to a dedicated file for easy tailing.
 # Size-rotated (20 MB × 3 files): unbounded FileHandler let this grow to 100 MB+.
-from logging.handlers import RotatingFileHandler
 _fe_handler = RotatingFileHandler(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "frontend-debug.log"),
     maxBytes=20 * 1024 * 1024, backupCount=2, encoding="utf-8",
 )
 _fe_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-logging.getLogger("frontend.debug").addHandler(_fe_handler)
-logging.getLogger("frontend.debug").setLevel(logging.DEBUG)
+_fe_logger = logging.getLogger("frontend.debug")
+_fe_logger.addHandler(_fe_handler)
+_fe_logger.setLevel(logging.DEBUG)
+_fe_logger.propagate = False  # dedicated file only — keep [fe] chatter out of orchestrator.log
 
 # Keyboard-viewport debug logger — high-volume per-frame samples from
 # /api/debug/kb-log. Raw lines, no timestamp prefix (samples carry t=).

@@ -502,13 +502,12 @@ async def kb_debug_log(request: Request):
     """Receive keyboard viewport debug samples — writes to logs/kb-debug.log."""
     body = await request.json()
     samples = body.get("samples", [])
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "logs")
-    log_path = os.path.join(log_dir, "kb-debug.log")
-    with open(log_path, "a") as f:
-        for s in samples:
-            f.write(f"t={s.get('t','?')} cH={s.get('cH','?')} iH={s.get('iH','?')} "
-                    f"vvH={s.get('vvH','?')} vvOT={s.get('vvOT','?')} "
-                    f"off={s.get('off','?')} open={s.get('open','?')}\n")
+    _kb = logging.getLogger("kb.debug")
+    for s in samples:
+        _kb.info("t=%s cH=%s iH=%s vvH=%s vvOT=%s off=%s open=%s",
+                 s.get('t', '?'), s.get('cH', '?'), s.get('iH', '?'),
+                 s.get('vvH', '?'), s.get('vvOT', '?'),
+                 s.get('off', '?'), s.get('open', '?'))
     return {"ok": True, "count": len(samples)}
 
 
@@ -815,7 +814,7 @@ async def system_logs_truncate():
         truncatable = [
             "backend-pm2.log", "backend-pm2-error.log",
             "frontend-pm2.log", "frontend-pm2-error.log",
-            "frontend-debug.log",
+            "frontend-debug.log", "kb-debug.log",
         ]
         for name in truncatable:
             fp = os.path.join(LOG_DIR, name)
@@ -842,7 +841,7 @@ async def system_logs_truncate():
         # Remove old rotated PM2 logs (pm2 max_size creates numbered copies)
         for pattern in ["backend-pm2*.log.*", "backend-pm2-error*.log.*",
                         "frontend-pm2*.log.*", "frontend-pm2-error*.log.*",
-                        "frontend-debug*.log.*"]:
+                        "frontend-debug*.log.*", "kb-debug*.log.*"]:
             for fp in globmod.glob(os.path.join(LOG_DIR, pattern)):
                 try:
                     sz = os.path.getsize(fp)

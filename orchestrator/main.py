@@ -27,13 +27,29 @@ from auth import get_jwt_secret, get_password_hash, verify_token
 setup_logging()
 logger = logging.getLogger("orchestrator")
 
-# Frontend debug logger — writes to a dedicated file for easy tailing
-_fe_handler = logging.FileHandler(
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "frontend-debug.log")
+# Frontend debug logger — writes to a dedicated file for easy tailing.
+# Size-rotated (20 MB × 3 files): unbounded FileHandler let this grow to 100 MB+.
+from logging.handlers import RotatingFileHandler
+_fe_handler = RotatingFileHandler(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "frontend-debug.log"),
+    maxBytes=20 * 1024 * 1024, backupCount=2, encoding="utf-8",
 )
 _fe_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
 logging.getLogger("frontend.debug").addHandler(_fe_handler)
 logging.getLogger("frontend.debug").setLevel(logging.DEBUG)
+
+# Keyboard-viewport debug logger — high-volume per-frame samples from
+# /api/debug/kb-log. Raw lines, no timestamp prefix (samples carry t=).
+# Size-rotated (20 MB × 3): the old raw-append writer grew to 1.2 GB.
+_kb_handler = RotatingFileHandler(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "kb-debug.log"),
+    maxBytes=20 * 1024 * 1024, backupCount=2, encoding="utf-8",
+)
+_kb_handler.setFormatter(logging.Formatter("%(message)s"))
+_kb_logger = logging.getLogger("kb.debug")
+_kb_logger.addHandler(_kb_handler)
+_kb_logger.setLevel(logging.DEBUG)
+_kb_logger.propagate = False  # per-frame samples must not spill into orchestrator.log
 
 
 # ---- Registry loader ----

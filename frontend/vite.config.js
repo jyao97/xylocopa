@@ -183,7 +183,10 @@ export default defineConfig({
       port: 3000,
     },
     proxy: {
-      '/api': 'http://localhost:8080',
+      // ws:true — port-preview web apps (webapp_present) open WebSockets at
+      // /api/preview/.../ws; the shorthand form only proxied plain HTTP,
+      // leaving those cards stuck on "connecting".
+      '/api': { target: 'http://localhost:8080', ws: true },
       '/ws': { target: 'ws://localhost:8080', ws: true },
     },
   },
@@ -195,7 +198,10 @@ export default defineConfig({
     port: 3000,
     cors: false,  // same rationale as `server.cors` above
     proxy: {
-      '/api': 'http://localhost:8080',
+      // ws:true — port-preview web apps (webapp_present) open WebSockets at
+      // /api/preview/.../ws; the shorthand form only proxied plain HTTP,
+      // leaving those cards stuck on "connecting".
+      '/api': { target: 'http://localhost:8080', ws: true },
       '/ws': { target: 'ws://localhost:8080', ws: true },
     },
   },

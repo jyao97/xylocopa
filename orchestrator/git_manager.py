@@ -6,6 +6,26 @@ import subprocess
 
 logger = logging.getLogger("orchestrator.git")
 
+# Identity written into each managed repo's local git config (and used for
+# orchestrator-made commits such as merges). Both halves are overridable via
+# env so a deployment can commit as e.g. its bot account.
+DEFAULT_GIT_USER_NAME = "Xylocopa"
+DEFAULT_GIT_USER_EMAIL = "xylocopa@localhost"
+
+# Pre-rebrand identity that older orchestrators baked into project repos'
+# .git/config. Only these exact values are ever rewritten — a user-set
+# identity is never touched.
+LEGACY_GIT_USER_NAMES = frozenset({"AgentHive"})
+LEGACY_GIT_USER_EMAILS = frozenset({"agenthive@localhost"})
+
+
+def git_identity() -> tuple[str, str]:
+    """(user.name, user.email) the orchestrator commits as."""
+    return (
+        os.getenv("GIT_USER_NAME", DEFAULT_GIT_USER_NAME),
+        os.getenv("GIT_USER_EMAIL", DEFAULT_GIT_USER_EMAIL),
+    )
+
 
 class GitManager:
     """Git operations executed as host subprocesses."""
@@ -198,6 +218,52 @@ class GitManager:
         """Get diff for a ref."""
         return self._run_git(project_path, ["diff", ref])
 
+    def set_identity(self, project_path: str) -> None:
+        """Write the orchestrator commit identity into the repo's local config."""
+        name, email = git_identity()
+        self._run_git(project_path, ["config", "user.name", name])
+        self._run_git(project_path, ["config", "user.email", email])
+
+    def migrate_legacy_identity(self, project_path: str) -> bool:
+        """Rewrite a pre-rebrand ``AgentHive`` local identity to the current one.
+
+        Older orchestrators wrote ``user.name=AgentHive`` /
+        ``user.email=agenthive@localhost`` into each project's ``.git/config``
+        during merges; the rebrand changed the code but not configs already on
+        disk, so agents (and their worktrees, which share the parent's config)
+        kept committing as AgentHive. Only the exact legacy values are
+        rewritten — anything else is left alone. Returns True if changed.
+        """
+        # Quiet probe first — _run_git logs a warning on failure, and this
+        # runs for every project at startup (some aren't repos, e.g. .xylo-internal).
+        try:
+            probe = subprocess.run(
+                ["git", "rev-parse", "--is-inside-work-tree"],
+                cwd=project_path, capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        if probe.returncode != 0 or probe.stdout.strip() != "true":
+            return False
+        cur_name = self._run_git(project_path, ["config", "--local", "--get", "user.name"])
+        cur_email = self._run_git(project_path, ["config", "--local", "--get", "user.email"])
+        if cur_name.startswith("ERROR:") or cur_email.startswith("ERROR:"):
+            return False  # unreadable config
+        new_name, new_email = git_identity()
+        changed = False
+        if cur_name in LEGACY_GIT_USER_NAMES:
+            self._run_git(project_path, ["config", "user.name", new_name])
+            changed = True
+        if cur_email in LEGACY_GIT_USER_EMAILS:
+            self._run_git(project_path, ["config", "user.email", new_email])
+            changed = True
+        if changed:
+            logger.info("Migrated legacy git identity in %s: %s <%s> -> %s <%s>",
+                        project_path, cur_name, cur_email,
+                        new_name if cur_name in LEGACY_GIT_USER_NAMES else cur_name,
+                        new_email if cur_email in LEGACY_GIT_USER_EMAILS else cur_email)
+        return changed
+
     def merge_branch(self, project_path: str, branch: str, *,
                      no_ff: bool = False, message: str | None = None) -> dict:
         """Merge a branch into the current branch. Returns result dict."""
@@ -205,8 +271,7 @@ class GitManager:
         if current.startswith("ERROR:"):
             return {"success": False, "error": current, "current_branch": "unknown"}
 
-        self._run_git(project_path, ["config", "user.name", "Xylocopa"])
-        self._run_git(project_path, ["config", "user.email", os.getenv("GIT_USER_EMAIL", "xylocopa@localhost")])
+        self.set_identity(project_path)
 
         merge_args = ["merge", branch]
         if no_ff:

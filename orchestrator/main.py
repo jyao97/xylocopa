@@ -394,6 +394,13 @@ async def lifespan(app: FastAPI):
     app.state.agent_dispatcher = agent_dispatcher
     app.state.worker_manager = wm
     app.state.git_manager = gm
+    # One-time migration: pre-rebrand orchestrators wrote user.name=AgentHive
+    # into each managed repo's .git/config; rewrite to the current identity so
+    # agents stop committing as AgentHive. Idempotent, non-fatal.
+    try:
+        _migrate_legacy_git_identity(gm)
+    except Exception:
+        logger.exception("Legacy git identity migration failed (non-fatal)")
     agent_dispatch_task = asyncio.create_task(agent_dispatcher.run())
     logger.info("Dispatcher started")
 
@@ -642,6 +649,34 @@ def _migrate_legacy_user_dirs():
     if os.path.isdir(old) and not os.path.exists(new):
         os.rename(old, new)
         logger.info("Migrated legacy %s → %s", old, new)
+
+
+def _migrate_legacy_git_identity(gm) -> int:
+    """Rewrite the legacy ``AgentHive`` git identity in every managed repo.
+
+    Iterates all projects known to the DB (registry + filesystem-scanned),
+    including archived ones — an archived project can be un-archived later
+    and its worktrees share the parent's config. Only the exact legacy values
+    are rewritten (see ``git_manager.migrate_legacy_identity``); user-set
+    identities are never touched. Returns the number of repos changed.
+    """
+    db = SessionLocal()
+    try:
+        paths = [p for (p,) in db.query(Project.path).all() if p]
+    finally:
+        db.close()
+    changed = 0
+    for path in paths:
+        if not os.path.isdir(path):
+            continue
+        try:
+            if gm.migrate_legacy_identity(path):
+                changed += 1
+        except Exception:
+            logger.debug("git identity migration skipped for %s", path, exc_info=True)
+    if changed:
+        logger.info("Migrated legacy git identity in %d repo(s)", changed)
+    return changed
 
 
 # ---- App creation ----

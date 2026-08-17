@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agents still committing as `AgentHive`.** Pre-rebrand orchestrators wrote `user.name=AgentHive` / `user.email=agenthive@localhost` into each managed repo's `.git/config` on merge; the rebrand changed the code but not configs already on disk, so agents (and their worktrees, which share the parent's config) kept authoring commits as AgentHive. Startup now rewrites that exact legacy identity in every DB-known project repo to `Xylocopa <xylocopa@localhost>` (idempotent; user-set identities untouched). Author name is now overridable via `GIT_USER_NAME`, alongside the existing `GIT_USER_EMAIL`.
+
 ## [0.14.0] - 2026-07-24
 
 Conversation branching release. A chat message can now be forked into a new agent that inherits the full conversation — including tool inputs/outputs and file-state context — by truncating and resuming the underlying Claude Code session transcript. Also fixes the localStorage quota exhaustion that silently dropped chat drafts and voice transcripts on long-lived installs.

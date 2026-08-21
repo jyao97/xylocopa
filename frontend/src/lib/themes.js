@@ -32,22 +32,22 @@ export const THEME_EVENT = "xy:theme-changed";
 export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
-    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#d3eaf2" } },
+    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
   { id: "dark", name: "Dark", base: "dark",
     preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" },
-    core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#0f3346" } },
+    core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" } },
   { id: "soft-dark", name: "Soft Dark", base: "dark",
     preview: { page: "#17181c", surface: "#1e2024", text: "#e8e6e3" },
-    core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41", bubble: "#1a3740" } },
+    core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41", bubble: "#375663" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
-    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#d0e4ec" } },
+    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
   { id: "solarized-dark", name: "Solarized Dark", base: "dark",
     preview: { page: "#002b36", surface: "#073642", text: "#aebcba" },
-    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e", bubble: "#0e4962" } },
+    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e", bubble: "#135b84" } },
   { id: "nord", name: "Nord", base: "dark",
     preview: { page: "#2e3440", surface: "#3b4252", text: "#eceff4" },
-    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a", bubble: "#46556d" } },
+    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a", bubble: "#4a6485" } },
   { id: "everforest", name: "Everforest", base: "dark",
     preview: { page: "#272e33", surface: "#2d353b", text: "#d3c6aa" },
     core: { page: "#272e33", surface: "#2d353b", heading: "#d3c6aa", body: "#b9ad93", edge: "#4a555b", bubble: "#3a515d" } },
@@ -55,8 +55,8 @@ export const PRESETS = [
 
 // Seed values for the custom editor, per base (= the default palettes).
 export const CUSTOM_SEEDS = {
-  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#d3eaf2" },
-  dark:  { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#0f3346" },
+  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" },
+  dark:  { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" },
 };
 
 export const CUSTOM_COLOR_FIELDS = [
@@ -144,13 +144,13 @@ export function deriveCustomTokens({ base, colors }) {
   const pole = base === "dark" ? "#ffffff" : "#000000";
   const glass = mix(surface, pole, 0.04);
   const glassNav = mix(surface, pole, 0.08);
-  // Ink matches the agent bubble's body text whenever the bubble sits on
-  // the same side of the brightness axis as the base; a bubble that flips
-  // sides (light bubble on dark base or vice versa) can't use the theme's
-  // body color and falls back to plain dark/light ink.
+  // Messenger convention: light bubbles carry dark ink; dark bubbles on a
+  // light base carry pure white (iMessage); dark bubbles on a dark base
+  // carry OFF-white — the theme's body color pushed toward white
+  // (WhatsApp-dark #E9EDEF-style), brighter than body, softer than #fff.
   const bubbleInk = isLightColor(bubble)
-    ? (base === "light" ? body : "#1f2937")
-    : (base === "dark" ? body : "#ffffff");
+    ? "#1f2937"
+    : base === "dark" ? mix(body, "#ffffff", 0.55) : "#ffffff";
   return {
     page, surface, heading, body, edge, bubble,
     bubbleRgb: channels(bubble),

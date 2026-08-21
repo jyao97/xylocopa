@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-08-21
+
+Unread-badge reliability fix.
+
+### Fixed
+
+- **Unread badges could silently diverge from the agent cards.** The unread FAB and bottom-nav badge read a WebSocket-only map; if the socket died without reconnecting, badges froze at a stale total while the agent cards (5s HTTP polls) kept showing fresh counts. The badge total is now derived from the same list payload the cards render — every agents fetch feeds the shared unread state — with a visibilitychange resync covering the laptop-sleep case on routes with no list mounted. Event-driven only, no new polling. (5be01a32)
+
 ## [0.15.1] - 2026-08-21
 
 Backend-only release: the attention job engine, a pluggable (trigger x action) automation layer for the orchestrator. No UI ships in this release — jobs are managed through the REST API (`/api/attention/*`), including a conversational endpoint that compiles natural-language requests into jobs. The assistant frontend built on top of this engine is being polished separately.

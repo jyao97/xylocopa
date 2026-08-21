@@ -20,7 +20,7 @@ export default function DoneView({ tasks, loading, selecting, selected, onToggle
   return (
     <div className="space-y-3">
       {completedCount > 0 && (
-        <div className="flex items-center gap-2 px-1 py-2 text-sm text-green-600 dark:text-green-400">
+        <div className="flex items-center gap-2 px-1 py-2 text-sm text-ok">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>

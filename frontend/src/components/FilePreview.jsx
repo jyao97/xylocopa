@@ -49,7 +49,7 @@ function ActionButtons({ src, filename, originalPath }) {
         className="p-0.5 rounded hover:bg-hover transition-colors text-dim hover:text-label"
       >
         {copied ? (
-          <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 text-ok" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
         ) : (

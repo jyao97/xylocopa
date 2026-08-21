@@ -1018,7 +1018,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
     return (
       <div className="px-4 py-10">
         <div className="bg-red-950/40 border border-red-800 rounded-xl p-4">
-          <p className="text-red-400 text-sm">Failed to load project: {loadError}</p>
+          <p className="text-danger text-sm">Failed to load project: {loadError}</p>
           <button type="button" onClick={loadData} className="mt-2 text-xs text-red-300 underline hover:text-red-200">
             Retry
           </button>

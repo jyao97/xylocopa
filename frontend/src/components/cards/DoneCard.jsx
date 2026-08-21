@@ -4,7 +4,7 @@ import CardShell, { cardPadding } from "./CardShell";
 import TaskExpandedContent from "./TaskExpandedContent";
 
 const STATUS_ICON = {
-  COMPLETE:  { color: "border-green-500 bg-green-500", icon: "M5 13l4 4L19 7" },
+  COMPLETE:  { color: "border-ok bg-ok", icon: "M5 13l4 4L19 7" },
   CANCELLED: { color: "border-gray-400 bg-gray-400 dark:border-gray-500 dark:bg-gray-500", icon: "M6 18L18 6M6 6l12 12" },
   REJECTED:  { color: "border-orange-500 bg-orange-500", icon: "M6 18L18 6M6 6l12 12" },
   FAILED:    { color: "border-red-500 bg-red-500", icon: "M6 18L18 6M6 6l12 12" },

@@ -366,8 +366,8 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
             }
             if (task.completed_at) {
               const termLabel = task.status === "COMPLETE" ? "Completed" : task.status === "FAILED" ? "Failed" : task.status === "TIMEOUT" ? "Timed Out" : task.status === "CANCELLED" ? "Dropped" : task.status === "REJECTED" ? "Rejected" : "Ended";
-              const termColor = task.status === "COMPLETE" ? "text-green-600 dark:text-green-400" : task.status === "CANCELLED" ? "text-gray-400" : "text-red-600 dark:text-red-400";
-              const termBg = task.status === "COMPLETE" ? "bg-green-500" : task.status === "CANCELLED" ? "bg-gray-500" : "bg-red-500";
+              const termColor = task.status === "COMPLETE" ? "text-ok" : task.status === "CANCELLED" ? "text-gray-400" : "text-danger";
+              const termBg = task.status === "COMPLETE" ? "bg-ok" : task.status === "CANCELLED" ? "bg-gray-500" : "bg-danger";
               steps.push({ label: termLabel, ts: task.completed_at, icon: "end", color: termColor, bg: termBg,
                 dur: task.started_at ? durationDisplay(task.started_at, task.completed_at) : null });
             }
@@ -469,7 +469,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               {(() => {
                 const arts = task.review_artifacts ? (() => { try { return JSON.parse(task.review_artifacts); } catch { return {}; } })() : {};
                 if (!arts.verify_status || arts.verify_status === "running") return null;
-                const colors = { pass: "text-green-600 dark:text-green-400 bg-green-500/10", fail: "text-red-600 dark:text-red-400 bg-red-500/10", warn: "text-amber-600 dark:text-amber-400 bg-amber-500/10", done: "text-accent accent-tint-10", error: "text-red-600 dark:text-red-400 bg-red-500/10" };
+                const colors = { pass: "text-ok ok-tint-10", fail: "text-danger danger-tint-10", warn: "text-amber-600 dark:text-amber-400 bg-amber-500/10", done: "text-accent accent-tint-10", error: "text-danger danger-tint-10" };
                 const labels = { pass: "Verification Passed", fail: "Verification Failed", warn: "Verification Warning", done: "Verification Complete", error: "Verification Error" };
                 return (
                   <div className="space-y-2">

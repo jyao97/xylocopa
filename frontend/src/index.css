@@ -45,6 +45,14 @@
   --color-accent:         #0891b2;
   --color-accent-rgb:     8 145 178;
   --color-accent-ink:     #ffffff;   /* text/glyph on a filled accent surface */
+  /* Semantic status family (dots, badges, status words). Green-600/red-600
+     here, 400-grade on .dark; branded palettes override with their own
+     native green/red. Filled DESTRUCTIVE buttons deliberately stay
+     Tailwind red-600+white everywhere — a universal alarm affordance. */
+  --color-ok:             #16a34a;
+  --color-ok-rgb:         22 163 74;
+  --color-danger:         #dc2626;
+  --color-danger-rgb:     220 38 38;
 
   /* Attention assistant identity. Still its own token (so it stays
      tunable in one place), but the values sit in the app's amber family —
@@ -112,6 +120,10 @@
   --color-accent:         #22d3ee;
   --color-accent-rgb:     34 211 238;
   --color-accent-ink:     #030712;   /* pale accents on dark bases take page-ink */
+  --color-ok:             #4ade80;
+  --color-ok-rgb:         74 222 128;
+  --color-danger:         #f87171;
+  --color-danger-rgb:     248 113 113;
 
   /* One Tailwind step brighter on dark surfaces (#030712 page), matching
      how the app's amber accents flip to amber-400 in dark mode. The orb
@@ -209,6 +221,11 @@
   --color-accent:         #4ba1d3;
   --color-accent-rgb:     75 161 211;
   --color-accent-ink:     #002b36;
+  /* Schoonover green; red lifted one step for base03 */
+  --color-ok:             #859900;
+  --color-ok-rgb:         133 153 0;
+  --color-danger:         #e04b48;
+  --color-danger-rgb:     224 75 72;
 }
 
 /* Solarized Light — warm cream base3/base2 family. */
@@ -248,6 +265,10 @@
   --color-accent:         #1f74b0;
   --color-accent-rgb:     31 116 176;
   --color-accent-ink:     #ffffff;
+  --color-ok:             #788f07;
+  --color-ok-rgb:         120 143 7;
+  --color-danger:         #dc322f;
+  --color-danger-rgb:     220 50 47;
 }
 
 /* Nord — polar-night blue-grays, snow-storm text. */
@@ -286,6 +307,11 @@
   --color-accent:         #88c0d0;
   --color-accent-rgb:     136 192 208;
   --color-accent-ink:     #2e3440;
+  /* aurora green; aurora red +12% white for the polar ground */
+  --color-ok:             #a3be8c;
+  --color-ok-rgb:         163 190 140;
+  --color-danger:         #c7747c;
+  --color-danger-rgb:     199 116 124;
 }
 
 /* Everforest — muted forest greens, warm parchment text. */
@@ -324,6 +350,10 @@
   --color-accent:         #7fbbb3;
   --color-accent-rgb:     127 187 179;
   --color-accent-ink:     #272e33;
+  --color-ok:             #a7c080;
+  --color-ok-rgb:         167 192 128;
+  --color-danger:         #e67e80;
+  --color-danger-rgb:     230 126 128;
 }
 
 /* Ash — the Bear/Things-style gray: cool light-gray ground with WHITE
@@ -486,6 +516,11 @@
   --color-accent:         #539bf5;
   --color-accent-rgb:     83 155 245;
   --color-accent-ink:     #22272e;
+  /* GitHub-Dimmed's own success/danger */
+  --color-ok:             #57ab5a;
+  --color-ok-rgb:         87 171 90;
+  --color-danger:         #e5534b;
+  --color-danger-rgb:     229 83 75;
 }
 /* Nord Light — Snow Storm ground with Polar Night ink; pairs with Nord. */
 .theme-nord-light {
@@ -523,6 +558,11 @@
   --color-accent:         #48709c;
   --color-accent-rgb:     72 112 156;
   --color-accent-ink:     #ffffff;
+  /* aurora pair pulled dark for the Snow Storm ground */
+  --color-ok:             #6f815f;
+  --color-ok-rgb:         111 129 95;
+  --color-danger:         #a95a64;
+  --color-danger-rgb:     169 90 100;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):
@@ -714,6 +754,10 @@ html.eink {
   --color-accent:         #000000;
   --color-accent-rgb:     0 0 0;
   --color-accent-ink:     #ffffff;
+  --color-ok:             #000000;
+  --color-ok-rgb:         0 0 0;
+  --color-danger:         #000000;
+  --color-danger-rgb:     0 0 0;
 
   --color-attn:       #000000;
   --color-attn-rgb:   0 0 0;
@@ -760,6 +804,10 @@ html.eink.dark {
   --color-accent:         #ffffff;
   --color-accent-rgb:     255 255 255;
   --color-accent-ink:     #000000;
+  --color-ok:             #ffffff;
+  --color-ok-rgb:         255 255 255;
+  --color-danger:         #ffffff;
+  --color-danger-rgb:     255 255 255;
 
   --color-attn:       #ffffff;
   --color-attn-rgb:   255 255 255;
@@ -1713,6 +1761,30 @@ svg text { font-family: inherit; }
   .form-accent      { accent-color: var(--color-accent); }
   /* shadow-lg's metrics with an accent-tinted shadow color (the FAB) */
   .shadow-accent-fab { box-shadow: 0 10px 15px -3px rgb(var(--color-accent-rgb) / 0.2), 0 4px 6px -4px rgb(var(--color-accent-rgb) / 0.2); }
+
+  /* Semantic status family — ok (green) and danger (red) ride per-theme
+     tokens so status chips/dots/words sit inside branded palettes (Nord
+     aurora, Solarized, Everforest, GitHub-Dimmed) instead of raw Tailwind
+     hues. Same hand-written rules as accent above. Filled destructive
+     buttons intentionally keep Tailwind red-600 + white (universal alarm). */
+  .text-ok        { color: var(--color-ok); }
+  .bg-ok          { background-color: var(--color-ok); }
+  .ok-tint-10     { background-color: rgb(var(--color-ok-rgb) / 0.10); }
+  .ok-tint-15     { background-color: rgb(var(--color-ok-rgb) / 0.15); }
+  .ok-tint-20     { background-color: rgb(var(--color-ok-rgb) / 0.20); }
+  .hover\:ok-tint-25:hover { background-color: rgb(var(--color-ok-rgb) / 0.25); }
+  .border-ok      { border-color: var(--color-ok); }
+  .ok-edge-40     { border-color: rgb(var(--color-ok-rgb) / 0.40); }
+  .text-danger    { color: var(--color-danger); }
+  .bg-danger      { background-color: var(--color-danger); }
+  .danger-tint-10 { background-color: rgb(var(--color-danger-rgb) / 0.10); }
+  .danger-tint-15 { background-color: rgb(var(--color-danger-rgb) / 0.15); }
+  .danger-tint-20 { background-color: rgb(var(--color-danger-rgb) / 0.20); }
+  .hover\:danger-tint-25:hover { background-color: rgb(var(--color-danger-rgb) / 0.25); }
+  .danger-edge-40 { border-color: rgb(var(--color-danger-rgb) / 0.40); }
+  .hover\:danger-edge-40:hover { border-color: rgb(var(--color-danger-rgb) / 0.40); }
+  .ring-danger-30 { --tw-ring-color: rgb(var(--color-danger-rgb) / 0.3); }
+  .form-danger    { accent-color: var(--color-danger); }
 
   .attn-tint-6  { background-color: rgb(var(--color-attn-rgb) / 0.06); }
   .attn-tint-8  { background-color: rgb(var(--color-attn-rgb) / 0.08); }

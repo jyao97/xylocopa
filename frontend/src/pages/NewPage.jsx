@@ -58,7 +58,7 @@ function NewProjectForm({ showToast, navigate }) {
       <div className="rounded-xl bg-surface shadow-card p-4 space-y-4">
         <div>
           <label className="block text-sm font-medium text-label mb-2">
-            Name <span className="text-red-400">*</span>
+            Name <span className="text-danger">*</span>
           </label>
           <input
             type="text"

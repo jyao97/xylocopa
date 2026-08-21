@@ -147,7 +147,7 @@ const FolderCard = memo(function FolderCard({ folder, onClick, dragHandleProps, 
           {/* Row 3: status pill */}
           <div className="flex items-center gap-1.5 mt-1.5">
             {folder.active ? (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full ok-tint-15 text-ok">
                 Active
               </span>
             ) : (

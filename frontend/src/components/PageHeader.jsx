@@ -38,7 +38,7 @@ function formatHoursShort(seconds) {
 function QueueItem({ status, label, sub, dim, onClick }) {
   const s = status || "";
   const isIdle = s === "IDLE";
-  const bgClass = isIdle ? "bg-green-500/15 text-green-600 dark:text-green-400"
+  const bgClass = isIdle ? "ok-tint-15 text-ok"
     : "accent-tint-15 text-accent";
   return (
     <div className="flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover rounded px-1 -mx-1 py-0.5" onClick={onClick}>
@@ -140,7 +140,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
             <button
               type="button"
               onClick={() => setShowDone(v => !v)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/12 text-green-600 dark:text-green-400 hover:bg-green-500/20 transition-colors"
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full ok-tint-10 text-ok hover:ok-tint-25 transition-colors"
             >
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -246,7 +246,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
             {todayCompleted.map(t => (
               <div key={t.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover rounded px-1 -mx-1 py-0.5"
                 onClick={() => { onClose(); navigate(`/tasks/${t.id}`); }}>
-                <span className="w-4 h-4 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 flex items-center justify-center shrink-0">
+                <span className="w-4 h-4 rounded-full ok-tint-15 text-ok flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
@@ -706,12 +706,12 @@ export default function PageHeader({ title, theme, onToggleTheme, actions, selec
     chipTitle = "Checking system health...";
   } else if (!isHealthy) {
     chipCls = "bg-red-500/15 text-red-400";
-    dotColor = "bg-red-500";
+    dotColor = "bg-danger";
     chipLabel = "Error";
     chipTitle = "System issue detected";
   } else if (memHigh) {
     chipCls = "bg-red-500/15 text-red-400";
-    dotColor = "bg-red-500";
+    dotColor = "bg-danger";
     chipLabel = `Mem ${memLabel}`;
     chipTitle = `High memory: orchestrator using ${memLabel} (steady state ~200 MB). Likely leak — check logs.`;
   } else if (memWarn) {
@@ -720,8 +720,8 @@ export default function PageHeader({ title, theme, onToggleTheme, actions, selec
     chipLabel = `Mem ${memLabel}`;
     chipTitle = `Elevated memory: orchestrator using ${memLabel} (steady state ~200 MB).`;
   } else {
-    chipCls = "bg-green-500/15 text-green-600 dark:text-green-400";
-    dotColor = "bg-green-500";
+    chipCls = "ok-tint-15 text-ok";
+    dotColor = "bg-ok";
     chipLabel = "OK";
     chipTitle = "System healthy";
   }

@@ -12,7 +12,7 @@ const STATUS_DOT = {
   inbox: "bg-slate-400",
   pending: "bg-blue-500",
   executing: "bg-amber-500",
-  complete: "bg-green-500",
+  complete: "bg-ok",
   failed: "bg-red-500",
   cancelled: "bg-gray-400",
   timeout: "bg-orange-500",

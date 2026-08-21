@@ -1,46 +1,47 @@
-// Status colors: EXECUTING follows the theme accent token; the fixed hues
-// (green/red/orange/…) are semantic and stay, but their TEXT form uses the
-// app's paired convention (600 on light bases, 400 on dark) — the bare 400
-// grades washed out to 1.7-2.8:1 on the light-base palettes.
+// Status colors: EXECUTING follows the theme accent token, and the green/red
+// families ride the per-theme ok/danger tokens (branded palettes supply their
+// own native hues — Nord aurora, Solarized, Everforest, GitHub-Dimmed). The
+// rarer fixed hues (orange/violet/blue/…) keep the paired 600/dark:400
+// convention — the bare 400 grades washed out to 1.7-2.8:1 on light bases.
 export const STATUS_COLORS = {
   PENDING: "bg-gray-500",
-  IDLE: "bg-green-500",
+  IDLE: "bg-ok",
   EXECUTING: "bg-accent",
-  COMPLETED: "bg-green-500",
-  FAILED: "bg-red-500",
+  COMPLETED: "bg-ok",
+  FAILED: "bg-danger",
   TIMEOUT: "bg-orange-500",
   CANCELLED: "bg-gray-600",
 };
 
 export const STATUS_TEXT_COLORS = {
   PENDING: "text-dim",
-  IDLE: "text-green-600 dark:text-green-400",
+  IDLE: "text-ok",
   EXECUTING: "text-accent",
-  COMPLETED: "text-green-600 dark:text-green-400",
-  FAILED: "text-red-600 dark:text-red-400",
+  COMPLETED: "text-ok",
+  FAILED: "text-danger",
   TIMEOUT: "text-orange-600 dark:text-orange-400",
   CANCELLED: "text-faint",
 };
 
 export const AGENT_STATUS_COLORS = {
   STARTING: "bg-gray-500",
-  IDLE: "bg-green-500",
+  IDLE: "bg-ok",
   EXECUTING: "bg-accent",
-  ERROR: "bg-red-500",
+  ERROR: "bg-danger",
   STOPPED: "bg-gray-600",
 };
 
 export const AGENT_STATUS_TEXT_COLORS = {
   STARTING: "text-dim",
-  IDLE: "text-green-600 dark:text-green-400",
+  IDLE: "text-ok",
   EXECUTING: "text-accent",
-  ERROR: "text-red-600 dark:text-red-400",
+  ERROR: "text-danger",
   STOPPED: "text-faint",
 };
 
 export const MODE_COLORS = {
   INTERVIEW: "bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/40",
-  AUTO: "bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/40",
+  AUTO: "ok-tint-20 text-ok border ok-edge-40",
 };
 
 export const AGENT_MODES = [
@@ -170,11 +171,11 @@ export const TASK_STATUS_COLORS = {
   EXECUTING: "bg-accent animate-pulse",
   REVIEW: "bg-amber-500",
   MERGING: "bg-purple-500",
-  CONFLICT: "bg-red-500",
-  COMPLETE: "bg-green-500",
+  CONFLICT: "bg-danger",
+  COMPLETE: "bg-ok",
   REJECTED: "bg-orange-500",
   CANCELLED: "bg-gray-600",
-  FAILED: "bg-red-500",
+  FAILED: "bg-danger",
   TIMEOUT: "bg-orange-500",
 };
 
@@ -185,11 +186,11 @@ export const TASK_STATUS_TEXT_COLORS = {
   EXECUTING: "text-accent",
   REVIEW: "text-amber-600 dark:text-amber-400",
   MERGING: "text-purple-600 dark:text-purple-400",
-  CONFLICT: "text-red-600 dark:text-red-400",
-  COMPLETE: "text-green-600 dark:text-green-400",
+  CONFLICT: "text-danger",
+  COMPLETE: "text-ok",
   REJECTED: "text-orange-600 dark:text-orange-400",
   CANCELLED: "text-faint",
-  FAILED: "text-red-600 dark:text-red-400",
+  FAILED: "text-danger",
   TIMEOUT: "text-orange-600 dark:text-orange-400",
 };
 

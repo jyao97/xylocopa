@@ -898,7 +898,7 @@ function Assistant({ children, error = false }) {
       <div
         className={`max-w-[88%] px-2.5 py-1.5 rounded-2xl rounded-bl-md text-[12.5px] leading-snug break-words ${
           error
-            ? "bg-red-500/10 text-red-600 dark:text-red-400"
+            ? "bg-red-500/10 text-danger"
             : "attn-tint-8 text-body"
         }`}
       >

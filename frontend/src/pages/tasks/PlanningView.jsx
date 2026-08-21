@@ -67,7 +67,7 @@ function PlanningCard({ task, selecting, selected, onToggle, expanded, onExpand,
                     Needs Answer
                   </span>
                 ) : subState === "needs_approval" ? (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full ok-tint-15 text-ok">
                     Review Plan
                   </span>
                 ) : (

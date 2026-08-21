@@ -190,7 +190,7 @@ function CertRegenSection() {
             {regenerating ? "Regenerating…" : isCovered ? "No regen needed" : "Regenerate"}
           </button>
           {msg && (
-            <p className={`text-xs mt-2 ${msg.kind === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+            <p className={`text-xs mt-2 ${msg.kind === "ok" ? "text-ok" : "text-danger"}`}>
               {msg.text}
             </p>
           )}

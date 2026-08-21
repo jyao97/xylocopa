@@ -279,7 +279,7 @@ export default function ClaudeMdDiffModal({ data, project, onClose, onApplied })
       <div className="shrink-0 border-b border-divider bg-surface sticky top-0 z-10">
         {/* Summary line */}
         <div className="px-4 pt-2 pb-1 text-xs text-dim">
-          <span className="text-green-600 dark:text-green-400">{addCount} addition{addCount !== 1 ? "s" : ""}</span>, <span className="text-red-600 dark:text-red-400">{removeCount} removal{removeCount !== 1 ? "s" : ""}</span>
+          <span className="text-ok">{addCount} addition{addCount !== 1 ? "s" : ""}</span>, <span className="text-danger">{removeCount} removal{removeCount !== 1 ? "s" : ""}</span>
         </div>
         <div className="flex items-center gap-3 px-4 pb-3">
           <button

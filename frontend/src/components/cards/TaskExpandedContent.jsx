@@ -139,7 +139,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
             </button>
             <button type="button" onClick={() => saveAndAction(dispatchTask, task.id)}
               disabled={actionLoading || (!editProject && !task.project_name)}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium bg-green-500/15 text-green-600 dark:text-green-400 hover:bg-green-500/25 disabled:opacity-50 transition-colors">
+              className="px-2.5 py-1 rounded-lg text-xs font-medium ok-tint-15 text-ok hover:ok-tint-25 disabled:opacity-50 transition-colors">
               Dispatch
             </button>
             {task.status === "PLANNING" && (

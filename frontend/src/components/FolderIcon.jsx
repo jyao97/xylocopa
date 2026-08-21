@@ -7,7 +7,7 @@ const STATE_COLORS = {
   running: "text-accent",
   error: "text-red-400",
   planning: "text-amber-400",
-  completed: "text-green-400",
+  completed: "text-ok",
 };
 
 export default function FolderIcon({ state = "idle", className = "w-8 h-8" }) {

@@ -395,7 +395,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
         let badgeClass = "";
         if (isDismissed) {
           badgeText = "Dismissed";
-          badgeClass = "bg-red-500/15 text-red-500";
+          badgeClass = "danger-tint-15 text-danger";
         } else if (item.auto_approved) {
           badgeText = "Auto-approved";
           badgeClass = "bg-elevated text-dim";
@@ -552,18 +552,18 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
   let badgeClass = "";
   if (isDismissed) {
     badgeText = "Dismissed";
-    badgeClass = "bg-red-500/15 text-red-500";
+    badgeClass = "danger-tint-15 text-danger";
   } else if (item.auto_approved) {
     badgeText = "Auto-approved";
     badgeClass = "bg-elevated text-dim";
   } else if (item.answer === "Timed out") {
     badgeText = "Timed out";
-    badgeClass = "bg-red-500/15 text-red-500";
+    badgeClass = "danger-tint-15 text-danger";
   } else if (answeredIdx != null) {
     const opt = options[answeredIdx];
     const optLabel = (opt?.label || opt || "").toLowerCase();
     if (optLabel.startsWith("no") || optLabel === "deny") {
-      badgeText = "Denied"; badgeClass = "bg-red-500/15 text-red-500";
+      badgeText = "Denied"; badgeClass = "danger-tint-15 text-danger";
     } else {
       badgeText = "Allowed"; badgeClass = "accent-tint-15 text-accent";
     }
@@ -951,7 +951,7 @@ function InsightsHistoryCard({ agentId }) {
         <div className="mt-2 space-y-1 pl-6">
           {accepted.map((s) => (
             <p key={s.id} className="text-sm text-body/70 leading-relaxed flex items-start gap-1.5">
-              <svg className="w-3.5 h-3.5 text-green-400/60 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-ok opacity-60 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               {s.edited_content || s.content}
@@ -1012,7 +1012,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
   let badgeClass = "";
   if (isDismissed) {
     badgeText = "Dismissed";
-    badgeClass = "bg-red-500/15 text-red-500";
+    badgeClass = "danger-tint-15 text-danger";
   } else if (item.auto_approved) {
     badgeText = "Auto-approved";
     badgeClass = "bg-elevated text-dim";
@@ -1510,7 +1510,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
             {isUser && message.source === "web" && !isPreDelivery && (isSlashCommand ? (
               (message.delivered_at || status === "delivered" || isExecuted) && (
                 (message.completed_at || isExecuted) ? (
-                  <span className="ml-auto text-green-600 dark:text-green-400" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
+                  <span className="ml-auto text-ok" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
                     <svg className="w-4 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 28 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2 13l4 4L16 7" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10 13l4 4L24 7" />
@@ -1525,14 +1525,14 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 )
               )
             ) : isExecuted ? (
-              <span className="ml-auto text-green-600 dark:text-green-400" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
+              <span className="ml-auto text-ok" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
                 <svg className="w-4 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 28 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2 13l4 4L16 7" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 13l4 4L24 7" />
                 </svg>
               </span>
             ) : status === "delivered" || message.delivered_at ? (
-              <span className="ml-auto text-green-600 dark:text-green-400" title={`Delivered ${message.delivered_at ? new Date(message.delivered_at).toLocaleTimeString() : ""}`}>
+              <span className="ml-auto text-ok" title={`Delivered ${message.delivered_at ? new Date(message.delivered_at).toLocaleTimeString() : ""}`}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
@@ -2378,7 +2378,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
         {!isEditing && attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-1">
             {attachments.map((att, i) => (
-              <div key={att.id} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs max-w-[160px] cursor-pointer ${att.error ? "bg-red-500/15 ring-1 ring-red-500/30" : "bg-elevated"}`}
+              <div key={att.id} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs max-w-[160px] cursor-pointer ${att.error ? "danger-tint-15 ring-1 ring-danger-30" : "bg-elevated"}`}
                 onClick={() => { if (!att.uploading && !att.error) setAttPreviewIndex(i); }}>
                 {att.previewUrl ? (
                   <img src={att.previewUrl} alt="" className={`w-8 h-8 rounded object-cover shrink-0 ${att.error ? "opacity-50" : ""}`} />
@@ -4244,13 +4244,13 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     healthLabel = "...";
     healthTitle = "Checking...";
   } else if (!isHealthy) {
-    healthChipCls = "bg-red-500/15 text-red-600 dark:text-red-400";
-    healthDotColor = "bg-red-500";
+    healthChipCls = "danger-tint-15 text-danger";
+    healthDotColor = "bg-danger";
     healthLabel = "Error";
     healthTitle = "System issue";
   } else if (_memHigh) {
-    healthChipCls = "bg-red-500/15 text-red-600 dark:text-red-400";
-    healthDotColor = "bg-red-500";
+    healthChipCls = "danger-tint-15 text-danger";
+    healthDotColor = "bg-danger";
     healthLabel = `Mem ${_memLabel}`;
     healthTitle = `High memory: ${_memLabel} (steady ~200 MB)`;
   } else if (_memWarn) {
@@ -4259,8 +4259,8 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     healthLabel = `Mem ${_memLabel}`;
     healthTitle = `Elevated memory: ${_memLabel}`;
   } else {
-    healthChipCls = "bg-green-500/15 text-green-600 dark:text-green-400";
-    healthDotColor = "bg-green-500";
+    healthChipCls = "ok-tint-15 text-ok";
+    healthDotColor = "bg-ok";
     healthLabel = "OK";
     healthTitle = "System healthy";
   }
@@ -4349,7 +4349,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                   </button>
                 ) : (
                   <button type="button" onClick={() => setShowStopConfirm(true)}
-                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-500 dark:text-red-400 transition-colors hover:bg-red-500/25">
+                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium danger-tint-15 text-danger transition-colors hover:bg-red-500/25">
                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
                     Stop
                   </button>
@@ -4392,7 +4392,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                   <button
                     type="button"
                     onClick={() => setShowStopConfirm(true)}
-                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-500 dark:text-red-400 transition-colors hover:bg-red-500/25"
+                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium danger-tint-15 text-danger transition-colors hover:bg-red-500/25"
                   >
                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
                       <rect x="6" y="6" width="12" height="12" rx="2" />

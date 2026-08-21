@@ -62,7 +62,7 @@ export default function ContextUsagePill({ usage, agentId }) {
 }
 
 const SEVERITY_ICON_COLOR = {
-  urgent: "text-red-500 dark:text-red-400",
+  urgent: "text-danger",
   warn: "text-amber-500 dark:text-amber-400",
   info: "text-accent",
 };
@@ -251,7 +251,7 @@ function LifetimeSection({ lifetime }) {
 }
 
 const END_REASON_STYLE = {
-  active:        { dot: "bg-emerald-500", label: "active" },
+  active:        { dot: "bg-ok",         label: "active" },
   rotation:      { dot: "bg-accent",     label: "rotation" },
   compact:       { dot: "bg-accent",     label: "compact" },
   clear:         { dot: "bg-accent",     label: "clear" },

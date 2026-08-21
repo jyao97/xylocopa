@@ -197,7 +197,7 @@ const AgentRow = memo(function AgentRow({
               </span>
             )}
             {agent.insight_status === "failed" && !agent.has_pending_suggestions && (
-              <span className="text-[10px] font-semibold px-1.5 py-px rounded-full bg-red-500/15 text-red-500 dark:text-red-400">
+              <span className="text-[10px] font-semibold px-1.5 py-px rounded-full danger-tint-15 text-danger">
                 failed
               </span>
             )}

@@ -56,7 +56,7 @@ curl -fsSL https://raw.githubusercontent.com/jyao97/xylocopa/master/setup.sh | b
 
 The installer clones into `~/xylocopa-main`, prompts for your projects directory, default model, and ports, writes `.env` ([`.env.example`](.env.example) is the annotated reference), generates SSL certs, and starts the services. To install manually instead, clone the repo and run `./setup.sh` followed by `./run.sh start`. Open `https://<machine-ip>:3000` and set a password on first visit.
 
-- **Add projects.** Long-press **+** and choose **New Project**, then paste a GitHub URL or point at a folder. Folders in `~/xylocopa-projects/` are picked up automatically.
+- **Add projects.** Long-press **+** to open the **New Project** form, then paste a GitHub URL or point at a folder. Folders in `~/xylocopa-projects/` are picked up automatically.
 - **Auto-start on reboot.** Run `./run.sh startup`, which registers pm2 with your init system and detaches it from the terminal's cgroup, so closing the terminal doesn't kill the services.
 - <a id="remote-access"></a>**Remote access.** Any VPN or tunnel works. With Tailscale, run `tailscale up` on the server and your phone, then open `https://<tailscale-ip>:3000`. No ports are exposed to the internet.
 - **Phone install.** Open the URL in Safari or Chrome and follow the on-screen guide to trust the self-signed certificate and add the app to your Home Screen ([per-platform cert steps](docs/install-cert.md)).

@@ -44,10 +44,10 @@ export const PRESETS = [
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#1f74b0" } },
   { id: "solarized-dark", name: "Solarized Dark", base: "dark",
     preview: { page: "#002b36", surface: "#073642", text: "#aebcba" },
-    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e", bubble: "#135b84" } },
+    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e", bubble: "#0d4a6b" } },
   { id: "nord", name: "Nord", base: "dark",
     preview: { page: "#2e3440", surface: "#3b4252", text: "#eceff4" },
-    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a", bubble: "#526e91" } },
+    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a", bubble: "#445d80" } },
   { id: "everforest", name: "Everforest", base: "dark",
     preview: { page: "#272e33", surface: "#2d353b", text: "#d3c6aa" },
     core: { page: "#272e33", surface: "#2d353b", heading: "#d3c6aa", body: "#b9ad93", edge: "#4a555b", bubble: "#3a515d" } },
@@ -144,7 +144,11 @@ export function deriveCustomTokens({ base, colors }) {
   const pole = base === "dark" ? "#ffffff" : "#000000";
   const glass = mix(surface, pole, 0.04);
   const glassNav = mix(surface, pole, 0.08);
-  const bubbleInk = isLightColor(bubble) ? "#1f2937" : "#ffffff";
+  // Dark bubble on a dark base: reuse the body text color so the user
+  // bubble reads like the agent bubble instead of shouting in white.
+  const bubbleInk = isLightColor(bubble)
+    ? "#1f2937"
+    : base === "dark" ? body : "#ffffff";
   return {
     page, surface, heading, body, edge, bubble,
     bubbleRgb: channels(bubble),

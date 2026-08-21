@@ -74,8 +74,14 @@
   --color-glass-nav:  #283246;
   --color-glass-edge: rgba(255,255,255,0.22);
 
-  --color-bubble:     #155e75;
-  --color-bubble-rgb: 21 94 117;
+  /* Two steps darker (cyan-800): keeps the identity but stops glowing.
+     Ink matches the agent bubble's text (--color-body / --color-label)
+     instead of pure white — same rule in every dark palette below. */
+  --color-bubble:         #155e75;
+  --color-bubble-rgb:     21 94 117;
+  --color-bubble-ink:     #d1d5db;
+  --color-bubble-ink-rgb: 209 213 219;
+  --color-bubble-dim:     #9ca3af;
 }
 
 /* ── Preset theme palettes ──────────────────────────────────────────────
@@ -113,6 +119,10 @@
   --color-glass:      #24262b;
   --color-glass-nav:  #2a2c32;
   --color-glass-edge: rgba(255,255,255,0.16);
+
+  --color-bubble-ink:     #c9c7c3;
+  --color-bubble-ink-rgb: 201 199 195;
+  --color-bubble-dim:     #9d9b97;
 }
 
 /* Solarized Dark — Ethan Schoonover's base03/base02 family. */
@@ -145,10 +155,13 @@
   --color-glass-nav:  #0a3e4c;
   --color-glass-edge: rgba(238,232,213,0.14);
 
-  /* Solarized blue (#268bd2) pulled down toward base03. */
-  --color-bubble:     #135b84;
-  --color-bubble-rgb: 19 91 132;
-  --color-bubble-dim: #9ec9e2;
+  /* Solarized blue (#268bd2) pulled down toward base03; one step deeper
+     than before since the ink dropped from white to base0-family body. */
+  --color-bubble:         #0d4a6b;
+  --color-bubble-rgb:     13 74 107;
+  --color-bubble-ink:     #90a2a4;
+  --color-bubble-ink-rgb: 144 162 164;
+  --color-bubble-dim:     #7b8f93;
 }
 
 /* Solarized Light — warm cream base3/base2 family. */
@@ -211,10 +224,13 @@
   --color-glass-nav:  #3a4152;
   --color-glass-edge: rgba(236,239,244,0.15);
 
-  /* nord10 frost blue blended toward polar night. */
-  --color-bubble:     #526e91;
-  --color-bubble-rgb: 82 110 145;
-  --color-bubble-dim: #c0cbdd;
+  /* nord10 frost blue blended toward polar night; deepened for the
+     body-colored (snow storm) ink. */
+  --color-bubble:         #445d80;
+  --color-bubble-rgb:     68 93 128;
+  --color-bubble-ink:     #d8dee9;
+  --color-bubble-ink-rgb: 216 222 233;
+  --color-bubble-dim:     #aab2c0;
 }
 
 /* Everforest — muted forest greens, warm parchment text. */
@@ -245,9 +261,11 @@
   --color-glass-edge: rgba(211,198,170,0.13);
 
   /* Everforest bg_blue — the palette's own blue-tinted surface. */
-  --color-bubble:     #3a515d;
-  --color-bubble-rgb: 58 81 93;
-  --color-bubble-dim: #a7c0bb;
+  --color-bubble:         #3a515d;
+  --color-bubble-rgb:     58 81 93;
+  --color-bubble-ink:     #b9ad93;
+  --color-bubble-ink-rgb: 185 173 147;
+  --color-bubble-dim:     #9da9a0;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):

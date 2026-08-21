@@ -574,3 +574,45 @@ export const fetchViewingStatsWeek = (days = 7) =>
 
 export const fetchViewingStatsDay = (date) =>
   request(`/api/stats/viewing/day?date=${encodeURIComponent(date)}&tz_offset=${new Date().getTimezoneOffset()}`);
+
+// ---- Attention assistant ----
+
+// Compile natural language into a job spec WITHOUT persisting it. The
+// response carries `preview_next_run_at`, computed by the backend trigger
+// rather than by the model's prose, so the confirmation the user approves
+// reflects the real schedule.
+export const compileAttentionRequest = (text) =>
+  request("/api/attention/compile", { method: "POST", body: JSON.stringify({ text }) });
+
+// One conversational turn for the bubble. `messages` is the recent
+// transcript as [{role: "user"|"assistant", content}]. Returns
+// {say, spec|null}; a spec is a proposal — nothing is persisted until the
+// user confirms and the client POSTs /jobs.
+export const chatAttention = (messages) =>
+  request("/api/attention/chat", { method: "POST", body: JSON.stringify({ messages }) });
+
+export const fetchAttentionJobs = (includeFinished = false) =>
+  request(`/api/attention/jobs?include_finished=${includeFinished ? "true" : "false"}`);
+
+export const createAttentionJob = (job) =>
+  request("/api/attention/jobs", { method: "POST", body: JSON.stringify(job) });
+
+export const patchAttentionJob = (id, patch) =>
+  request(`/api/attention/jobs/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export const deleteAttentionJob = (id) =>
+  request(`/api/attention/jobs/${id}`, { method: "DELETE" });
+
+export const snoozeAttentionJob = (id, minutes = 15) =>
+  request(`/api/attention/jobs/${id}/snooze?minutes=${minutes}`, { method: "POST" });
+
+export const runAttentionJobNow = (id) =>
+  request(`/api/attention/jobs/${id}/run-now`, { method: "POST" });
+
+export const fetchAttentionCapabilities = () =>
+  request("/api/attention/capabilities");
+
+// Design a new orb character with a strong model. Returns {character};
+// nothing persists server-side — the client stores accepted designs.
+export const generateAttentionCharacter = (text) =>
+  request("/api/attention/character", { method: "POST", body: JSON.stringify({ text }) });

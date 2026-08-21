@@ -190,6 +190,25 @@ async def compile_endpoint(body: CompileRequest, db: Session = Depends(get_db)):
     return {"spec": spec}
 
 
+class CharGenRequest(BaseModel):
+    text: str = Field(..., max_length=300)
+
+
+@router.post("/api/attention/character")
+async def generate_character_endpoint(body: CharGenRequest):
+    """Design a new orb character with a strong model. Persists nothing —
+    the client previews the returned definition and stores it locally.
+    Every design passes validate_character(), the only gate between model
+    output and the renderer."""
+    from attention.chargen import CharGenError, generate_character
+
+    try:
+        character = await generate_character(body.text)
+    except CharGenError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"character": character}
+
+
 @router.post("/api/attention/chat")
 async def chat_endpoint(body: ChatRequest, db: Session = Depends(get_db)):
     """One turn of the bubble conversation. Persists nothing.

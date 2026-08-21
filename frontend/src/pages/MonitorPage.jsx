@@ -8,6 +8,7 @@ import {
 } from "../lib/api";
 import { useMonitor } from "../contexts/MonitorContext";
 import { getEinkMode, setEinkMode } from "../lib/einkMode";
+import { getOrbEnabled, setOrbEnabled } from "../lib/orbMode";
 import ThemeSettings from "../components/ThemeSettings";
 
 const HEALTH_COLORS = {
@@ -265,12 +266,19 @@ export default function MonitorPage({ theme, onToggleTheme }) {
   const [telemetry, setTelemetry] = useState(null);
   const [telemetryBusy, setTelemetryBusy] = useState(false);
   const [einkOn, setEinkOn] = useState(() => getEinkMode());
+  const [orbOn, setOrbOn] = useState(() => getOrbEnabled());
 
   const handleEinkToggle = useCallback(() => {
     const next = !einkOn;
     setEinkOn(next);
     setEinkMode(next);
   }, [einkOn]);
+
+  const handleOrbToggle = useCallback(() => {
+    const next = !orbOn;
+    setOrbOn(next);
+    setOrbEnabled(next);
+  }, [orbOn]);
 
   const loadTelemetry = useCallback(async () => {
     try {
@@ -736,6 +744,43 @@ export default function MonitorPage({ theme, onToggleTheme }) {
 
         {/* Display: theme palettes + custom editor */}
         <ThemeSettings theme={theme} />
+
+        {/* Display: assistant character (orb) toggle */}
+        <section className="rounded-xl bg-surface shadow-card p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-medium text-heading flex items-center gap-2">
+                Assistant character
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  Experimental
+                </span>
+              </h3>
+              <p className="text-xs text-dim mt-1 leading-relaxed">
+                The orb assistant with its chat bubble — talk to it to set up
+                attention jobs (reminders, watchers, scheduled tasks). Still
+                being polished. When off, the corner button is the classic
+                unread badge — tap opens the oldest unread chat, long-press
+                opens split screen.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={orbOn ? "true" : "false"}
+              aria-label="Toggle assistant character"
+              onClick={handleOrbToggle}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                orbOn ? "bg-cyan-500" : "bg-elevated"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  orbOn ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+        </section>
 
         {/* Display: e-ink mode toggle */}
         <section className="rounded-xl bg-surface shadow-card p-4">

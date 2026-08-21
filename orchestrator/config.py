@@ -51,6 +51,19 @@ CC_MODEL = os.getenv("CC_MODEL", DEFAULT_CLAUDE_MODEL)
 # required for 1M context". Cheaper/faster than CC_MODEL for text-in/text-out.
 SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "claude-sonnet-5")
 
+# Attention assistant's interactive turns (bubble chat + compile) — its own
+# knob because the user is watching a spinner here, unlike the background
+# digest jobs (run_prompt action) which stay on SUMMARY_MODEL. Sonnet 5 by
+# MEASUREMENT, not tier intuition: on the real chat prompt (9KB, registry +
+# context) sonnet-5 ran 4.1s/5.2s vs haiku-4.5's 11.0s/23.6s — the newer
+# serving stack beats the smaller model, and haiku pads output with
+# markdown fences. Re-benchmark before "downgrading for speed" again.
+ATTENTION_MODEL = os.getenv("ATTENTION_MODEL", "claude-sonnet-5")
+
+# One-off orb character designs (user-invoked, quality over latency) —
+# a strong model per explicit request; the fable id also works here.
+ATTENTION_CHARGEN_MODEL = os.getenv("ATTENTION_CHARGEN_MODEL", "claude-opus-5")
+
 # Valid model names — keep in sync with frontend MODEL_OPTIONS
 VALID_MODELS = {
     "claude-fable-5",

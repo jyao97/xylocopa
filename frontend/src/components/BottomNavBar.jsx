@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import useLongPress from "../hooks/useLongPress";
+import { getOrbEnabled, ORB_EVENT } from "../lib/orbMode";
 
 // Shared tab definitions — single source of truth for both App.jsx and SplitScreenPage
 export const navTabs = [
@@ -103,6 +104,14 @@ function CenterFab({ tab, onNewTask }) {
  */
 export default function BottomNavBar({ badges, onDoubleTap, onProjectsTap, onNewTask, className = "" }) {
   const location = useLocation();
+  // Unread badge color pairs with whichever FAB is active: amber (attn
+  // token) alongside the orb, classic red with the plain unread FAB.
+  const [orbOn, setOrbOn] = useState(getOrbEnabled);
+  useEffect(() => {
+    const onChange = () => setOrbOn(getOrbEnabled());
+    window.addEventListener(ORB_EVENT, onChange);
+    return () => window.removeEventListener(ORB_EVENT, onChange);
+  }, []);
 
   return (
     <div className={className}>
@@ -134,8 +143,12 @@ export default function BottomNavBar({ badges, onDoubleTap, onProjectsTap, onNew
             >
               {tab.icon}
               <span className="text-[10px] mt-0.5">{tab.label}</span>
+              {/* Same useUnread() total the attention FAB renders. Solid
+                  fills on purpose — tinted tag-style pills were tried and
+                  read as invisible at 16px: the classic red-500/white with
+                  the plain unread FAB, solid amber (attn) with the orb. */}
               {tab.key === "agents" && badges?.agents > 0 && (
-                <span className="absolute top-1.5 left-[calc(50%+6px)] inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
+                <span className={`absolute top-1.5 left-[calc(50%+6px)] inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full ${orbOn ? "bg-attn" : "bg-red-500"} text-white text-[10px] font-bold leading-none`}>
                   {badges.agents > 99 ? "99+" : badges.agents}
                 </span>
               )}

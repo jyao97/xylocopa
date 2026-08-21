@@ -226,12 +226,12 @@ def build_jobs_context(db, *, limit: int = 20) -> str:
 
 
 def _claude_p(prompt: str) -> tuple[int, str, str]:
-    from config import CLAUDE_BIN, SUMMARY_MODEL
+    from config import ATTENTION_MODEL, CLAUDE_BIN
     from route_helpers import subprocess_clean_env
 
     proc = subprocess.run(
         [CLAUDE_BIN, "-p", "-", "--output-format", "text",
-         "--no-session-persistence", "--model", SUMMARY_MODEL],
+         "--no-session-persistence", "--model", ATTENTION_MODEL],
         input=prompt,
         capture_output=True, text=True,
         timeout=COMPILE_TIMEOUT_SECONDS,

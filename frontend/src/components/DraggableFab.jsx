@@ -13,39 +13,86 @@ function toRB(abs, w, h) {
   return { right: window.innerWidth - abs.x - w, bottom: window.innerHeight - abs.y - h };
 }
 
-function clampRB(rb, w, h, minBottom = 0) {
+function clampRB(rb, w, h) {
   return {
     right: Math.max(0, Math.min(rb.right, window.innerWidth - w)),
-    bottom: Math.max(minBottom, Math.min(rb.bottom, window.innerHeight - h)),
+    bottom: Math.max(0, Math.min(rb.bottom, window.innerHeight - h)),
   };
 }
 
-// Detect the height of fixed/sticky bottom bars (nav bar, input bar)
-function detectBottomBarHeight() {
-  const candidates = document.querySelectorAll("nav, [class*='glass-bar-nav']");
-  let maxH = 0;
-  for (const el of candidates) {
-    const style = window.getComputedStyle(el);
-    if (style.position === "fixed" || style.position === "sticky") {
-      const rect = el.getBoundingClientRect();
-      const fromBottom = window.innerHeight - rect.top;
-      if (fromBottom > 0 && fromBottom < 200) {
-        maxH = Math.max(maxH, fromBottom);
-      }
+// Keep-out rectangles: the nav bar and text-input bar islands. These are
+// the ONLY places the FAB may not park — it used to be barred from a
+// full-width strip as tall as the tallest bottom bar, which on the chat
+// page (composer island ~180px) forbade the entire lower fifth of the
+// screen including the empty margins beside the islands.
+function keepOutRects() {
+  const rects = [];
+  // A bar counts as pinned when it, or a near ancestor, is out-of-flow —
+  // both islands are statically-positioned children of positioned
+  // wrappers (the nav in a fixed flex row, the composer in an ABSOLUTE
+  // overlay inside the non-scrolling app shell), so checking only the
+  // element's own position misses them. Absolute counts as pinned here
+  // because the shell never scrolls and the candidate set is already
+  // restricted to bottom bars.
+  const pinned = (el) => {
+    let n = el;
+    for (let i = 0; i < 5 && n && n !== document.body; i++) {
+      const pos = window.getComputedStyle(n).position;
+      if (pos === "fixed" || pos === "sticky" || pos === "absolute") return true;
+      n = n.parentElement;
     }
-  }
-  const inputBars = document.querySelectorAll("[class*='pointer-events-none'] > [class*='glass-bar-nav']");
-  for (const el of inputBars) {
-    const rect = el.getBoundingClientRect();
-    const fromBottom = window.innerHeight - rect.top;
-    if (fromBottom > 0 && fromBottom < 200) {
-      maxH = Math.max(maxH, fromBottom);
-    }
-  }
-  return maxH;
+    return false;
+  };
+  document.querySelectorAll("nav, [class*='glass-bar-nav']").forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return;
+    // Bottom-bar sanity guard (as before): ignore headers and in-flow navs
+    // that happen to scroll near the bottom.
+    const fromBottom = window.innerHeight - r.top;
+    if (fromBottom <= 0 || fromBottom >= 200) return;
+    if (!pinned(el)) return;
+    rects.push(r);
+  });
+  return rects;
 }
 
-export default function DraggableFab({ storageKey, defaultPosition, onClick, onLongPress, className, children }) {
+// Push an intended landing spot out of any keep-out rect by the smallest
+// displacement that stays on screen. Two passes: resolving against one
+// island can land on another (nav + input bar overlap zones).
+const KEEPOUT_MARGIN = 6;
+function resolveKeepOut(abs, w, h, rects) {
+  let { x, y } = abs;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  for (let pass = 0; pass < 2; pass++) {
+    let movedAny = false;
+    for (const r of rects) {
+      const overlapsX = x < r.right + KEEPOUT_MARGIN && x + w > r.left - KEEPOUT_MARGIN;
+      const overlapsY = y < r.bottom + KEEPOUT_MARGIN && y + h > r.top - KEEPOUT_MARGIN;
+      if (!overlapsX || !overlapsY) continue;
+      const candidates = [
+        { dx: 0, dy: (r.top - KEEPOUT_MARGIN - h) - y },   // up, above the bar
+        { dx: (r.left - KEEPOUT_MARGIN - w) - x, dy: 0 },  // left of the bar
+        { dx: (r.right + KEEPOUT_MARGIN) - x, dy: 0 },     // right of the bar
+        { dx: 0, dy: (r.bottom + KEEPOUT_MARGIN) - y },    // below the bar
+      ].filter((c) => {
+        const nx = x + c.dx;
+        const ny = y + c.dy;
+        return nx >= 0 && nx + w <= vw && ny >= 0 && ny + h <= vh;
+      }).sort((a, b) =>
+        (Math.abs(a.dx) + Math.abs(a.dy)) - (Math.abs(b.dx) + Math.abs(b.dy)));
+      if (candidates.length) {
+        x += candidates[0].dx;
+        y += candidates[0].dy;
+        movedAny = true;
+      }
+    }
+    if (!movedAny) break;
+  }
+  return { x, y };
+}
+
+export default function DraggableFab({ storageKey, defaultPosition, onClick, onLongPress, onDragChange, ariaLabel, className, children, outerRef }) {
   const fabRef = useRef(null);
   const sizeRef = useRef({ w: 44, h: 44 });
   const [rb, setRB] = useState(null); // {right, bottom}
@@ -57,11 +104,13 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
   const moved = useRef(false);
   const longPressTimer = useRef(null);
   const longPressFired = useRef(false);
-  const cachedBarH = useRef(0);
+  const cachedRects = useRef([]);
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
   const onLongPressRef = useRef(onLongPress);
   onLongPressRef.current = onLongPress;
+  const onDragChangeRef = useRef(onDragChange);
+  onDragChangeRef.current = onDragChange;
 
   // Resolve position on mount
   useEffect(() => {
@@ -92,8 +141,18 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
   });
 
   // Use a stable onStart via ref — avoids re-creating the callback when rb changes
+  const lastTouchAt = useRef(0);
   const onStart = useCallback((e) => {
-    if (e.type === "mousedown" && e.button !== 0) return;
+    // After a touch, browsers replay a synthetic mousedown/mouseup pair
+    // (React's root touchstart listener is passive, so preventDefault
+    // below can't suppress them). Without this guard every touch tap runs
+    // onClick twice — harmless for idempotent opens, but it instantly
+    // re-closes anything the first tap toggled open.
+    if (e.type === "touchstart") lastTouchAt.current = Date.now();
+    if (e.type === "mousedown") {
+      if (Date.now() - lastTouchAt.current < 700) return;
+      if (e.button !== 0) return;
+    }
     const t = e.touches ? e.touches[0] : e;
     const { w, h } = sizeRef.current;
     const currentRB = rbRef.current;
@@ -102,8 +161,9 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
     moved.current = false;
     longPressFired.current = false;
     dragging.current = true;
-    // Cache bottom bar height once at drag start (expensive DOM query)
-    cachedBarH.current = detectBottomBarHeight();
+    // Cache keep-out rects once at drag start (expensive DOM query); the
+    // bars don't move mid-drag.
+    cachedRects.current = keepOutRects();
     // Start long-press timer
     clearTimeout(longPressTimer.current);
     longPressTimer.current = setTimeout(() => {
@@ -124,6 +184,9 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
       if (!moved.current) {
         // First move: disable CSS transitions so transform updates are instant
         if (fabRef.current) fabRef.current.style.transition = 'none';
+        // Notified once per drag, on the first movement only — never per
+        // frame, so the per-move path below stays free of React re-renders.
+        onDragChangeRef.current?.(true);
       }
       moved.current = true;
       clearTimeout(longPressTimer.current); // Cancel long-press on drag
@@ -137,6 +200,7 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
       if (!dragging.current) return;
       dragging.current = false;
       clearTimeout(longPressTimer.current);
+      if (moved.current) onDragChangeRef.current?.(false);
       if (moved.current) {
         // Commit final position to React state (single re-render)
         const el = fabRef.current;
@@ -144,10 +208,10 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
           const rect = el.getBoundingClientRect();
           el.style.transform = "";
           const { w, h } = sizeRef.current;
-          const abs = { x: rect.left, y: rect.top };
-          const barH = cachedBarH.current;
-          const minBottom = barH > 0 ? barH + 8 : 0;
-          const final_ = clampRB(toRB(abs, w, h), w, h, minBottom);
+          const abs = resolveKeepOut(
+            { x: rect.left, y: rect.top }, w, h, cachedRects.current,
+          );
+          const final_ = clampRB(toRB(abs, w, h), w, h);
           // Restore CSS transitions after position committed
           requestAnimationFrame(() => { if (el) el.style.transition = ''; });
           setRB(final_);
@@ -181,11 +245,17 @@ export default function DraggableFab({ storageKey, defaultPosition, onClick, onL
 
   return (
     <button
-      ref={fabRef}
+      ref={(el) => {
+        fabRef.current = el;
+        // Exposes the live element (not a snapshot) so the parent can
+        // anchor popovers to it and write CSS vars onto it.
+        if (outerRef) outerRef.current = el;
+      }}
       type="button"
       onMouseDown={onStart}
       onTouchStart={onStart}
       onClick={blockClick}
+      aria-label={ariaLabel}
       className={className}
       style={{ position: "fixed", right: rb.right, bottom: rb.bottom, zIndex: 50, touchAction: "none", willChange: "transform" }}
     >

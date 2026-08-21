@@ -48,6 +48,26 @@
      here, which is exactly what the assistant holds. The face and bubble
      shapes, not the hue, are what keep it distinct from status chips.
      Ink is dark on purpose: white on amber-500 is ~2.2:1. */
+  --color-attn:       #f59e0b;   /* amber-500, same as the Auto chip */
+  --color-attn-rgb:   245 158 11;  /* channels for rgb()/alpha tints */
+  --color-attn-hi:    #fcd34d;   /* highlight stop (amber-300) */
+  --color-attn-ink:   #451a03;   /* text/glyph on a filled attn surface */
+
+  /* The orb's own skin, split from the attn accent. Modern-emoji styling
+     after the Fluent/Noto 😊 references: emoji yellow with a pale core
+     and a deeper rim (soft 3D, no hard gloss), plum features instead of
+     brown-black, pink blush. Fluent Emoji is MIT and Noto is open too —
+     and this is an original SVG in that style, not their asset.
+     Deliberately identical in light and dark: emoji don't theme-shift,
+     and that familiarity is what keeps the face low-key. */
+  --color-orb:        #ffc93c;
+  --color-orb-hi:     #ffe066;   /* pale top-light core */
+  --color-orb-lo:     #f2a63c;   /* deeper bottom rim */
+  --color-orb-face:   #402a32;   /* Fluent's plum feature color */
+  --color-orb-spark:  #ffffff;   /* catchlight inside the pupils — always the
+                                    opposite pole of orb-face so the eyes
+                                    keep their sparkle on every theme */
+  --color-orb-blush:  #f470a9;   /* soft pink cheeks */
 }
 
 .dark {
@@ -84,6 +104,14 @@
   --color-bubble-ink:     #dbdee3;
   --color-bubble-ink-rgb: 219 222 227;
   --color-bubble-dim:     #a3c6d1;
+
+  /* One Tailwind step brighter on dark surfaces (#030712 page), matching
+     how the app's amber accents flip to amber-400 in dark mode. The orb
+     tokens intentionally do NOT shift — see :root. */
+  --color-attn:       #fbbf24;
+  --color-attn-rgb:   251 191 36;
+  --color-attn-hi:    #fde68a;
+  --color-attn-ink:   #451a03;
 }
 
 /* ── Preset theme palettes ──────────────────────────────────────────────
@@ -92,7 +120,7 @@
    `.dark` (so every `dark:` Tailwind variant keeps working), light palettes
    don't. Single-class selectors (0,1,0) on purpose: they override :root /
    .dark by source order, while html.eink / html.no-glass (0,1,1) still win.
-   Tokens not listed inherit from the base theme.
+   Tokens not listed (attn/orb) inherit from the base theme.
    Registry + custom-theme plumbing: src/lib/themes.js. */
 
 /* Soft Dark — low-contrast warm charcoal, no pure black. */
@@ -424,14 +452,28 @@ html.eink {
   --color-glass-nav:  #f5f5f5;
   --color-glass-edge: #6a6a6a;
 
-  /* The user bubble goes ink-on-paper: the .bg-bubble utility bypasses
-     the [class*="bg-cyan-"] flattening rules below, so the tokens
-     themselves must carry the e-ink values. */
+  /* e-ink renders orange as a mid gray, so the attn surface would lose all
+     contrast against page white. Go fully black-on-white and let the shape
+     (filled disc + border) carry the signal instead of the hue. */
+  /* The user bubble goes ink-on-paper like the attn surface: the .bg-bubble
+     utility bypasses the [class*="bg-cyan-"] flattening rules below, so the
+     tokens themselves must carry the e-ink values. */
   --color-bubble:         #000000;
   --color-bubble-rgb:     0 0 0;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #d5d5d5;
+
+  --color-attn:       #000000;
+  --color-attn-rgb:   0 0 0;
+  --color-attn-hi:    #000000;
+  --color-attn-ink:   #ffffff;
+  --color-orb:        #000000;
+  --color-orb-hi:     #000000;
+  --color-orb-lo:     #000000;
+  --color-orb-face:   #ffffff;
+  --color-orb-spark:  #000000;
+  --color-orb-blush:  #ffffff;
 }
 html.eink.dark {
   --color-page:       #000000;
@@ -464,6 +506,17 @@ html.eink.dark {
   --color-bubble-ink:     #000000;
   --color-bubble-ink-rgb: 0 0 0;
   --color-bubble-dim:     #2a2a2a;
+
+  --color-attn:       #ffffff;
+  --color-attn-rgb:   255 255 255;
+  --color-attn-hi:    #ffffff;
+  --color-attn-ink:   #000000;
+  --color-orb:        #ffffff;
+  --color-orb-hi:     #ffffff;
+  --color-orb-lo:     #ffffff;
+  --color-orb-face:   #000000;
+  --color-orb-spark:  #ffffff;
+  --color-orb-blush:  #000000;
 }
 
 /* Heavier baseline font weight + crisper rendering. :where() keeps
@@ -1346,15 +1399,38 @@ svg text { font-family: inherit; }
 
   .hover\:ring-ring-hover:hover { --tw-ring-color: var(--color-ring-hover); }
 
+  /* Attention assistant.
+     Written out by hand like every other token in this block: Tailwind does
+     NOT generate utilities from a --color-* declaration in :root (that is
+     why .bg-surface / .text-dim above exist at all), so omitting these
+     silently produces no rule and the element renders unstyled.
+     The alpha steps use rgb() slash-alpha rather than a `/NN` Tailwind
+     modifier — an alpha cannot be applied to a bare var() color, and
+     color-mix() downlevels to a fully-opaque fallback, which would paint a
+     solid orange block on engines that lack it (this app ships to forked
+     e-ink browsers, see html.no-glass). Add a step here if a new one is
+     needed; arbitrary opacities are not available. */
+  .bg-attn      { background-color: var(--color-attn); }
+  .text-attn    { color: var(--color-attn); }
+  .text-attn-ink { color: var(--color-attn-ink); }
+  .border-attn  { border-color: var(--color-attn); }
+  .focus\:border-attn:focus { border-color: var(--color-attn); }
 
-  /* User chat bubble. Written out by hand: Tailwind does NOT generate
-     utilities (or `/NN` alpha modifiers) from --color-* declarations in
-     :root, so the alpha steps use rgb() slash-alpha over the -rgb vars. */
+  /* User chat bubble. Alpha steps written out (no `/NN` modifiers on
+     custom classes — see the attn note above). */
   .bg-bubble        { background-color: var(--color-bubble); }
   .bg-bubble-60     { background-color: rgb(var(--color-bubble-rgb) / 0.6); }
   .text-bubble-ink  { color: var(--color-bubble-ink); }
   .text-bubble-ink-80 { color: rgb(var(--color-bubble-ink-rgb) / 0.8); }
   .text-bubble-dim  { color: var(--color-bubble-dim); }
+
+  .attn-tint-6  { background-color: rgb(var(--color-attn-rgb) / 0.06); }
+  .attn-tint-8  { background-color: rgb(var(--color-attn-rgb) / 0.08); }
+  .attn-tint-12 { background-color: rgb(var(--color-attn-rgb) / 0.12); }
+  .attn-tint-hover:hover { background-color: rgb(var(--color-attn-rgb) / 0.22); }
+  .attn-edge-25 { border-color: rgb(var(--color-attn-rgb) / 0.25); }
+  .attn-edge-40 { border-color: rgb(var(--color-attn-rgb) / 0.40); }
+
   /* Placeholder */
   .placeholder-hint::placeholder { color: var(--color-hint); }
 
@@ -1601,6 +1677,212 @@ body::after {
 
 .animate-shake {
   animation: shake 0.4s ease-in-out;
+}
+
+/* ── Attention orb ──
+   The orb is mounted on every route, so all of its motion is CSS-driven:
+   no rAF loop, no JS timers. The one exception is pupil tracking, which is
+   event-driven (pointermove → one rAF write of --orb-px/--orb-py on the
+   FAB element) and desktop-only. */
+
+@keyframes orb-blink {
+  0%, 91%, 100% { transform: scaleY(1); }
+  94%, 96%      { transform: scaleY(0.08); }
+}
+/* transform-origin sits on the eye's own centre so the lid closes toward
+   the middle instead of collapsing upward. Applied to the group that holds
+   pupil + catchlight, so the sparkle blinks with the lid. */
+.orb-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orb-blink 5.5s ease-in-out infinite;
+}
+/* Offsetting the second lid by a hair reads as one blink, not two. */
+.orb-eye-b { animation-delay: 0.08s; }
+
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+.orb-breathe {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orb-breathe 3.6s ease-in-out infinite;
+}
+
+/* Pupils follow the cursor. The vars are written by AttentionButton onto
+   the FAB element and inherit into the SVG; the transition smooths the
+   discrete rAF updates into a glide. Kept small (±2.4px in a 52-unit
+   viewBox) so the eyes never touch the eye-white edge. */
+.orb-pupils {
+  transform: translate(var(--orb-px, 0px), var(--orb-py, 0px));
+  transition: transform 140ms ease-out;
+}
+
+/* Idle wander — the coarse-pointer stand-in for cursor tracking: every few
+   seconds the eyes glance to a side and come back. Long flat stretches
+   between glances keep it shy rather than shifty. */
+@keyframes orb-wander {
+  0%, 22%, 100% { transform: translate(0, 0); }
+  26%, 38%      { transform: translate(1.9px, 0.3px); }
+  42%, 68%      { transform: translate(0, 0); }
+  72%, 84%      { transform: translate(-1.7px, 0.5px); }
+  88%           { transform: translate(0, 0); }
+}
+.orb-wander { animation: orb-wander 11s ease-in-out infinite; }
+
+@keyframes orb-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgb(var(--color-attn-rgb) / 0.55)); }
+  50%      { filter: drop-shadow(0 0 9px rgb(var(--color-attn-rgb) / 0.85)); }
+}
+.orb-glow { animation: orb-glow 2.1s ease-in-out infinite; }
+
+@keyframes orb-ring {
+  0%   { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+.orb-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orb-ring 1.6s ease-out infinite;
+}
+
+@keyframes orb-arc {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+.orb-arc {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orb-arc 1.1s linear infinite;
+}
+
+@keyframes orb-nudge {
+  0%, 100%              { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80%      { transform: translateX(2px); }
+}
+.orb-nudge { animation: orb-nudge 0.5s ease-in-out 2; }
+
+/* One-shot greeting hop — squash on the anticipation, stretch at the top,
+   settle with a wobble. Fired when the bubble opens or a job lands. */
+@keyframes orb-hop {
+  0%   { transform: translateY(0) scale(1, 1); }
+  18%  { transform: translateY(1.5px) scale(1.08, 0.9); }
+  45%  { transform: translateY(-6px) scale(0.94, 1.08); }
+  70%  { transform: translateY(0.5px) scale(1.07, 0.92); }
+  85%  { transform: translateY(0) scale(0.98, 1.02); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.orb-hop {
+  transform-box: fill-box;
+  transform-origin: center 80%;
+  animation: orb-hop 0.62s cubic-bezier(0.34, 1.3, 0.5, 1) 1;
+}
+
+/* Talking: the open mouth chews while the body bobs a little. */
+@keyframes orb-talk {
+  0%, 100% { transform: scaleY(1); }
+  30%      { transform: scaleY(0.45); }
+  60%      { transform: scaleY(0.85); }
+}
+.orb-talk {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orb-talk 0.5s ease-in-out infinite;
+}
+@keyframes orb-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.6px); }
+}
+.orb-bob {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orb-bob 0.5s ease-in-out infinite;
+}
+
+/* Blush is a hue trick; on e-ink it degrades into a gray smear on a
+   solid black/white disc, so drop it and let the line face carry. */
+html.eink .orb-blush { display: none; }
+
+/* Custom character palettes are inline CSS vars on the svg; e-ink must
+   still win, and !important is what beats an inline (non-important)
+   declaration. Values mirror the html.eink token blocks above. */
+html.eink .attn-orb {
+  --color-orb: #000000 !important;
+  --color-orb-hi: #000000 !important;
+  --color-orb-lo: #000000 !important;
+  --color-orb-face: #ffffff !important;
+  --color-orb-spark: #000000 !important;
+  --color-orb-blush: #ffffff !important;
+}
+html.eink.dark .attn-orb {
+  --color-orb: #ffffff !important;
+  --color-orb-hi: #ffffff !important;
+  --color-orb-lo: #ffffff !important;
+  --color-orb-face: #000000 !important;
+  --color-orb-spark: #ffffff !important;
+  --color-orb-blush: #000000 !important;
+}
+
+/* ── Attention bubble ──
+   The assistant's speech bubble. It scales up out of its own tail corner
+   (transform-origin is set inline to the tail's position), which is what
+   makes it read as the ball speaking rather than a panel appearing. */
+@keyframes attn-bubble-pop {
+  0%   { opacity: 0; transform: scale(0.55) translateY(4px); }
+  70%  { opacity: 1; transform: scale(1.03); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.attn-bubble-pop { animation: attn-bubble-pop 0.22s cubic-bezier(0.34, 1.4, 0.6, 1) 1; }
+
+@keyframes attn-msg-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.attn-msg-in { animation: attn-msg-in 0.18s ease-out 1; }
+
+/* Assistant is thinking — three dots breathing in sequence. */
+@keyframes attn-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1; transform: translateY(-2px); }
+}
+.attn-dot { animation: attn-dot 1.1s ease-in-out infinite; }
+.attn-dot-b { animation-delay: 0.15s; }
+.attn-dot-c { animation-delay: 0.3s; }
+
+/* An OS-level motion preference must silence a face that would otherwise
+   breathe and blink on every screen in the app. The e-ink paths already
+   kill animation wholesale further up; this is the standards-honoring
+   equivalent. Opacity/scale are pinned back to their resting values so a
+   paused mid-keyframe frame can't leave the orb squashed or
+   half-transparent. Pupil tracking freezes too — the vars stop being
+   written, and the transition below is neutralized. */
+@media (prefers-reduced-motion: reduce) {
+  .orb-eye,
+  .orb-breathe,
+  .orb-glow,
+  .orb-ring,
+  .orb-arc,
+  .orb-nudge,
+  .orb-hop,
+  .orb-talk,
+  .orb-bob,
+  .orb-wander,
+  .attn-bubble-pop,
+  .attn-msg-in,
+  .attn-dot {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .orb-pupils { transform: none !important; transition: none !important; }
+  /* The unread ring conveys nothing on its own once it stops expanding —
+     it would just sit there as a stray outline. */
+  .orb-ring { opacity: 0 !important; }
+  /* A frozen typing indicator still has to say "working" — rest the dots
+     at readable opacity instead of the dim keyframe floor. */
+  .attn-dot { opacity: 0.6 !important; }
 }
 
 /* Typing indicator dots */

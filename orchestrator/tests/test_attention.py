@@ -844,3 +844,63 @@ async def test_chat_prompt_carries_history_and_pending_jobs(db_session, monkeypa
     assert "which agent do you mean?" in prompt
     assert "the camera one" in prompt
     assert "Pending jobs" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Character generation (orb skins)
+# ---------------------------------------------------------------------------
+
+def _valid_char(**over):
+    from attention.chargen import EXAMPLE_CHARACTER
+    c = json.loads(json.dumps(EXAMPLE_CHARACTER))
+    c.update(over)
+    return c
+
+
+def test_chargen_example_validates():
+    from attention.chargen import validate_character
+    out = validate_character(_valid_char())
+    assert out["id"] == "mochi-cat"
+    assert len(out["extras"]) == 8
+    assert out["nose"]["fill"] == "blush"
+    assert set(out["mouths"]) == {"idle", "done"}
+
+
+def test_chargen_rejects_script_in_path():
+    from attention.chargen import CharGenError, validate_character
+    bad = _valid_char()
+    bad["extras"][0]["d"] = 'M0 0"/><script>alert(1)</script>'
+    with pytest.raises(CharGenError):
+        validate_character(bad)
+
+
+def test_chargen_rejects_out_of_bounds_coords():
+    from attention.chargen import CharGenError, validate_character
+    bad = _valid_char()
+    bad["extras"][0]["d"] = "M0 0 L500 500 Z"
+    with pytest.raises(CharGenError):
+        validate_character(bad)
+
+
+def test_chargen_rejects_non_hex_palette_and_bad_fill():
+    from attention.chargen import CharGenError, validate_character
+    bad = _valid_char()
+    bad["palette"]["body"] = "url(javascript:alert(1))"
+    with pytest.raises(CharGenError):
+        validate_character(bad)
+    bad2 = _valid_char()
+    bad2["extras"][0]["fill"] = "url(#evil)"
+    with pytest.raises(CharGenError):
+        validate_character(bad2)
+
+
+def test_chargen_rejects_unoverridable_mouth_and_extra_flood():
+    from attention.chargen import CharGenError, MAX_EXTRAS, validate_character
+    bad = _valid_char()
+    bad["mouths"] = {"speak": "M20 30 h10"}  # open mouths are fixed
+    with pytest.raises(CharGenError):
+        validate_character(bad)
+    bad2 = _valid_char()
+    bad2["extras"] = [{"d": "M0 0 h1", "fill": "body"}] * (MAX_EXTRAS + 1)
+    with pytest.raises(CharGenError):
+        validate_character(bad2)

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-21
+
+Assistant character release (experimental). The UI layer for the attention job engine that shipped in v0.15.1: an orb assistant with an animated face, a speech-bubble chat that turns natural-language requests into attention jobs, and a character-skin system. Off by default — enabled via an Experimental toggle in Monitor > Display.
+
+### Added
+
+- **Assistant character (experimental, off by default).** An orb FAB with an animated emoji-style face (Fluent/Noto-family styling): pointer-tracking pupils, a celebration when a job fires, and rect-based parking that keeps out of the composer and nav. Tapping toggles its speech bubble — the FAB never navigates. The bubble chat creates attention jobs (reminders, state watchers, schedules) through the backend compiler, shows inline job proposals with previews, and manages existing jobs. Skins: preset faces plus Opus-generated custom characters (new chargen endpoint). (e6cb58bf)
+- **Kill switch.** With the toggle off, the corner button is the classic unread FAB — cyan count badge, tap opens the oldest unread chat, long-press opens split screen — and the bottom-nav unread badge stays classic red. The toggle swaps the two subtrees live.
+
 ## [0.15.2] - 2026-08-21
 
 Unread-badge reliability fix.

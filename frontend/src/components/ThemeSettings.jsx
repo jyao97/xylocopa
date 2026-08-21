@@ -62,31 +62,25 @@ export default function ThemeSettings({ theme }) {
     if (getActivePaletteId() !== "custom") selectPalette("custom");
   }, []);
 
-  // Track the preset the user came from, so the editor can offer it as a
-  // starting point ("Copy from Nord") after they've switched to Custom.
-  const [sourcePreset, setSourcePreset] = useState(null);
-
   const handlePickCustom = useCallback(() => {
-    const current = getActivePaletteId();
-    if (current !== "custom") {
-      setSourcePreset(current);
-      // First time customizing: start from what's on screen right now,
-      // not from the stock light/dark palette.
-      if (!hasCustomConfig()) {
-        const seeded = customConfigFromPreset(current);
-        setCustom(seeded);
-        saveCustomConfig(seeded);
-      }
+    // First time customizing: start from what's on screen right now,
+    // not from the stock light/dark palette.
+    if (!hasCustomConfig()) {
+      const seeded = customConfigFromPreset(getActivePaletteId());
+      setCustom(seeded);
+      saveCustomConfig(seeded);
     }
     selectPalette("custom");
     setEditorOpen(true);
   }, []);
 
-  const handleCopyFromPreset = useCallback((id) => {
-    const seeded = customConfigFromPreset(id);
-    setCustom(seeded);
-    saveCustomConfig(seeded);
-  }, []);
+  // The editor mirrors whatever palette is selected: with a preset active
+  // it shows that preset's core colors, and the first edit forks them into
+  // the Custom palette. With Custom active it shows the stored config.
+  const displayed = active === "custom" ? custom : customConfigFromPreset(active);
+  const activeName = active === "custom"
+    ? null
+    : (PRESETS.find((p) => p.id === active)?.name ?? active);
 
   return (
     <section className="rounded-xl bg-surface shadow-card p-4">
@@ -137,6 +131,11 @@ export default function ThemeSettings({ theme }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
           Customize
+          {activeName && (
+            <span className="font-normal text-faint">
+              — showing {activeName}; edits save as Custom
+            </span>
+          )}
         </button>
 
         {editorOpen && (
@@ -149,9 +148,11 @@ export default function ThemeSettings({ theme }) {
                   <button
                     key={b}
                     type="button"
-                    onClick={() => handleCustomChange({ base: b, colors: { ...CUSTOM_SEEDS[b] } })}
+                    onClick={() => {
+                      if (b !== displayed.base) handleCustomChange({ base: b, colors: { ...CUSTOM_SEEDS[b] } });
+                    }}
                     className={`px-3 py-1 text-xs rounded-md capitalize ${
-                      custom.base === b ? "bg-elevated text-heading" : "text-dim"
+                      displayed.base === b ? "bg-elevated text-heading" : "text-dim"
                     }`}
                   >
                     {b}
@@ -167,35 +168,24 @@ export default function ThemeSettings({ theme }) {
                 <span className="text-xs text-dim w-24 shrink-0">{f.label}</span>
                 <input
                   type="color"
-                  value={custom.colors[f.key]}
+                  value={displayed.colors[f.key]}
                   aria-label={f.label}
                   onChange={(e) =>
-                    handleCustomChange({ ...custom, colors: { ...custom.colors, [f.key]: e.target.value } })
+                    handleCustomChange({ base: displayed.base, colors: { ...displayed.colors, [f.key]: e.target.value } })
                   }
                   className="w-8 h-8 rounded-md border border-edge bg-transparent cursor-pointer p-0.5"
                 />
-                <code className="text-xs text-label font-mono">{custom.colors[f.key]}</code>
+                <code className="text-xs text-label font-mono">{displayed.colors[f.key]}</code>
               </div>
             ))}
 
-            <div className="flex items-center gap-4">
-              {sourcePreset && sourcePreset !== custom.base && (
-                <button
-                  type="button"
-                  onClick={() => handleCopyFromPreset(sourcePreset)}
-                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
-                >
-                  Copy from {PRESETS.find((p) => p.id === sourcePreset)?.name}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleCustomChange({ base: custom.base, colors: { ...CUSTOM_SEEDS[custom.base] } })}
-                className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
-              >
-                Reset to {custom.base} defaults
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => handleCustomChange({ base: displayed.base, colors: { ...CUSTOM_SEEDS[displayed.base] } })}
+              className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+            >
+              Reset to {displayed.base} defaults
+            </button>
           </div>
         )}
       </div>

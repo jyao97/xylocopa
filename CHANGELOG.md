@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-08-21
+
+Backend-only release: the attention job engine, a pluggable (trigger x action) automation layer for the orchestrator. No UI ships in this release — jobs are managed through the REST API (`/api/attention/*`), including a conversational endpoint that compiles natural-language requests into jobs. The assistant frontend built on top of this engine is being polished separately.
+
+### Added
+
+- **Attention job engine.** One `AttentionJob` row = one trigger x one action, both resolved through pluggable registries. Triggers: `at` (one-shot), `every` (interval, rate-floored), `signal` (conditions over named app-state signals, with `became` edge semantics and per-job cooldown so state watchers fire on transitions instead of spamming), `probe` (webhook). Actions: `notify` (web push), `message_agent`, `dispatch_task`, `run_prompt`. Evaluation rides the existing 2s dispatcher tick and delivery reuses the app's existing paths (notify.py, the probe wake path, task_service) — no new scheduling machinery. `daily_at` schedules are local wall-clock with an optional weekdays filter, and previews are backed by the real trigger arithmetic. A `/chat` endpoint compiles natural language into job definitions via `claude -p`; job firings broadcast an `attention_fired` WebSocket event. Ships with a 59-test suite. (0e6d1d24, b57537f7, 3f5f119e, bdc024d6)
+
 ## [0.15.0] - 2026-08-21
 
 Theme release. The app gains a theme system: five preset palettes beyond the stock Light/Dark, a custom theme editor, per-palette user-bubble colors following messenger conventions, and a terminal overlay that follows the active theme. Also a set of smaller fixes: UTF-8-pinned telemetry file IO, WebSocket forwarding for port-preview cards, keyboard-focus delegation for sandboxed preview iframes, log rotation for the frontend/kb debug logs, and an mcp<2 dependency pin.

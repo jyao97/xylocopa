@@ -10,7 +10,7 @@ import beeLogo from "../assets/xylocopa-bee.svg";
 const STATE_GLOW = {
   idle: "",
   running:
-    "shadow-[0_0_16px_rgba(6,182,212,0.55),inset_0_0.5px_0_var(--color-glass-edge)] animate-glow",
+    "shadow-[0_0_16px_rgb(var(--color-accent-rgb)/0.55),inset_0_0.5px_0_var(--color-glass-edge)] animate-glow",
   error:
     "shadow-[0_0_14px_rgba(248,113,113,0.5),inset_0_0.5px_0_var(--color-glass-edge)]",
   planning:

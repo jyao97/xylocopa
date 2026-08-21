@@ -29,19 +29,29 @@ export const THEME_EVENT = "xy:theme-changed";
 
 // `core` mirrors the preset's page/surface/heading/body/edge tokens in
 // index.css — it seeds the custom editor when starting from that preset.
+// Grouped light-first, then dark, for the picker grid.
 export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
+  { id: "soft-light", name: "Soft Light", base: "light",
+    preview: { page: "#f6f4f1", surface: "#eeebe6", text: "#37342f" },
+    core: { page: "#f6f4f1", surface: "#eeebe6", heading: "#37342f", body: "#55524c", edge: "#d3cdc3", bubble: "#2b7a9b" } },
+  { id: "solarized-light", name: "Solarized Light", base: "light",
+    preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
+    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
+  { id: "rose-dawn", name: "Rosé Pine Dawn", base: "light",
+    preview: { page: "#faf4ed", surface: "#f2e9e1", text: "#575279" },
+    core: { page: "#faf4ed", surface: "#f2e9e1", heading: "#575279", body: "#6e6a86", edge: "#d5cfd0", bubble: "#286983" } },
+  { id: "latte", name: "Latte", base: "light",
+    preview: { page: "#eff1f5", surface: "#e6e9ef", text: "#4c4f69" },
+    core: { page: "#eff1f5", surface: "#e6e9ef", heading: "#4c4f69", body: "#5c5f77", edge: "#ccd0da", bubble: "#1e66f5" } },
   { id: "dark", name: "Dark", base: "dark",
     preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" },
     core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" } },
   { id: "soft-dark", name: "Soft Dark", base: "dark",
     preview: { page: "#17181c", surface: "#1e2024", text: "#e8e6e3" },
     core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41", bubble: "#375663" } },
-  { id: "solarized-light", name: "Solarized Light", base: "light",
-    preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
-    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
   { id: "solarized-dark", name: "Solarized Dark", base: "dark",
     preview: { page: "#002b36", surface: "#073642", text: "#aebcba" },
     core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e", bubble: "#135b84" } },
@@ -310,6 +320,31 @@ const TERMINAL_THEMES = {
     brightBlack: "#859289", brightRed: "#e67e80", brightGreen: "#a7c080",
     brightYellow: "#dbbc7f", brightBlue: "#7fbbb3", brightMagenta: "#d699b6",
     brightCyan: "#83c092", brightWhite: "#fdf1c7",
+  },
+  "soft-light": {
+    background: "#f6f4f1", foreground: "#55524c", cursor: "#2b7a9b",
+    cursorAccent: "#f6f4f1", selectionBackground: "#dcd7ce",
+    ...GITHUB_LIGHT_ANSI,
+  },
+  // Official Rosé Pine Dawn terminal palette.
+  "rose-dawn": {
+    background: "#faf4ed", foreground: "#575279", cursor: "#575279",
+    cursorAccent: "#faf4ed", selectionBackground: "#dfdad9",
+    black: "#f2e9e1", red: "#b4637a", green: "#286983", yellow: "#ea9d34",
+    blue: "#56949f", magenta: "#907aa9", cyan: "#d7827e", white: "#575279",
+    brightBlack: "#9893a5", brightRed: "#b4637a", brightGreen: "#286983",
+    brightYellow: "#ea9d34", brightBlue: "#56949f", brightMagenta: "#907aa9",
+    brightCyan: "#d7827e", brightWhite: "#575279",
+  },
+  // Official Catppuccin Latte ANSI table.
+  latte: {
+    background: "#eff1f5", foreground: "#4c4f69", cursor: "#4c4f69",
+    cursorAccent: "#eff1f5", selectionBackground: "#ccd0da",
+    black: "#5c5f77", red: "#d20f39", green: "#40a02b", yellow: "#df8e1d",
+    blue: "#1e66f5", magenta: "#ea76cb", cyan: "#179299", white: "#acb0be",
+    brightBlack: "#6c6f85", brightRed: "#de293e", brightGreen: "#49af3d",
+    brightYellow: "#eea02d", brightBlue: "#456eff", brightMagenta: "#fe85d8",
+    brightCyan: "#2d9fa8", brightWhite: "#bcc0cc",
   },
 };
 

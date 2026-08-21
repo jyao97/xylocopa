@@ -302,6 +302,111 @@
   --color-bubble-dim:     #adbcb0;
 }
 
+/* Soft Light — low-contrast warm paper-gray, the light twin of Soft Dark. */
+.theme-soft-light {
+  --color-page:       #f6f4f1;
+  --color-surface:    #eeebe6;
+  --color-input:      #e6e2db;
+  --color-elevated:   #dcd7ce;
+  --color-hover:      #d0cabf;
+  --color-inset:      #f6f4f1;
+
+  --color-heading:    #37342f;
+  --color-body:       #55524c;
+  --color-label:      #6b6862;
+  --color-dim:        #7f7c75;
+  --color-faint:      #9b978f;
+  --color-ghost:      #b5b1a8;
+
+  --color-divider:    #e6e2db;
+  --color-edge:       #d3cdc3;
+  --color-ring-hover: #c1bab0;
+
+  --color-hint:       #9b978f;
+  --color-shadow:     rgba(60,55,45,0.08);
+  --color-skel:       #e6e2db;
+  --color-glass:      #eeebe6;
+  --color-glass-nav:  #f2efeb;
+  --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* Desaturated steel-cyan to sit with the warm paper. */
+  --color-bubble:         #2b7a9b;
+  --color-bubble-rgb:     43 122 155;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #c3dde9;
+}
+
+/* Rosé Pine Dawn — warm rose-tinted parchment, muted purple ink. */
+.theme-rose-dawn {
+  --color-page:       #faf4ed;
+  --color-surface:    #f2e9e1;
+  --color-input:      #eadfd6;
+  --color-elevated:   #dfd8d4;
+  --color-hover:      #cecac7;
+  --color-inset:      #faf4ed;
+
+  --color-heading:    #575279;
+  --color-body:       #6e6a86;
+  --color-label:      #797593;
+  --color-dim:        #9893a5;
+  --color-faint:      #aeaab8;
+  --color-ghost:      #c3c0cb;
+
+  --color-divider:    #eee6de;
+  --color-edge:       #d5cfd0;
+  --color-ring-hover: #c3bec1;
+
+  --color-hint:       #9893a5;
+  --color-shadow:     rgba(87,82,121,0.08);
+  --color-skel:       #eadfd6;
+  --color-glass:      #f2e9e1;
+  --color-glass-nav:  #f6efe8;
+  --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* Rosé Pine's pine accent. */
+  --color-bubble:         #286983;
+  --color-bubble-rgb:     40 105 131;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #c0d7e0;
+}
+
+/* Latte — Catppuccin Latte's cool soft grays. */
+.theme-latte {
+  --color-page:       #eff1f5;
+  --color-surface:    #e6e9ef;
+  --color-input:      #dce0e8;
+  --color-elevated:   #ccd0da;
+  --color-hover:      #bcc0cc;
+  --color-inset:      #eff1f5;
+
+  --color-heading:    #4c4f69;
+  --color-body:       #5c5f77;
+  --color-label:      #6c6f85;
+  --color-dim:        #7c7f93;
+  --color-faint:      #8c8fa1;
+  --color-ghost:      #9ca0b0;
+
+  --color-divider:    #dce0e8;
+  --color-edge:       #ccd0da;
+  --color-ring-hover: #aeb3c1;
+
+  --color-hint:       #8c8fa1;
+  --color-shadow:     rgba(76,79,105,0.08);
+  --color-skel:       #dce0e8;
+  --color-glass:      #e6e9ef;
+  --color-glass-nav:  #ebedf2;
+  --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* Latte's blue accent. */
+  --color-bubble:         #1e66f5;
+  --color-bubble-rgb:     30 102 245;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #c9d8fb;
+}
+
 /* Translucent glass surfaces (opt-in via @supports below):
    .glass-bar     — login card, bot icon, small FABs (light frost, alpha ~.7)
    .glass-bar-nav — bottom nav + text input bars (frost, alpha ≥.65).
@@ -351,6 +456,18 @@
     --color-glass: rgba(49,58,64,0.7);
     --color-glass-nav: rgba(54,64,70,0.68);
   }
+  .theme-soft-light {
+    --color-glass: rgba(238,235,230,0.68);
+    --color-glass-nav: rgba(242,239,235,0.65);
+  }
+  .theme-rose-dawn {
+    --color-glass: rgba(242,233,225,0.68);
+    --color-glass-nav: rgba(246,239,232,0.65);
+  }
+  .theme-latte {
+    --color-glass: rgba(230,233,239,0.68);
+    --color-glass-nav: rgba(235,237,242,0.65);
+  }
 }
 
 html.no-glass {
@@ -367,6 +484,9 @@ html.no-glass.theme-solarized-dark  { --color-glass: #073642; --color-glass-nav:
 html.no-glass.theme-solarized-light { --color-glass: #eee8d5; --color-glass-nav: #f2ecd9; }
 html.no-glass.theme-nord            { --color-glass: #353c4a; --color-glass-nav: #3a4152; }
 html.no-glass.theme-everforest      { --color-glass: #313a40; --color-glass-nav: #364046; }
+html.no-glass.theme-soft-light      { --color-glass: #eeebe6; --color-glass-nav: #f2efeb; }
+html.no-glass.theme-rose-dawn       { --color-glass: #f2e9e1; --color-glass-nav: #f6efe8; }
+html.no-glass.theme-latte           { --color-glass: #e6e9ef; --color-glass-nav: #ebedf2; }
 html.no-glass .glass-bar,
 html.no-glass .glass-bar-nav {
   backdrop-filter: none;

@@ -33,7 +33,7 @@ export const THEME_EVENT = "xy:theme-changed";
 export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
-    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
+    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0e7490" } },
   { id: "ash", name: "Ash", base: "light",
     preview: { page: "#f2f3f5", surface: "#ffffff", text: "#1c1e21" },
     core: { page: "#f2f3f5", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
@@ -45,7 +45,7 @@ export const PRESETS = [
     core: { page: "#cac5be", surface: "#d2cdc6", heading: "#2b2723", body: "#48423c", edge: "#a8a29a", bubble: "#6f4e37" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
-    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
+    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#1f74b0" } },
   { id: "nord-light", name: "Nord Light", base: "light",
     preview: { page: "#e9eef6", surface: "#e0e7f1", text: "#2e3440" },
     core: { page: "#e9eef6", surface: "#e0e7f1", heading: "#2e3440", body: "#434c5e", edge: "#bcc8d9", bubble: "#527099" } },
@@ -171,10 +171,15 @@ export function deriveCustomTokens({ base, colors }) {
   // dark bases so it reads as text, used near-directly on light ones.
   const accent = base === "dark" ? mix(bubble, "#ffffff", 0.45)
     : isLightColor(bubble) ? mix(bubble, "#000000", 0.3) : bubble;
+  // Ink for FILLED accent surfaces (FAB, filter pills): pale dark-base
+  // accents take the page ink, dark light-base accents take white.
+  const accentInk = base === "dark" ? page
+    : isLightColor(accent) ? "#1f2937" : "#ffffff";
   return {
     page, surface, heading, body, edge, bubble,
     accent,
     accentRgb: channels(accent),
+    accentInk,
     bubbleRgb: channels(bubble),
     bubbleInk,
     bubbleInkRgb: channels(bubbleInk),
@@ -215,6 +220,7 @@ function buildCustomCss(cfg) {
     `--color-bubble-ink:${t.bubbleInk};--color-bubble-ink-rgb:${t.bubbleInkRgb};`,
     `--color-bubble-dim:${t.bubbleDim};`,
     `--color-accent:${t.accent};--color-accent-rgb:${t.accentRgb};`,
+    `--color-accent-ink:${t.accentInk};`,
     "}",
     "@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){",
     `html.theme-custom{--color-glass:${t.glassRgba};--color-glass-nav:${t.glassNavRgba};}`,

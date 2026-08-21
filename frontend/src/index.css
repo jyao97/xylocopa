@@ -35,13 +35,16 @@
      deep desaturated hue with OFF-white ink (#E9EDEF-class) — brighter
      than --color-body so "my" messages keep presence, dimmer than pure
      white so they don't glare. */
-  --color-bubble:         #0891b2;   /* cyan-600 — the classic light look */
-  --color-bubble-rgb:     8 145 178;
+  --color-bubble:         #0e7490;   /* cyan-700 — white ink reads at 5.4:1;
+                                        the old cyan-600 sat at 3.7 for full
+                                        paragraphs of message text */
+  --color-bubble-rgb:     14 116 144;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #a5f3fc;   /* timestamp row (cyan-200) */
   --color-accent:         #0891b2;
   --color-accent-rgb:     8 145 178;
+  --color-accent-ink:     #ffffff;   /* text/glyph on a filled accent surface */
 
   /* Attention assistant identity. Still its own token (so it stays
      tunable in one place), but the values sit in the app's amber family —
@@ -108,6 +111,7 @@
   --color-bubble-dim:     #a3c6d1;
   --color-accent:         #22d3ee;
   --color-accent-rgb:     34 211 238;
+  --color-accent-ink:     #030712;   /* pale accents on dark bases take page-ink */
 
   /* One Tailwind step brighter on dark surfaces (#030712 page), matching
      how the app's amber accents flip to amber-400 in dark mode. The orb
@@ -162,6 +166,7 @@
   --color-bubble-dim:     #b2b0ab;
   --color-accent:         #7fc0cf;
   --color-accent-rgb:     127 192 207;
+  --color-accent-ink:     #17181c;
 }
 
 /* Solarized Dark — Ethan Schoonover's base03/base02 family. */
@@ -203,6 +208,7 @@
   --color-bubble-dim:     #9dbccb;
   --color-accent:         #4ba1d3;
   --color-accent-rgb:     75 161 211;
+  --color-accent-ink:     #002b36;
 }
 
 /* Solarized Light — warm cream base3/base2 family. */
@@ -217,7 +223,7 @@
   --color-heading:    #073642;
   --color-body:       #586e75;
   --color-label:      #657b83;
-  --color-dim:        #839496;
+  --color-dim:        #74868c;   /* base0 darkened to clear the ~3.2 dim floor on cream */
   --color-faint:      #93a1a1;
   --color-ghost:      #b0bcbb;
 
@@ -233,13 +239,15 @@
   --color-glass-edge: rgba(255,255,255,0.5);
 
   /* Canonical solarized blue + white — the iMessage treatment on cream. */
-  --color-bubble:         #268bd2;
-  --color-bubble-rgb:     38 139 210;
+  --color-bubble:         #1f74b0;   /* one step below Schoonover blue — white
+                                        ink lifts from 3.7 to ~5.0 */
+  --color-bubble-rgb:     31 116 176;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #cfe6f5;
   --color-accent:         #1f74b0;
   --color-accent-rgb:     31 116 176;
+  --color-accent-ink:     #ffffff;
 }
 
 /* Nord — polar-night blue-grays, snow-storm text. */
@@ -256,7 +264,7 @@
   --color-label:      #aab2c0;
   --color-dim:        #8892a4;
   --color-faint:      #6a7488;
-  --color-ghost:      #525b6e;
+  --color-ghost:      #5d6678;   /* drag handles were 1.48 on surface at #525b6e */
 
   --color-divider:    #434c5e;
   --color-edge:       #4c566a;
@@ -277,6 +285,7 @@
   --color-bubble-dim:     #bcc8da;
   --color-accent:         #88c0d0;
   --color-accent-rgb:     136 192 208;
+  --color-accent-ink:     #2e3440;
 }
 
 /* Everforest — muted forest greens, warm parchment text. */
@@ -293,7 +302,7 @@
   --color-label:      #9da9a0;
   --color-dim:        #859289;
   --color-faint:      #6b766d;
-  --color-ghost:      #525d54;
+  --color-ghost:      #59645b;   /* was 1.81 on surface — hold the ~1.9 ghost floor */
 
   --color-divider:    #343f44;
   --color-edge:       #4a555b;
@@ -314,6 +323,7 @@
   --color-bubble-dim:     #adbcb0;
   --color-accent:         #7fbbb3;
   --color-accent-rgb:     127 187 179;
+  --color-accent-ink:     #272e33;
 }
 
 /* Ash — the Bear/Things-style gray: cool light-gray ground with WHITE
@@ -331,7 +341,7 @@
   --color-heading:    #1c1e21;
   --color-body:       #3f4247;
   --color-label:      #6e7278;
-  --color-dim:        #8a8e94;
+  --color-dim:        #7e828a;   /* one step down: was 2.97 on the gray page */
   --color-faint:      #a5a8ae;
   --color-ghost:      #bfc2c7;
 
@@ -353,6 +363,7 @@
   --color-bubble-dim:     #b6d2e0;
   --color-accent:         #1d6390;
   --color-accent-rgb:     29 99 144;
+  --color-accent-ink:     #ffffff;
 }
 
 /* Silver — flat industrial gray: the WHOLE interface lives at the
@@ -373,7 +384,7 @@
   --color-label:      #5b5e63;
   --color-dim:        #63666b;
   --color-faint:      #7c7f84;
-  --color-ghost:      #94969b;
+  --color-ghost:      #8a8c91;   /* was 1.69 on the #c2c4c7 page */
 
   --color-divider:    #b4b6ba;
   --color-edge:       #a7a9ad;
@@ -393,6 +404,7 @@
   --color-bubble-dim:     #c9cbce;
   --color-accent:         #4a6378;
   --color-accent-rgb:     74 99 120;
+  --color-accent-ink:     #ffffff;
 }
 
 /* Clay — warm greige x brown: the flat tonal model Silver validated,
@@ -432,6 +444,7 @@
   --color-bubble-dim:     #dfcbb8;
   --color-accent:         #7d5230;
   --color-accent-rgb:     125 82 48;
+  --color-accent-ink:     #ffffff;
 }
 
 /* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
@@ -472,6 +485,7 @@
   --color-bubble-dim:     #a3c2d1;
   --color-accent:         #539bf5;
   --color-accent-rgb:     83 155 245;
+  --color-accent-ink:     #22272e;
 }
 /* Nord Light — Snow Storm ground with Polar Night ink; pairs with Nord. */
 .theme-nord-light {
@@ -487,7 +501,7 @@
   --color-label:      #4c566a;
   --color-dim:        #6d7a92;
   --color-faint:      #8f9aae;
-  --color-ghost:      #adb5c4;
+  --color-ghost:      #99a4b8;   /* was 1.66 on the snow-storm surface */
 
   --color-divider:    #d3dce9;
   --color-edge:       #bcc8d9;
@@ -508,6 +522,7 @@
   --color-bubble-dim:     #cdd9e8;
   --color-accent:         #48709c;
   --color-accent-rgb:     72 112 156;
+  --color-accent-ink:     #ffffff;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):
@@ -698,6 +713,7 @@ html.eink {
   --color-bubble-dim:     #d5d5d5;
   --color-accent:         #000000;
   --color-accent-rgb:     0 0 0;
+  --color-accent-ink:     #ffffff;
 
   --color-attn:       #000000;
   --color-attn-rgb:   0 0 0;
@@ -743,6 +759,7 @@ html.eink.dark {
   --color-bubble-dim:     #2a2a2a;
   --color-accent:         #ffffff;
   --color-accent-rgb:     255 255 255;
+  --color-accent-ink:     #000000;
 
   --color-attn:       #ffffff;
   --color-attn-rgb:   255 255 255;
@@ -1661,15 +1678,33 @@ svg text { font-family: inherit; }
   .text-bubble-ink-80 { color: rgb(var(--color-bubble-ink-rgb) / 0.8); }
   .text-bubble-dim  { color: var(--color-bubble-dim); }
 
-  /* Accent — the tag-chip / link / inline-code family (project chips,
-     active mode pills, markdown links). Hand-written like attn/bubble
-     above: Tailwind generates nothing from a --color-* var in :root, so
-     every step used in JSX must exist here, hover forms included. */
+  /* Accent — the tag-chip / link / inline-code / active-chrome family
+     (project chips, mode pills, markdown links, FAB, filter pills, status
+     EXECUTING). Hand-written like attn/bubble above: Tailwind generates
+     nothing from a --color-* var in :root, so every step used in JSX must
+     exist here, hover/focus forms included. Filled accent surfaces pair
+     with --color-accent-ink (white on the dark light-base accents,
+     page-ink on the pale dark-base ones). */
   .text-accent      { color: var(--color-accent); }
   .hover\:text-accent:hover { color: var(--color-accent); }
   .text-accent-70   { color: rgb(var(--color-accent-rgb) / 0.7); }
+  .text-accent-60   { color: rgb(var(--color-accent-rgb) / 0.6); }
+  .text-accent-40   { color: rgb(var(--color-accent-rgb) / 0.4); }
+  .text-accent-ink  { color: var(--color-accent-ink); }
+  .bg-accent        { background-color: var(--color-accent); }
+  .border-accent    { border-color: var(--color-accent); }
+  .focus\:border-accent:focus { border-color: var(--color-accent); }
+  .accent-tint-10   { background-color: rgb(var(--color-accent-rgb) / 0.10); }
   .accent-tint-15   { background-color: rgb(var(--color-accent-rgb) / 0.15); }
+  .accent-tint-20   { background-color: rgb(var(--color-accent-rgb) / 0.20); }
   .hover\:accent-tint-25:hover { background-color: rgb(var(--color-accent-rgb) / 0.25); }
+  .accent-edge-40   { border-color: rgb(var(--color-accent-rgb) / 0.40); }
+  .accent-edge-60   { border-color: rgb(var(--color-accent-rgb) / 0.60); }
+  .ring-accent      { --tw-ring-color: var(--color-accent); }
+  .ring-accent-50   { --tw-ring-color: rgb(var(--color-accent-rgb) / 0.5); }
+  .focus-visible\:ring-accent:focus-visible { --tw-ring-color: var(--color-accent); }
+  /* shadow-lg's metrics with an accent-tinted shadow color (the FAB) */
+  .shadow-accent-fab { box-shadow: 0 10px 15px -3px rgb(var(--color-accent-rgb) / 0.2), 0 4px 6px -4px rgb(var(--color-accent-rgb) / 0.2); }
 
   .attn-tint-6  { background-color: rgb(var(--color-attn-rgb) / 0.06); }
   .attn-tint-8  { background-color: rgb(var(--color-attn-rgb) / 0.08); }

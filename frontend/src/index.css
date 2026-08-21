@@ -302,49 +302,49 @@
   --color-bubble-dim:     #adbcb0;
 }
 
-/* Soft Light — low-contrast neutral graphite, the light twin of Soft Dark. */
-.theme-soft-light {
-  --color-page:       #f4f4f5;
-  --color-surface:    #ebebed;
-  --color-input:      #e3e3e6;
-  --color-elevated:   #d8d8dc;
-  --color-hover:      #cbcbd1;
-  --color-inset:      #f4f4f5;
+/* Ash — monochrome gray-on-gray: a genuinely gray ground (not near-white)
+   and mid-gray ink, deliberately soft. Even the bubble is grayscale. */
+.theme-ash {
+  --color-page:       #e9e9ea;
+  --color-surface:    #e0e0e2;
+  --color-input:      #d8d8da;
+  --color-elevated:   #cccccf;
+  --color-hover:      #bfbfc3;
+  --color-inset:      #e9e9ea;
 
-  --color-heading:    #323236;
-  --color-body:       #515156;
-  --color-label:      #67676d;
-  --color-dim:        #7c7c82;
-  --color-faint:      #97979d;
-  --color-ghost:      #b1b1b7;
+  --color-heading:    #55555a;
+  --color-body:       #6b6b70;
+  --color-label:      #7d7d82;
+  --color-dim:        #8e8e93;
+  --color-faint:      #a2a2a7;
+  --color-ghost:      #b6b6ba;
 
-  --color-divider:    #e3e3e6;
-  --color-edge:       #d1d1d6;
-  --color-ring-hover: #bfbfc6;
+  --color-divider:    #d8d8da;
+  --color-edge:       #c9c9cd;
+  --color-ring-hover: #b8b8bd;
 
-  --color-hint:       #97979d;
-  --color-shadow:     rgba(0,0,0,0.07);
-  --color-skel:       #e3e3e6;
-  --color-glass:      #ebebed;
-  --color-glass-nav:  #efeff1;
-  --color-glass-edge: rgba(255,255,255,0.5);
+  --color-hint:       #a2a2a7;
+  --color-shadow:     rgba(0,0,0,0.06);
+  --color-skel:       #d8d8da;
+  --color-glass:      #e0e0e2;
+  --color-glass-nav:  #e4e4e6;
+  --color-glass-edge: rgba(255,255,255,0.45);
 
-  /* Desaturated steel-cyan to sit with the quiet grays. */
-  --color-bubble:         #2b7a9b;
-  --color-bubble-rgb:     43 122 155;
+  --color-bubble:         #71717a;
+  --color-bubble-rgb:     113 113 122;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
-  --color-bubble-dim:     #c3dde9;
+  --color-bubble-dim:     #d4d4d8;
 }
 
 /* Nord Light — Snow Storm ground with Polar Night ink; pairs with Nord. */
 .theme-nord-light {
-  --color-page:       #eceff4;
-  --color-surface:    #e5e9f0;
-  --color-input:      #d8dee9;
-  --color-elevated:   #ccd3df;
-  --color-hover:      #bfc8d6;
-  --color-inset:      #eceff4;
+  --color-page:       #e9eef6;
+  --color-surface:    #e0e7f1;
+  --color-input:      #d3dce9;
+  --color-elevated:   #c5d1e1;
+  --color-hover:      #b6c4d8;
+  --color-inset:      #e9eef6;
 
   --color-heading:    #2e3440;
   --color-body:       #434c5e;
@@ -353,15 +353,15 @@
   --color-faint:      #8f9aae;
   --color-ghost:      #adb5c4;
 
-  --color-divider:    #d8dee9;
-  --color-edge:       #c2cbd8;
-  --color-ring-hover: #aeb9ca;
+  --color-divider:    #d3dce9;
+  --color-edge:       #bcc8d9;
+  --color-ring-hover: #a9b8cd;
 
   --color-hint:       #8f9aae;
   --color-shadow:     rgba(46,52,64,0.08);
-  --color-skel:       #d8dee9;
-  --color-glass:      #e5e9f0;
-  --color-glass-nav:  #e9ecf2;
+  --color-skel:       #d3dce9;
+  --color-glass:      #e0e7f1;
+  --color-glass-nav:  #e5ebf4;
   --color-glass-edge: rgba(255,255,255,0.5);
 
   /* nord10 frost blue, deepened a step for white ink. */
@@ -456,13 +456,13 @@
     --color-glass: rgba(49,58,64,0.7);
     --color-glass-nav: rgba(54,64,70,0.68);
   }
-  .theme-soft-light {
-    --color-glass: rgba(235,235,237,0.68);
-    --color-glass-nav: rgba(239,239,241,0.65);
+  .theme-ash {
+    --color-glass: rgba(224,224,226,0.68);
+    --color-glass-nav: rgba(228,228,230,0.65);
   }
   .theme-nord-light {
-    --color-glass: rgba(229,233,240,0.68);
-    --color-glass-nav: rgba(233,236,242,0.65);
+    --color-glass: rgba(224,231,241,0.68);
+    --color-glass-nav: rgba(229,235,244,0.65);
   }
   .theme-latte {
     --color-glass: rgba(230,233,239,0.68);
@@ -484,8 +484,8 @@ html.no-glass.theme-solarized-dark  { --color-glass: #073642; --color-glass-nav:
 html.no-glass.theme-solarized-light { --color-glass: #eee8d5; --color-glass-nav: #f2ecd9; }
 html.no-glass.theme-nord            { --color-glass: #353c4a; --color-glass-nav: #3a4152; }
 html.no-glass.theme-everforest      { --color-glass: #313a40; --color-glass-nav: #364046; }
-html.no-glass.theme-soft-light      { --color-glass: #ebebed; --color-glass-nav: #efeff1; }
-html.no-glass.theme-nord-light      { --color-glass: #e5e9f0; --color-glass-nav: #e9ecf2; }
+html.no-glass.theme-ash             { --color-glass: #e0e0e2; --color-glass-nav: #e4e4e6; }
+html.no-glass.theme-nord-light      { --color-glass: #e0e7f1; --color-glass-nav: #e5ebf4; }
 html.no-glass.theme-latte           { --color-glass: #e6e9ef; --color-glass-nav: #ebedf2; }
 html.no-glass .glass-bar,
 html.no-glass .glass-bar-nav {

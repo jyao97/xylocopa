@@ -74,6 +74,6 @@ One anonymous event per day: random install id, version, platform, timestamp —
 
 ## More
 
-[Getting started guide](docs/getting-started.md) ([中文](docs/getting-started-zh.md)) · [Gestures](docs/gestures.md) · [Troubleshooting](docs/troubleshooting.md) · [Architecture](docs/ARCHITECTURE.md) · [Agent MCP tools](docs/agent-mcp-tools.md) · [Data & uninstall](docs/uninstall.md) · [Migrating from AgentHive](docs/migrating-from-agenthive.md)
+[Getting started guide](docs/getting-started.md) · [Gestures](docs/gestures.md) · [Troubleshooting](docs/troubleshooting.md) · [Architecture](docs/ARCHITECTURE.md) · [Agent MCP tools](docs/agent-mcp-tools.md) · [Data & uninstall](docs/uninstall.md) · [Migrating from AgentHive](docs/migrating-from-agenthive.md)
 
 Apache 2.0 — see [LICENSE](LICENSE). Contributions welcome: [CONTRIBUTING.md](CONTRIBUTING.md).

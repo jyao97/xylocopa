@@ -37,15 +37,15 @@ export const PRESETS = [
   { id: "ash", name: "Ash", base: "light",
     preview: { page: "#f2f3f5", surface: "#ffffff", text: "#1c1e21" },
     core: { page: "#f2f3f5", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
+  { id: "silver", name: "Silver", base: "light",
+    preview: { page: "#c2c4c7", surface: "#ffffff", text: "#1c1e21" },
+    core: { page: "#c2c4c7", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
   { id: "nord-light", name: "Nord Light", base: "light",
     preview: { page: "#e9eef6", surface: "#e0e7f1", text: "#2e3440" },
     core: { page: "#e9eef6", surface: "#e0e7f1", heading: "#2e3440", body: "#434c5e", edge: "#bcc8d9", bubble: "#527099" } },
-  { id: "latte", name: "Latte", base: "light",
-    preview: { page: "#eff1f5", surface: "#e6e9ef", text: "#4c4f69" },
-    core: { page: "#eff1f5", surface: "#e6e9ef", heading: "#4c4f69", body: "#5c5f77", edge: "#ccd0da", bubble: "#1e66f5" } },
   { id: "dark", name: "Dark", base: "dark",
     preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" },
     core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" } },
@@ -329,6 +329,11 @@ const TERMINAL_THEMES = {
     cursorAccent: "#f2f3f5", selectionBackground: "#d7dade",
     ...GITHUB_LIGHT_ANSI,
   },
+  silver: {
+    background: "#c2c4c7", foreground: "#2e3135", cursor: "#135b84",
+    cursorAccent: "#c2c4c7", selectionBackground: "#dfe1e4",
+    ...GITHUB_LIGHT_ANSI,
+  },
   // GitHub Dark Dimmed ANSI table.
   graphite: {
     background: "#22272e", foreground: "#adbac7", cursor: "#539bf5",
@@ -348,16 +353,6 @@ const TERMINAL_THEMES = {
     brightBlack: "#4c566a", brightRed: "#bf616a", brightGreen: "#7a9556",
     brightYellow: "#c48e2c", brightBlue: "#5e81ac", brightMagenta: "#b48ead",
     brightCyan: "#6f9fae", brightWhite: "#2e3440",
-  },
-  // Official Catppuccin Latte ANSI table.
-  latte: {
-    background: "#eff1f5", foreground: "#4c4f69", cursor: "#4c4f69",
-    cursorAccent: "#eff1f5", selectionBackground: "#ccd0da",
-    black: "#5c5f77", red: "#d20f39", green: "#40a02b", yellow: "#df8e1d",
-    blue: "#1e66f5", magenta: "#ea76cb", cyan: "#179299", white: "#acb0be",
-    brightBlack: "#6c6f85", brightRed: "#de293e", brightGreen: "#49af3d",
-    brightYellow: "#eea02d", brightBlue: "#456eff", brightMagenta: "#fe85d8",
-    brightCyan: "#2d9fa8", brightWhite: "#bcc0cc",
   },
 };
 

@@ -135,12 +135,12 @@ export default function FloatingTaskCard({ taskId, onClose, onAction }) {
                   onChange={(e) => setTitleDraft(e.target.value)}
                   onBlur={saveTitle}
                   onKeyDown={(e) => { if (e.key === "Enter") saveTitle(); if (e.key === "Escape") { setTitleDraft(task?.title || ""); setEditingTitle(false); } }}
-                  className="w-full text-lg font-semibold text-heading bg-transparent px-0 py-0 border-0 border-b border-cyan-500 focus:outline-none"
+                  className="w-full text-lg font-semibold text-heading bg-transparent px-0 py-0 border-0 border-b border-accent focus:outline-none"
                 />
               ) : (
                 <h3
                   onClick={() => { if (canEdit) setEditingTitle(true); }}
-                  className={`text-lg font-semibold text-heading leading-snug ${canEdit ? "cursor-pointer hover:text-cyan-400" : ""}`}
+                  className={`text-lg font-semibold text-heading leading-snug ${canEdit ? "cursor-pointer hover:text-accent" : ""}`}
                 >
                   {task?.title || "Untitled"}
                 </h3>
@@ -168,7 +168,7 @@ export default function FloatingTaskCard({ taskId, onClose, onAction }) {
               </span>
               {/* Project */}
               {task.project_name && (
-                <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400">
+                <span className="text-[10px] font-medium px-1.5 py-px rounded-full accent-tint-15 text-accent">
                   {task.project_name}
                 </span>
               )}
@@ -278,7 +278,7 @@ export default function FloatingTaskCard({ taskId, onClose, onAction }) {
                         onClick={() => setSelectedPill(i)}
                         className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
                           i === sel
-                            ? "bg-cyan-500 text-white"
+                            ? "bg-accent text-white"
                             : "bg-input text-dim hover:text-body"
                         }`}
                       >
@@ -288,7 +288,7 @@ export default function FloatingTaskCard({ taskId, onClose, onAction }) {
                     <button
                       type="button"
                       onClick={() => { onClose(); navigate(`/agents/${task.attempt_agents[sel].agent_id}`, { state: forwardState(location) }); }}
-                      className="ml-auto text-[11px] font-medium text-cyan-500 hover:text-cyan-400 transition-colors"
+                      className="ml-auto text-[11px] font-medium text-accent hover:opacity-80 transition-colors"
                     >
                       Enter Chat &rarr;
                     </button>

@@ -93,8 +93,8 @@ const FolderCard = memo(function FolderCard({ folder, onClick, dragHandleProps, 
       style={{ WebkitTapHighlightColor: "transparent" }}
       data-project-name={folder.name}
       data-claudemd-pending={hasPendingClaudeMd ? "1" : undefined}
-      className={`relative w-full text-left rounded-2xl bg-surface shadow-card overflow-hidden transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 hover:ring-1 hover:ring-ring-hover ${
-        selecting && selected ? "ring-2 ring-cyan-500/50 brightness-[0.88]" : ""
+      className={`relative w-full text-left rounded-2xl bg-surface shadow-card overflow-hidden transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:ring-1 hover:ring-ring-hover ${
+        selecting && selected ? "ring-2 ring-accent-50 brightness-[0.88]" : ""
       }`}
     >
       {hasPendingClaudeMd && (
@@ -120,8 +120,8 @@ const FolderCard = memo(function FolderCard({ folder, onClick, dragHandleProps, 
                 {folder.display_name || folder.name}
               </h3>
               {running > 0 && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-500 dark:text-cyan-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-glow" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-accent">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-glow" />
                   {running}
                 </span>
               )}
@@ -147,7 +147,7 @@ const FolderCard = memo(function FolderCard({ folder, onClick, dragHandleProps, 
           {/* Row 3: status pill */}
           <div className="flex items-center gap-1.5 mt-1.5">
             {folder.active ? (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full bg-emerald-500/15 text-emerald-500 dark:text-emerald-400">
+              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                 Active
               </span>
             ) : (
@@ -503,7 +503,7 @@ function ProjectsPage({ theme, onToggleTheme, isActive = true }) {
             <button
               type="button"
               onClick={allSelected ? deselectAll : selectAll}
-              className="justify-self-start text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-start text-sm font-medium text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               {allSelected ? "Deselect All" : "Select All"}
             </button>
@@ -513,7 +513,7 @@ function ProjectsPage({ theme, onToggleTheme, isActive = true }) {
             <button
               type="button"
               onClick={exitSelectMode}
-              className="justify-self-end text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-end text-sm font-semibold text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               Done
             </button>
@@ -531,13 +531,13 @@ function ProjectsPage({ theme, onToggleTheme, isActive = true }) {
                     onClick={() => setFilter(tab.key)}
                     className={`shrink-0 min-h-[36px] px-3 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive
-                        ? "bg-cyan-600 text-white"
+                        ? "bg-accent text-white"
                         : "bg-surface text-label hover:bg-input hover:text-body"
                     }`}
                   >
                     {tab.label}
                     {count != null && (
-                      <span className={`ml-1.5 text-xs ${isActive ? "text-cyan-200" : "text-faint"}`}>
+                      <span className={`ml-1.5 text-xs ${isActive ? "text-accent-ink opacity-75" : "text-faint"}`}>
                         {count}
                       </span>
                     )}
@@ -652,7 +652,7 @@ function ProjectsPage({ theme, onToggleTheme, isActive = true }) {
               type="button"
               onClick={handleBulkActivate}
               disabled={bulkBusy || selectedArchived.length === 0 || selectedActive.length > 0}
-              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

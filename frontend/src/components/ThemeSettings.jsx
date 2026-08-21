@@ -30,7 +30,7 @@ function PaletteCard({ name, base, active, onClick, children }) {
       aria-pressed={active ? "true" : "false"}
       className={`text-left rounded-lg p-2 border transition-colors ${
         active
-          ? "border-cyan-500 ring-1 ring-cyan-500"
+          ? "border-accent ring-1 ring-accent"
           : "border-edge hover:border-ring-hover"
       }`}
     >
@@ -182,7 +182,7 @@ export default function ThemeSettings({ theme }) {
             <button
               type="button"
               onClick={() => handleCustomChange({ base: displayed.base, colors: { ...CUSTOM_SEEDS[displayed.base] } })}
-              className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+              className="text-xs text-accent hover:underline"
             >
               Reset to {displayed.base} defaults
             </button>

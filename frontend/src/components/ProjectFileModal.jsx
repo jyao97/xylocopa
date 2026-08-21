@@ -121,7 +121,7 @@ export default function ProjectFileModal({ project, filename, onClose }) {
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !hasChanges}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 transition-colors disabled:opacity-40"
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg accent-tint-15 text-accent hover:accent-tint-25 transition-colors disabled:opacity-40"
                 >
                   {saving ? "Saving..." : "Save"}
                 </button>
@@ -152,7 +152,7 @@ export default function ProjectFileModal({ project, filename, onClose }) {
               type="button"
               onClick={handleScaffold}
               disabled={saving}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 transition-colors disabled:opacity-40"
+              className="px-4 py-2 text-sm font-medium rounded-lg accent-tint-15 text-accent hover:accent-tint-25 transition-colors disabled:opacity-40"
             >
               {saving ? "Generating..." : `Generate ${filename}`}
             </button>

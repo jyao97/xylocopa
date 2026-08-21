@@ -213,7 +213,7 @@ export default function ClaudeMdDiffModal({ data, project, onClose, onApplied })
           <button
             disabled={applying}
             onClick={handleAcceptAll}
-            className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-accent hover:opacity-90 text-accent-ink text-sm font-semibold transition-colors disabled:opacity-50"
           >
             {applying ? "Writing..." : "Accept"}
           </button>
@@ -243,14 +243,14 @@ export default function ClaudeMdDiffModal({ data, project, onClose, onApplied })
             value={reviewText}
             onChange={(e) => setReviewText(e.target.value)}
             spellCheck={false}
-            className="w-full h-full min-h-[60vh] bg-surface text-body text-xs font-mono p-4 rounded-lg border border-divider outline-none focus:border-cyan-500 resize-none leading-relaxed"
+            className="w-full h-full min-h-[60vh] bg-surface text-body text-xs font-mono p-4 rounded-lg border border-divider outline-none focus:border-accent resize-none leading-relaxed"
           />
         </div>
         <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t border-divider">
           <button
             disabled={applying}
             onClick={() => handleApplyFinal(reviewText)}
-            className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-accent hover:opacity-90 text-accent-ink text-sm font-semibold transition-colors disabled:opacity-50"
           >
             {applying ? "Applying..." : "Apply"}
           </button>
@@ -279,13 +279,13 @@ export default function ClaudeMdDiffModal({ data, project, onClose, onApplied })
       <div className="shrink-0 border-b border-divider bg-surface sticky top-0 z-10">
         {/* Summary line */}
         <div className="px-4 pt-2 pb-1 text-xs text-dim">
-          <span className="text-green-500">{addCount} addition{addCount !== 1 ? "s" : ""}</span>, <span className="text-red-400">{removeCount} removal{removeCount !== 1 ? "s" : ""}</span>
+          <span className="text-green-600 dark:text-green-400">{addCount} addition{addCount !== 1 ? "s" : ""}</span>, <span className="text-red-600 dark:text-red-400">{removeCount} removal{removeCount !== 1 ? "s" : ""}</span>
         </div>
         <div className="flex items-center gap-3 px-4 pb-3">
           <button
             disabled={applying}
             onClick={handleAcceptAll}
-            className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-accent hover:opacity-90 text-accent-ink text-sm font-semibold transition-colors disabled:opacity-50"
           >
             {applying ? "Applying..." : "Accept All"}
           </button>
@@ -375,7 +375,7 @@ export default function ClaudeMdDiffModal({ data, project, onClose, onApplied })
                           type="checkbox"
                           checked={fl.checked}
                           onChange={() => toggleLine(fl.key)}
-                          className="w-3.5 h-3.5 rounded accent-cyan-600 cursor-pointer"
+                          className="w-3.5 h-3.5 rounded form-accent cursor-pointer"
                         />
                       ) : null}
                     </div>

@@ -43,7 +43,7 @@ export default function AgentPickerPanel({ onSelect }) {
           placeholder="Search agents..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 text-sm rounded-lg bg-input border border-edge text-body placeholder:text-faint outline-none focus:border-cyan-500 transition-colors"
+          className="w-full px-3 py-2 text-sm rounded-lg bg-input border border-edge text-body placeholder:text-faint outline-none focus:border-accent transition-colors"
         />
       </div>
 

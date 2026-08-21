@@ -10,8 +10,8 @@ export default memo(function TaskCard({ task, isExpanded, onToggle, showProject 
     <button
       type="button"
       onClick={onToggle}
-      className={`w-full text-left rounded-xl bg-surface shadow-card p-4 transition-colors active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
-        isExpanded ? "ring-1 ring-cyan-500/50" : ""
+      className={`w-full text-left rounded-xl bg-surface shadow-card p-4 transition-colors active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        isExpanded ? "ring-1 ring-accent-50" : ""
       }`}
     >
       {/* Top row: badges */}

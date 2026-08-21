@@ -129,7 +129,7 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
     >
       {/* Toolbar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-divider shrink-0">
-        <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
         </svg>
         <span className="text-sm text-label truncate flex-1 min-w-0" title={path}>{filename}</span>
@@ -160,7 +160,7 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
           type="button"
           onClick={() => setShowConsole((v) => !v)}
           title="Toggle console"
-          className={`relative p-1.5 rounded hover:bg-hover transition-colors ${showConsole ? "text-cyan-400" : "text-dim hover:text-label"}`}
+          className={`relative p-1.5 rounded hover:bg-hover transition-colors ${showConsole ? "text-accent" : "text-dim hover:text-label"}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
@@ -340,7 +340,7 @@ export function WebAppCardBubble({ message, agentId }) {
         className="rounded-2xl rounded-bl-md bg-surface shadow-card overflow-hidden max-w-[min(85%,20rem)] cursor-pointer hover:bg-hover transition-colors"
       >
         <div className="flex items-center gap-2.5 px-4 py-3">
-          <svg className="w-5 h-5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
           </svg>
           <div className="flex-1 min-w-0">
@@ -355,8 +355,8 @@ export function WebAppCardBubble({ message, agentId }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
             </svg>
           ) : (
-            <div className="w-7 h-7 rounded-full bg-cyan-500/15 flex items-center justify-center shrink-0">
-              <svg className="w-3.5 h-3.5 ml-px text-cyan-400" fill="currentColor" viewBox="0 0 24 24">
+            <div className="w-7 h-7 rounded-full accent-tint-15 flex items-center justify-center shrink-0">
+              <svg className="w-3.5 h-3.5 ml-px text-accent" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>

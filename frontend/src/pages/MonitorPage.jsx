@@ -39,7 +39,7 @@ function formatResetTime(isoStr) {
 
 function UsageBar({ label, pct, detail }) {
   const barColor =
-    pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-cyan-500";
+    pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-accent";
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -70,7 +70,7 @@ function HealthCard({ label, status }) {
 }
 
 const STORAGE_COLORS = {
-  cyan: { ring: "stroke-cyan-500", dot: "bg-cyan-500", bar: "bg-cyan-500" },
+  cyan: { ring: "stroke-accent", dot: "bg-accent", bar: "bg-accent" },
   violet: { ring: "stroke-violet-500", dot: "bg-violet-500", bar: "bg-violet-500" },
   amber: { ring: "stroke-amber-500", dot: "bg-amber-500", bar: "bg-amber-500" },
   emerald: { ring: "stroke-emerald-500", dot: "bg-emerald-500", bar: "bg-emerald-500" },
@@ -588,7 +588,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                     <button
                       type="button"
                       onClick={() => handleUpdateConfig({ enabled: !backupInfo.enabled })}
-                      className={`relative w-9 h-5 rounded-full transition-colors ${backupInfo.enabled ? "bg-cyan-500" : "bg-zinc-600"}`}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${backupInfo.enabled ? "bg-accent" : "bg-zinc-600"}`}
                     >
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${backupInfo.enabled ? "left-[18px]" : "left-0.5"}`} />
                     </button>
@@ -632,7 +632,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                   type="button"
                   disabled={backupBusy}
                   onClick={handleManualBackup}
-                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 transition-colors disabled:opacity-50"
+                  className="px-2 py-0.5 rounded text-[11px] font-medium accent-tint-20 text-accent hover:accent-tint-25 transition-colors disabled:opacity-50"
                 >
                   {backupBusy ? "..." : "Backup"}
                 </button>
@@ -708,7 +708,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                           title="Restore"
                           className="w-6 h-6 flex items-center justify-center rounded hover:bg-input"
                         >
-                          <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-accent" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
                         </button>
@@ -770,7 +770,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
               aria-label="Toggle assistant character"
               onClick={handleOrbToggle}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                orbOn ? "bg-cyan-500" : "bg-elevated"
+                orbOn ? "bg-accent" : "bg-elevated"
               }`}
             >
               <span
@@ -799,7 +799,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
               aria-label="Toggle e-ink mode"
               onClick={handleEinkToggle}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                einkOn ? "bg-cyan-500" : "bg-elevated"
+                einkOn ? "bg-accent" : "bg-elevated"
               }`}
             >
               <span
@@ -823,7 +823,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                   href="https://github.com/jyao97/xylocopa#telemetry"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-500 hover:underline"
+                  className="text-accent hover:underline"
                 >
                   Details
                 </a>
@@ -842,7 +842,7 @@ export default function MonitorPage({ theme, onToggleTheme }) {
               disabled={!telemetry || telemetry.env_locked || telemetryBusy}
               onClick={handleTelemetryToggle}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                telemetry?.enabled ? "bg-cyan-500" : "bg-elevated"
+                telemetry?.enabled ? "bg-accent" : "bg-elevated"
               }`}
             >
               <span

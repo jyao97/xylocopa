@@ -33,7 +33,7 @@ export default memo(function ActiveCard({ task, selecting, selected, onToggle })
           {/* Pulsing dot — only when not selecting */}
           {!selecting && (
             <div className="shrink-0 mt-[7px]">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse block" />
+              <span className="w-2 h-2 rounded-full bg-accent animate-pulse block" />
             </div>
           )}
 
@@ -49,7 +49,7 @@ export default memo(function ActiveCard({ task, selecting, selected, onToggle })
 
           {/* Row 2: Status + last message */}
           <div className="mt-1.5">
-            <span className="text-sm text-cyan-400 font-medium">Running</span>
+            <span className="text-sm text-accent font-medium">Running</span>
             {task.last_agent_message && (
               <p className="text-sm text-dim leading-relaxed mt-0.5 line-clamp-2">{task.last_agent_message}</p>
             )}

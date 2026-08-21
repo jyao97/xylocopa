@@ -266,7 +266,7 @@ export default function InboxView({ tasks, loading, selecting, selected, onToggl
                 onRefresh={() => {}}
               />
               {isMultiDrag && (
-                <div className="absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-cyan-500 text-white text-xs font-bold flex items-center justify-center shadow-md">
+                <div className="absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shadow-md">
                   {selected.size}
                 </div>
               )}

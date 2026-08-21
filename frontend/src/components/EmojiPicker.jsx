@@ -112,7 +112,7 @@ export default function EmojiPicker({ current, onSelect, onClear, onClose, ancho
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search..."
             autoFocus
-            className="w-full h-8 pl-8 pr-7 rounded-lg bg-elevated text-sm text-body placeholder-hint outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full h-8 pl-8 pr-7 rounded-lg bg-elevated text-sm text-body placeholder-hint outline-none focus:ring-1 focus:ring-accent"
           />
           {query && (
             <button type="button" onClick={() => setQuery("")}
@@ -163,7 +163,7 @@ export default function EmojiPicker({ current, onSelect, onClear, onClose, ancho
                   type="button"
                   onClick={() => handlePick(char)}
                   className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors active:scale-90 ${
-                    isSelected ? "bg-cyan-500/20 ring-1 ring-cyan-500/50" : "hover:bg-input"
+                    isSelected ? "accent-tint-20 ring-1 ring-accent-50" : "hover:bg-input"
                   }`}
                   title={char}
                 >

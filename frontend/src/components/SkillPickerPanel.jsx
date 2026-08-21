@@ -39,7 +39,7 @@ function sourceLabel(source) {
 }
 
 function sourceColor(source) {
-  if (source === "personal") return "text-cyan-400";
+  if (source === "personal") return "text-accent";
   if (source === "project") return "text-emerald-400";
   if (source === "command") return "text-amber-400";
   if (source === "bundled") return "text-faint";

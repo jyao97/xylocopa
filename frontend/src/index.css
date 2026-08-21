@@ -1705,6 +1705,12 @@ svg text { font-family: inherit; }
   .ring-accent      { --tw-ring-color: var(--color-accent); }
   .ring-accent-50   { --tw-ring-color: rgb(var(--color-accent-rgb) / 0.5); }
   .focus-visible\:ring-accent:focus-visible { --tw-ring-color: var(--color-accent); }
+  .focus\:ring-accent:focus { --tw-ring-color: var(--color-accent); }
+  .group:hover .group-hover\:text-accent { color: var(--color-accent); }
+  .hover\:accent-edge-60:hover { border-color: rgb(var(--color-accent-rgb) / 0.6); }
+  .stroke-accent    { stroke: var(--color-accent); }
+  .bg-accent-90     { background-color: rgb(var(--color-accent-rgb) / 0.9); }
+  .form-accent      { accent-color: var(--color-accent); }
   /* shadow-lg's metrics with an accent-tinted shadow color (the FAB) */
   .shadow-accent-fab { box-shadow: 0 10px 15px -3px rgb(var(--color-accent-rgb) / 0.2), 0 4px 6px -4px rgb(var(--color-accent-rgb) / 0.2); }
 

@@ -96,7 +96,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
               type="text"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              className="w-full text-base font-semibold text-heading bg-transparent px-0 py-0.5 border-0 border-b border-transparent focus:border-cyan-500 focus:outline-none transition-colors"
+              className="w-full text-base font-semibold text-heading bg-transparent px-0 py-0.5 border-0 border-b border-transparent focus:border-accent focus:outline-none transition-colors"
               placeholder="Task title"
             />
 
@@ -105,7 +105,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value)}
               rows={2}
-              className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-sm text-body resize-none focus:border-cyan-500 focus:outline-none placeholder-hint"
+              className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-sm text-body resize-none focus:border-accent focus:outline-none placeholder-hint"
               placeholder="Add description..."
             />
 
@@ -134,12 +134,12 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
           {/* Action buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => saveAndAction()} disabled={actionLoading}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 disabled:opacity-50 transition-colors">
+              className="px-2.5 py-1 rounded-lg text-xs font-medium accent-tint-15 text-accent hover:accent-tint-25 disabled:opacity-50 transition-colors">
               Save
             </button>
             <button type="button" onClick={() => saveAndAction(dispatchTask, task.id)}
               disabled={actionLoading || (!editProject && !task.project_name)}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-50 transition-colors">
+              className="px-2.5 py-1 rounded-lg text-xs font-medium bg-green-500/15 text-green-600 dark:text-green-400 hover:bg-green-500/25 disabled:opacity-50 transition-colors">
               Dispatch
             </button>
             {task.status === "PLANNING" && (
@@ -174,10 +174,10 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
 
           {task.status === "EXECUTING" && task.agent_id && (
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               <span className="text-sm text-label">Agent executing</span>
               <button type="button" onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-                className="ml-auto text-xs text-cyan-400 hover:text-cyan-300">
+                className="ml-auto text-xs text-accent hover:opacity-80">
                 View agent &rarr;
               </button>
             </div>
@@ -192,7 +192,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
               )}
               {task.agent_id && (
                 <button type="button" onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-                  className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
+                  className="inline-flex items-center gap-1 text-xs text-accent hover:opacity-80">
                   View agent conversation &rarr;
                 </button>
               )}
@@ -220,7 +220,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
               )}
               {task.agent_id && (
                 <button type="button" onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-                  className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
+                  className="inline-flex items-center gap-1 text-xs text-accent hover:opacity-80">
                   View agent &rarr;
                 </button>
               )}
@@ -229,7 +229,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
 
           {task.status === "CANCELLED" && task.agent_id && (
             <button type="button" onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-              className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
+              className="inline-flex items-center gap-1 text-xs text-accent hover:opacity-80">
               View agent &rarr;
             </button>
           )}
@@ -239,7 +239,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
               {task.rejection_reason && <p className="text-sm text-body">{task.rejection_reason}</p>}
               {task.agent_id && (
                 <button type="button" onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-                  className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
+                  className="inline-flex items-center gap-1 text-xs text-accent hover:opacity-80">
                   View agent &rarr;
                 </button>
               )}
@@ -251,7 +251,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
               {task.error_message && <p className="text-sm text-body">{task.error_message}</p>}
               {task.agent_id && (
                 <button type="button" onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-                  className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300">
+                  className="inline-flex items-center gap-1 text-xs text-accent hover:opacity-80">
                   View agent &rarr;
                 </button>
               )}
@@ -285,7 +285,7 @@ export default function TaskExpandedContent({ task, onRefresh, onCollapse }) {
                 <>
                   <button type="button" onClick={() => doAction(dispatchTask, task.id)}
                     disabled={actionLoading || !task.project_name}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 disabled:opacity-50 transition-colors">
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium accent-tint-15 text-accent hover:accent-tint-25 disabled:opacity-50 transition-colors">
                     Retry
                   </button>
                   <button type="button" onClick={doDelete} disabled={actionLoading}

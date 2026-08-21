@@ -236,7 +236,7 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
         </button>
         <button type="button" onClick={handleNextWeek}
           className="w-full text-left px-4 py-2 text-sm text-body hover:bg-input transition-colors flex items-center gap-2.5">
-          <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           Next Week
@@ -284,8 +284,8 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
               className={`h-8 text-xs rounded-full flex items-center justify-center transition-colors ${
                 !day ? ""
                   : isPast(day) ? "text-faint/30 cursor-not-allowed"
-                  : isSelected(day) ? "bg-cyan-500 text-white font-semibold"
-                  : isToday(day) ? "bg-cyan-500/15 text-cyan-400 font-semibold hover:bg-cyan-500/25"
+                  : isSelected(day) ? "bg-accent text-white font-semibold"
+                  : isToday(day) ? "accent-tint-15 text-accent font-semibold hover:accent-tint-25"
                   : "text-body hover:bg-input"
               }`}
             >
@@ -327,7 +327,7 @@ export default function SendLaterPicker({ onSelect, onClose, onClear, title = "R
           onClick={handleConfirm}
           disabled={!selectedIsFuture}
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-            selectedIsFuture ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-faint cursor-not-allowed"
+            selectedIsFuture ? "bg-accent text-accent-ink hover:opacity-90" : "bg-elevated text-faint cursor-not-allowed"
           }`}
           title="Confirm"
         >

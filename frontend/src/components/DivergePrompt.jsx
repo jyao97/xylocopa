@@ -48,7 +48,7 @@ export default function DivergePrompt({ agentId, message, onClose, onDiverged })
     <div className="diverge-overlay" onClick={() => !busy && onClose?.()}>
       <div className="diverge-card" onClick={(e) => e.stopPropagation()}>
         <p className="diverge-title flex items-center gap-1.5">
-          <svg className="w-[18px] h-[18px] text-cyan-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <svg className="w-[18px] h-[18px] text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 17h-8l-3.5-5H3" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 7h-8l-3.5 5" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M18 10l3-3-3-3" />

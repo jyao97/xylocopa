@@ -43,7 +43,7 @@ export default function VoiceRecorder({
       {micError && (
         <p className="absolute -top-6 left-3 text-xs text-red-400">
           {micError === "cert_needed" ? (
-            <>Microphone needs a trusted certificate. <a href="/api/cert" className="underline text-cyan-400" target="_blank" rel="noopener">Install certificate</a></>
+            <>Microphone needs a trusted certificate. <a href="/api/cert" className="underline text-accent" target="_blank" rel="noopener">Install certificate</a></>
           ) : micError}
         </p>
       )}

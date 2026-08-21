@@ -61,7 +61,7 @@ function MergeDropdown({ branchName, currentName, isMerging, disabled, onMerge }
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={id}
-        className="px-2 py-0.5 rounded-full text-xs font-medium transition-colors bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 active:bg-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:active:bg-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-2 py-0.5 rounded-full text-xs font-medium transition-colors accent-tint-15 text-accent hover:accent-tint-25 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Merge…
       </button>
@@ -534,7 +534,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
                     key={wt.path || idx}
                     className={`flex items-center gap-2 rounded-lg text-sm px-3 py-2 border transition-colors ${
                       isMain
-                        ? "bg-input border-cyan-500/40 text-heading dark:bg-cyan-500/5 dark:border-cyan-500/30 dark:text-cyan-300"
+                        ? "bg-input accent-edge-40 text-heading"
                         : "bg-input border-purple-500/40 text-heading dark:bg-purple-500/5 dark:border-purple-500/30 dark:text-purple-300"
                     }`}
                   >
@@ -543,7 +543,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
                     </svg>
                     <span className="font-mono text-xs truncate">{name}</span>
                     {wt.branch && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isMain ? "bg-cyan-500/15 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300" : "bg-purple-500/15 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isMain ? "accent-tint-15 text-accent" : "bg-purple-500/15 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300"}`}>
                         {wt.branch}
                       </span>
                     )}
@@ -630,10 +630,10 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
                       cleanupMode && isSelected
                         ? "bg-red-500/10 border-red-500/40 text-heading dark:bg-red-500/5 dark:border-red-500/30 dark:text-red-300"
                         : isCurrent
-                          ? "bg-input border-cyan-500/40 text-heading dark:bg-cyan-500/5 dark:border-cyan-500/30 dark:text-cyan-300"
+                          ? "bg-input accent-edge-40 text-heading"
                           : cleanupMode && !isCurrent
                             ? "bg-input border-edge text-heading cursor-pointer hover:border-red-400/50 dark:hover:border-red-500/30"
-                            : "bg-input border-edge text-heading cursor-pointer hover:border-cyan-400/50 dark:hover:border-cyan-500/30"
+                            : "bg-input border-edge text-heading cursor-pointer hover:accent-edge-60 "
                     }`}
                     title={cleanupMode ? (isCurrent ? "Current branch (cannot clean)" : "Click to select for cleanup") : (isCurrent ? "Current branch" : "Double-click to checkout")}
                   >
@@ -669,7 +669,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
 
                     {isCurrent && !cleanupMode && (
                       <svg
-                        className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0"
+                        className="w-4 h-4 text-accent shrink-0"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth={2.5}
@@ -719,8 +719,8 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
                 disabled={pushing}
                 className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
                   pushing
-                    ? "bg-cyan-500/10 text-cyan-400 cursor-wait"
-                    : "bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 active:bg-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:active:bg-cyan-500/25"
+                    ? "accent-tint-10 text-accent cursor-wait"
+                    : "accent-tint-15 text-accent hover:accent-tint-25"
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {pushing ? (
@@ -750,7 +750,7 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
               {/* Working tree line */}
               <div className="flex items-center gap-2">
                 <span className={`inline-block w-2 h-2 rounded-full ${status.clean ? "bg-green-500" : "bg-amber-500"}`} />
-                <span className={`text-sm ${status.clean ? "text-green-400" : "text-amber-400"}`}>
+                <span className={`text-sm ${status.clean ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
                   {status.clean ? "Working tree clean" : "Uncommitted changes"}
                 </span>
                 <span className="text-xs text-dim ml-1">on {status.branch}</span>
@@ -759,8 +759,8 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
               {/* Sync status line — only when ahead */}
               {status.ahead != null && status.ahead > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-cyan-500" />
-                  <span className="text-sm text-cyan-400">
+                  <span className="inline-block w-2 h-2 rounded-full bg-accent" />
+                  <span className="text-sm text-accent">
                     {status.ahead} {status.ahead === 1 ? "commit" : "commits"} ahead of origin
                   </span>
                 </div>
@@ -771,13 +771,13 @@ export default function GitPage({ theme, onToggleTheme, isActive = true }) {
                 <>
                   {status.staged.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-green-400 mb-1">
+                      <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-1">
                         Staged ({status.staged.length})
                       </p>
                       <div className="space-y-0.5">
                         {status.staged.map((f, i) => (
                           <div key={i} className="flex items-center gap-2 text-xs">
-                            <span className="shrink-0 w-4 text-center font-mono text-green-400">{f.status}</span>
+                            <span className="shrink-0 w-4 text-center font-mono text-green-600 dark:text-green-400">{f.status}</span>
                             <span className="font-mono text-heading truncate">{f.path}</span>
                           </div>
                         ))}

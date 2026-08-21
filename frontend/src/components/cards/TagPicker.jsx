@@ -113,7 +113,7 @@ export default function TagPicker({ options, value, onSelect, className, childre
                 type="button"
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150 ${
                   String(opt.value) === String(value)
-                    ? "bg-cyan-500 text-white shadow-sm"
+                    ? "bg-accent text-white shadow-sm"
                     : "text-dim hover:text-heading hover:bg-elevated active:scale-95"
                 }`}
                 onClick={handleSelect(opt.value)}

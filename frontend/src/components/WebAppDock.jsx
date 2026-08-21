@@ -156,7 +156,7 @@ export default function WebAppDock({ chips, onRestore, onClose }) {
           title={`Restore ${app.filename}`}
           className="flex items-center gap-1 pl-2 pr-1 py-1 rounded-full bg-elevated border border-divider shadow-card cursor-pointer hover:bg-hover transition-colors"
         >
-          <svg className="w-3 h-3 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <svg className="w-3 h-3 text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3 7.5 7.03 7.5 12s2.015 9 4.5 9zM3.6 9h16.8M3.6 15h16.8" />
           </svg>
           <span className="text-[11px] leading-4 text-label max-w-[96px] truncate">{app.filename}</span>

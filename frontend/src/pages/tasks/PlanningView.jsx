@@ -67,11 +67,11 @@ function PlanningCard({ task, selecting, selected, onToggle, expanded, onExpand,
                     Needs Answer
                   </span>
                 ) : subState === "needs_approval" ? (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-500">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400">
                     Review Plan
                   </span>
                 ) : (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full accent-tint-15 text-accent">
                     Planning...
                   </span>
                 )}
@@ -191,7 +191,7 @@ function PlanningCard({ task, selecting, selected, onToggle, expanded, onExpand,
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate(`/agents/${task.agent_id}`, { state: forwardState(location) }); }}
-                    className="w-8 h-8 rounded-full bg-cyan-500 text-white flex items-center justify-center hover:bg-cyan-400 active:scale-90 transition-all"
+                    className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent active:scale-90 transition-all"
                     title="View Conversation"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

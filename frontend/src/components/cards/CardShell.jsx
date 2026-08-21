@@ -223,9 +223,9 @@ export default memo(function CardShell({
   // non-layout properties only: shadow, ring, brightness.
   const baseClasses = `w-full text-left rounded-2xl bg-surface overflow-hidden transition-[box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] ${
     expanded && !selecting
-      ? "shadow-2xl ring-1 ring-cyan-500/30 z-10"
+      ? "shadow-2xl ring-1 ring-accent-50 z-10"
       : "shadow-card active:bg-input"
-  } ${selecting && selected ? "ring-2 ring-cyan-500/50 brightness-[0.88]" : ""} ${className}`;
+  } ${selecting && selected ? "ring-2 ring-accent-50 brightness-[0.88]" : ""} ${className}`;
 
   // No swipe support — plain card
   if (!swipeCtx || !taskId) {

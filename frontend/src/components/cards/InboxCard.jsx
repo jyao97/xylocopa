@@ -599,7 +599,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   </span>
                 )}
                 {voice.refining && (
-                  <div className="px-1 pb-1 text-sm text-cyan-400/80 italic animate-pulse">
+                  <div className="px-1 pb-1 text-sm text-accent-70 italic animate-pulse">
                     Refining...
                   </div>
                 )}
@@ -740,7 +740,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                         value={task.worktree_name || ""}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => { e.stopPropagation(); update("worktree_name", e.target.value); }}
-                        className="w-full mt-1 px-2 py-1.5 rounded-lg text-xs bg-elevated text-heading placeholder-hint outline-none border border-edge/30 focus:border-cyan-500/50 transition-colors"
+                        className="w-full mt-1 px-2 py-1.5 rounded-lg text-xs bg-elevated text-heading placeholder-hint outline-none border border-edge/30 focus:border-accent transition-colors"
                       />
                     ) : null}>
                     <span className="flex items-center gap-0.5">
@@ -869,7 +869,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                   <button type="button" onClick={handleDispatch}
                     disabled={!task.project_name}
                     className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-all ${
-                      task.project_name ? "bg-cyan-500 text-white hover:bg-cyan-400" : "bg-elevated text-faint cursor-not-allowed"
+                      task.project_name ? "bg-accent text-accent-ink hover:opacity-90" : "bg-elevated text-faint cursor-not-allowed"
                     }`}
                     title={task.project_name ? "Start task" : "Select a project first"}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

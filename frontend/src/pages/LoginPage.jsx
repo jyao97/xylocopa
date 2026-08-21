@@ -151,7 +151,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={submitting || !password}
-                className="w-full py-2 rounded-lg text-sm font-medium transition-all bg-cyan-600/90 text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
+                className="w-full py-2 rounded-lg text-sm font-medium transition-all bg-accent-90 text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
               >
                 {submitting
                   ? "..."
@@ -168,7 +168,7 @@ export default function LoginPage() {
           First time on this device?{" "}
           <a
             href="/cert-guide"
-            className="text-cyan-400 hover:underline"
+            className="text-accent hover:underline"
           >
             Install CA certificate
           </a>

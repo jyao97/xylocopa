@@ -394,8 +394,8 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
       const el = document.querySelector("[data-unread='1']");
       if (!el) return;
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("ring-2", "ring-cyan-400");
-      setTimeout(() => el.classList.remove("ring-2", "ring-cyan-400"), 1500);
+      el.classList.add("ring-2", "ring-accent");
+      setTimeout(() => el.classList.remove("ring-2", "ring-accent"), 1500);
     };
     window.addEventListener("nav-scroll-to-unread", handler);
     return () => window.removeEventListener("nav-scroll-to-unread", handler);
@@ -606,7 +606,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
               type="button"
               onClick={handleToggleAgentNotifs}
               title={agentNotifsOn ? "Mute all agent notifications" : "Unmute all agent notifications"}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-input transition-colors ${agentNotifsOn ? "text-cyan-400" : "text-dim"}`}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-input transition-colors ${agentNotifsOn ? "text-accent" : "text-dim"}`}
             >
               {agentNotifsOn ? (
                 <Bell className="w-4 h-4" />
@@ -639,7 +639,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
             <button
               type="button"
               onClick={allSelected ? deselectAll : selectAll}
-              className="justify-self-start text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-start text-sm font-medium text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               {allSelected ? "Deselect All" : "Select All"}
             </button>
@@ -649,7 +649,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
             <button
               type="button"
               onClick={exitSelectMode}
-              className="justify-self-end text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-end text-sm font-semibold text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               Done
             </button>
@@ -671,7 +671,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search agents & messages..."
-            className="w-full h-9 pl-9 pr-8 rounded-lg bg-surface border border-divider text-sm text-body placeholder-hint focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full h-9 pl-9 pr-8 rounded-lg bg-surface border border-divider text-sm text-body placeholder-hint focus:outline-none focus:ring-1 focus:ring-accent"
           />
           {search && (
             <button
@@ -735,7 +735,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                     <button
                       type="button"
                       onClick={() => navigate(`/agents/${agentId}`, { state: forwardState(location) })}
-                      className="w-full text-left px-3 py-1 border-t border-divider text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors"
+                      className="w-full text-left px-3 py-1 border-t border-divider text-[10px] text-accent hover:opacity-80 transition-colors"
                     >
                       +{group.items.length - 3} more
                     </button>
@@ -783,7 +783,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                             {s.tmux_session || s.project_name || "unknown"}
                           </span>
                           {s.project_name && (
-                            <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 truncate">
+                            <span className="text-[10px] font-medium px-1.5 py-px rounded-full accent-tint-15 text-accent truncate">
                               {s.project_name}
                             </span>
                           )}
@@ -796,7 +796,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
                         type="button"
                         onClick={() => handleAdopt(s)}
                         disabled={adoptingId === fk}
-                        className="shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/25 transition-colors disabled:opacity-50"
+                        className="shrink-0 px-3 py-1 rounded-full text-xs font-medium accent-tint-15 text-accent hover:accent-tint-25 transition-colors disabled:opacity-50"
                       >
                         {adoptingId === fk ? "Linking…" : "Adopt"}
                       </button>
@@ -944,7 +944,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
               type="button"
               onClick={handleBulkMarkRead}
               disabled={bulkMarking || unreadSelected.length === 0}
-              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-accent hover:opacity-90 text-accent-ink text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 18h10a2 2 0 002-2V8H3v8a2 2 0 002 2zM17 8h2a2 2 0 010 4h-2M8 2v3M12 2v3" />

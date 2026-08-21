@@ -153,7 +153,7 @@ function CertRegenSection() {
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white text-sm font-bold flex items-center justify-center">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent text-white text-sm font-bold flex items-center justify-center">
           1
         </div>
         <div className="min-w-0 flex-1">
@@ -175,7 +175,7 @@ function CertRegenSection() {
       </div>
 
       <div className="flex gap-3">
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white text-sm font-bold flex items-center justify-center">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent text-white text-sm font-bold flex items-center justify-center">
           2
         </div>
         <div className="min-w-0 flex-1">
@@ -185,7 +185,7 @@ function CertRegenSection() {
             type="button"
             onClick={handleRegenerate}
             disabled={regenerating || isCovered}
-            className="mt-2 px-3 py-1.5 rounded-md text-xs bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+            className="mt-2 px-3 py-1.5 rounded-md text-xs bg-accent hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white"
           >
             {regenerating ? "Regenerating…" : isCovered ? "No regen needed" : "Regenerate"}
           </button>
@@ -205,7 +205,7 @@ function StepList({ steps, onLinkClick }) {
     <div className="space-y-4">
       {steps.map((s) => (
         <div key={s.num} className="flex gap-3">
-          <div className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white text-sm font-bold flex items-center justify-center">
+          <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent text-white text-sm font-bold flex items-center justify-center">
             {s.num}
           </div>
           <div className="min-w-0">
@@ -218,7 +218,7 @@ function StepList({ steps, onLinkClick }) {
                   <a
                     href={s.link.href}
                     onClick={onLinkClick}
-                    className="text-cyan-400 underline"
+                    className="text-accent underline"
                   >
                     {s.link.label}
                   </a>
@@ -296,14 +296,14 @@ export default function CertGuidePage() {
           <button
             type="button"
             onClick={() => setPlatform("ios")}
-            className={`px-3 py-1 rounded-full transition-colors ${platform === "ios" ? "bg-cyan-600 text-white" : "bg-surface/50 text-dim hover:text-heading"}`}
+            className={`px-3 py-1 rounded-full transition-colors ${platform === "ios" ? "bg-accent text-white" : "bg-surface/50 text-dim hover:text-heading"}`}
           >
             iOS
           </button>
           <button
             type="button"
             onClick={() => setPlatform("android")}
-            className={`px-3 py-1 rounded-full transition-colors ${platform === "android" ? "bg-cyan-600 text-white" : "bg-surface/50 text-dim hover:text-heading"}`}
+            className={`px-3 py-1 rounded-full transition-colors ${platform === "android" ? "bg-accent text-white" : "bg-surface/50 text-dim hover:text-heading"}`}
           >
             Android
           </button>
@@ -353,7 +353,7 @@ export default function CertGuidePage() {
                 <button
                   type="button"
                   onClick={handleAndroidInstall}
-                  className="mt-4 w-full py-3 rounded-xl font-medium bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98] text-white transition-all"
+                  className="mt-4 w-full py-3 rounded-xl font-medium bg-accent hover:opacity-90 active:scale-[0.98] text-white transition-all"
                 >
                   Install Xylocopa App
                 </button>
@@ -365,7 +365,7 @@ export default function CertGuidePage() {
         </div>
 
         <p className="text-center mt-4">
-          <a href="/login" className="text-sm text-cyan-400 hover:underline">
+          <a href="/login" className="text-sm text-accent hover:underline">
             Back to login
           </a>
         </p>

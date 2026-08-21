@@ -125,7 +125,7 @@ function TaskChip({ task, navigate, location }) {
         )}
         <span className="absolute inset-0 rounded-full" style={{ backgroundColor: color }} />
       </span>
-      <span className="text-[11px] text-body truncate flex-1 group-hover:text-cyan-400 transition-colors min-w-0">
+      <span className="text-[11px] text-body truncate flex-1 group-hover:text-accent transition-colors min-w-0">
         {task.title}
       </span>
       <span
@@ -154,7 +154,7 @@ function AgentNode({ agent, children, agentTaskMap, depth, isLast, navigate, loc
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <StatusDot status={agent.status} pulse={isActive} />
-          <span className="text-xs text-heading font-medium truncate group-hover:text-cyan-400 transition-colors">
+          <span className="text-xs text-heading font-medium truncate group-hover:text-accent transition-colors">
             {agent.name}
           </span>
           <span className={`text-[10px] shrink-0 ${textColor}`}>

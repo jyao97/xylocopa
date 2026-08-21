@@ -65,7 +65,7 @@ function NewProjectForm({ showToast, navigate }) {
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))}
             placeholder="my-project"
-            className="w-full min-h-[44px] rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint font-mono focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+            className="w-full min-h-[44px] rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint font-mono focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
           />
           <p className="text-xs text-dim mt-1">Lowercase letters, numbers, hyphens, underscores, dots</p>
         </div>
@@ -77,7 +77,7 @@ function NewProjectForm({ showToast, navigate }) {
             value={gitUrl}
             onChange={(e) => setGitUrl(e.target.value)}
             placeholder="https://github.com/user/repo.git"
-            className="w-full min-h-[44px] rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+            className="w-full min-h-[44px] rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
           />
         </div>
 
@@ -88,7 +88,7 @@ function NewProjectForm({ showToast, navigate }) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What does this project do?"
             rows={2}
-            className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint resize-none focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+            className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-heading placeholder-hint resize-none focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
           />
         </div>
       </div>
@@ -99,7 +99,7 @@ function NewProjectForm({ showToast, navigate }) {
         className={`w-full min-h-[48px] rounded-lg text-base font-semibold transition-colors ${
           submitting || !name.trim()
             ? "bg-elevated text-dim cursor-not-allowed"
-            : "bg-cyan-500 hover:bg-cyan-400 text-white shadow-md shadow-cyan-500/20"
+            : "bg-accent hover:opacity-90 text-accent-ink shadow-md"
         }`}
       >
         {submitting ? "Creating Project..." : "Create Project"}

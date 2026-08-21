@@ -97,15 +97,15 @@ const AgentRow = memo(function AgentRow({
       onTouchCancel={onTouchMovePrefetch}
       {...longPressHandlers}
       style={{ WebkitTapHighlightColor: "transparent" }}
-      className={`w-full text-left rounded-2xl bg-surface shadow-card overflow-hidden transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 hover:ring-1 hover:ring-ring-hover ${
-        selecting && selected ? "ring-2 ring-cyan-500/50 brightness-[0.88]" : ""
+      className={`w-full text-left rounded-2xl bg-surface shadow-card overflow-hidden transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:ring-1 hover:ring-ring-hover ${
+        selecting && selected ? "ring-2 ring-accent-50 brightness-[0.88]" : ""
       }`}
     >
       <div className="flex items-start gap-3 px-5 py-[18px]">
         {/* Status dot */}
         <div className={`shrink-0 w-2.5 h-2.5 rounded-full self-center -ml-1 mr-1 ${
-          agent.status === "EXECUTING" ? "bg-cyan-400 animate-glow"
-            : agent.status === "IDLE" ? "bg-cyan-300/50"
+          agent.status === "EXECUTING" ? "bg-accent animate-glow"
+            : agent.status === "IDLE" ? "accent-tint-20"
             : agent.status === "ERROR" ? "bg-red-400"
             : "bg-zinc-400/50"
         }`} />
@@ -137,7 +137,7 @@ const AgentRow = memo(function AgentRow({
                 </span>
               )}
               {agent.unread_count > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-cyan-500 text-white text-xs font-bold">
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-accent text-white text-xs font-bold">
                   {agent.unread_count}
                 </span>
               )}

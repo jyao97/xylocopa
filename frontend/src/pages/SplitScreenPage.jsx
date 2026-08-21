@@ -386,7 +386,7 @@ export default function SplitScreenPage() {
                 title={l.label}
                 className={`p-1 rounded-md transition-colors ${
                   effectiveLayout === l.key
-                    ? "bg-cyan-500/20 text-cyan-400"
+                    ? "accent-tint-20 text-accent"
                     : "text-dim hover:text-body hover:bg-input"
                 }`}
               >

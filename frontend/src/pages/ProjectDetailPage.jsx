@@ -1051,7 +1051,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
               type="button"
               onClick={openEmojiPicker}
               title="Change project icon"
-              className="shrink-0 rounded-lg p-1 -m-1 hover:bg-input transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+              className="shrink-0 rounded-lg p-1 -m-1 hover:bg-input transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <ProjectRing
                 emoji={project.emoji}
@@ -1072,7 +1072,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                       if (e.key === "Escape") setEditingName(false);
                     }}
                     maxLength={100}
-                    className="text-lg font-bold text-heading min-w-0 flex-1 bg-input border border-cyan-500 rounded px-1.5 py-0.5 outline-none"
+                    className="text-lg font-bold text-heading min-w-0 flex-1 bg-input border border-accent rounded px-1.5 py-0.5 outline-none"
                   />
                 ) : (
                   <h1
@@ -1112,7 +1112,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                   {["CLAUDE.md", "PROGRESS.md"].map((fn) => {
                     const letter = fn === "CLAUDE.md" ? "C" : "P";
                     const exists = fileExists[fn];
-                    const color = exists === false ? "text-zinc-500 hover:text-zinc-400" : "text-cyan-400 hover:text-cyan-300";
+                    const color = exists === false ? "text-zinc-500 hover:text-zinc-400" : "text-accent hover:opacity-80";
                     return (
                       <button
                         key={fn}
@@ -1176,7 +1176,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search agents, messages & files..."
-          className="w-full h-9 pl-9 pr-8 rounded-lg bg-surface border border-divider text-sm text-body placeholder-hint focus:outline-none focus:ring-1 focus:ring-cyan-500"
+          className="w-full h-9 pl-9 pr-8 rounded-lg bg-surface border border-divider text-sm text-body placeholder-hint focus:outline-none focus:ring-1 focus:ring-accent"
         />
         {search && (
           <button
@@ -1238,7 +1238,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                     <button
                       type="button"
                       onClick={() => navigate(`/agents/${agentId}`, { state: forwardState(location) })}
-                      className="w-full text-left px-3 py-1 border-t border-divider text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors"
+                      className="w-full text-left px-3 py-1 border-t border-divider text-[10px] text-accent hover:opacity-80 transition-colors"
                     >
                       +{group.items.length - 3} more
                     </button>
@@ -1331,7 +1331,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
             type="button"
             disabled={activating}
             onClick={handleActivate}
-            className="shrink-0 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+            className="shrink-0 px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent disabled:opacity-50 transition-colors"
           >
             {activating ? "Activating..." : "Activate"}
           </button>
@@ -1356,7 +1356,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                   <button
                     type="button"
                     onClick={allSelected ? deselectAll : selectAll}
-                    className="justify-self-start text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+                    className="justify-self-start text-sm font-medium text-accent hover:opacity-80 transition-colors px-2 py-1"
                   >
                     {allSelected ? "Deselect All" : "Select All"}
                   </button>
@@ -1366,7 +1366,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                   <button
                     type="button"
                     onClick={exitSelectMode}
-                    className="justify-self-end text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+                    className="justify-self-end text-sm font-semibold text-accent hover:opacity-80 transition-colors px-2 py-1"
                   >
                     Done
                   </button>
@@ -1431,7 +1431,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
               type="button"
               disabled={refreshingClaudeMd}
               onClick={handleRefreshClaudeMd}
-              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 active:bg-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:active:bg-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 accent-tint-15 text-accent hover:accent-tint-25 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {refreshingClaudeMd ? (
                 <>
@@ -1457,7 +1457,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
             type="button"
             disabled={rebuildingInsights}
             onClick={handleRebuildInsights}
-            className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 active:bg-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:active:bg-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors accent-tint-15 text-accent hover:accent-tint-25 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {rebuildingInsights ? "Rebuilding..." : "Rebuild"}
           </button>
@@ -1487,7 +1487,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
               type="button"
               disabled={activating}
               onClick={handleActivate}
-              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 active:bg-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:active:bg-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors accent-tint-15 text-accent hover:accent-tint-25 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {activating ? "Activating..." : "Activate"}
             </button>
@@ -1525,7 +1525,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                 type="button"
                 disabled={renaming}
                 onClick={confirmRename}
-                className="flex-1 min-h-[44px] rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-sm transition-colors disabled:opacity-50"
+                className="flex-1 min-h-[44px] rounded-lg bg-accent hover:opacity-90 text-accent-ink font-semibold text-sm transition-colors disabled:opacity-50"
               >
                 {renaming ? "Renaming..." : "Rename"}
               </button>
@@ -1661,7 +1661,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
                       showToast("Apply failed: " + (err.message || "unknown error"), "error");
                     }
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-xs font-medium hover:bg-cyan-500 transition-colors"
+                  className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent transition-colors"
                 >
                   Apply
                 </button>
@@ -1688,7 +1688,7 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
               type="button"
               onClick={handleBulkMarkRead}
               disabled={bulkBusy || unreadSelected.length === 0}
-              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 18h10a2 2 0 002-2V8H3v8a2 2 0 002 2zM17 8h2a2 2 0 010 4h-2M8 2v3M12 2v3" />

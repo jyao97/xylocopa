@@ -229,7 +229,7 @@ function AuthGuard({ children }) {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm hover:bg-cyan-500 transition-colors"
+          className="px-4 py-2 rounded-lg bg-accent text-white text-sm hover:bg-accent transition-colors"
         >
           Retry
         </button>

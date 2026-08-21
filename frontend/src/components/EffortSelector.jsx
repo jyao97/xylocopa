@@ -17,7 +17,7 @@ export default function EffortSelector({ value, onChange }) {
           title={lvl}
           className={`whitespace-nowrap px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
             value === lvl
-              ? "bg-cyan-600 text-white shadow-sm"
+              ? "bg-accent text-white shadow-sm"
               : "text-body hover:text-heading"
           }`}
         >

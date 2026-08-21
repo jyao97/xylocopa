@@ -360,7 +360,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
               <button
                 type="button"
                 onClick={reconnect}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-cyan-600/90 hover:bg-cyan-500 text-white text-sm transition-colors"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-accent-90 text-accent-ink text-sm transition-opacity hover:opacity-90"
               >
                 <RotateCw className="w-3.5 h-3.5" strokeWidth={2} />
                 Reconnect
@@ -388,7 +388,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
               }}
               className={`flex-1 h-9 rounded-md text-[13px] font-medium transition-colors ${
                 k.ctrl && ctrlArmed
-                  ? "bg-cyan-600 text-white"
+                  ? "bg-accent text-accent-ink"
                   : "bg-input text-body active:bg-hover"
               }`}
             >

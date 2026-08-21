@@ -96,7 +96,7 @@ function BookmarkRow({ projectName, item, onOpen, isPendingDelete, onTogglePendi
         className={`w-full text-left transition-[background-color] duration-200 ${
           editing
             ? ""
-            : "active:bg-input hover:bg-input/40 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+            : "active:bg-input hover:bg-input/40 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         }`}
       >
         <div className="flex items-start gap-3 px-5 py-3">
@@ -126,7 +126,7 @@ function BookmarkRow({ projectName, item, onOpen, isPendingDelete, onTogglePendi
                   placeholder="Title — leave empty to use AI summary"
                   rows={Math.min(6, Math.max(1, draft.split("\n").length))}
                   disabled={saving}
-                  className="w-full bg-input rounded-md px-2 py-0.5 text-[13px] leading-snug font-medium text-heading resize-none outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+                  className="w-full bg-input rounded-md px-2 py-0.5 text-[13px] leading-snug font-medium text-heading resize-none outline-none focus:ring-2 focus:ring-accent disabled:opacity-60"
                 />
               ) : (
                 <p className="text-[13px] leading-snug font-medium text-heading truncate">

@@ -8,7 +8,7 @@ import { relativeTime, durationDisplay } from "../lib/formatters";
 import { forwardState } from "../lib/nav";
 import PopoverArrow from "./PopoverArrow";
 
-// Project bars/dots in the viewing-time popover use cyan (the app's accent)
+// Project bars/dots in the viewing-time popover use the theme accent token
 // with decreasing opacity by rank, so the top project reads as primary and
 // the tail fades out. Avoids rainbow palettes that clash with the rest of
 // the UI, which never differentiates projects by hue.
@@ -38,7 +38,7 @@ function formatHoursShort(seconds) {
 function QueueItem({ status, label, sub, dim, onClick }) {
   const s = status || "";
   const isIdle = s === "IDLE";
-  const bgClass = isIdle ? "bg-green-500/15 text-green-500"
+  const bgClass = isIdle ? "bg-green-500/15 text-green-600 dark:text-green-400"
     : "accent-tint-15 text-accent";
   return (
     <div className="flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover rounded px-1 -mx-1 py-0.5" onClick={onClick}>
@@ -130,7 +130,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
           <div className="flex-1 min-w-0">
             <div className="text-heading text-sm font-semibold">Agent Queue</div>
             <div className="text-dim text-xs mt-0.5 flex items-center gap-2">
-              {totalRunning > 0 && <span className="text-cyan-500">{totalRunning} running</span>}
+              {totalRunning > 0 && <span className="text-accent">{totalRunning} running</span>}
               {totalRunning > 0 && pending.length > 0 && <span>·</span>}
               {pending.length > 0 && <span className="text-amber-500">{pending.length} waiting</span>}
               {totalRunning === 0 && pending.length === 0 && <span>idle</span>}
@@ -140,7 +140,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
             <button
               type="button"
               onClick={() => setShowDone(v => !v)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/12 text-green-500 hover:bg-green-500/20 transition-colors"
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/12 text-green-600 dark:text-green-400 hover:bg-green-500/20 transition-colors"
             >
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -184,7 +184,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
                       <div key={`a${i}`} className={`w-[10px] h-[10px] rounded-sm transition-all ${
                         i >= max
                           ? "bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]"
-                          : "bg-cyan-500 shadow-[0_0_4px_rgba(6,182,212,0.4)]"
+                          : "bg-accent shadow-[0_0_4px_rgba(6,182,212,0.4)]"
                       }`} />
                     ))}
                     {/* Idle agents — green */}
@@ -197,7 +197,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
                     ))}
                     {/* Idle agents — dimmer */}
                     {Array.from({ length: idle }, (_, i) => (
-                      <div key={`i${i}`} className="w-[10px] h-[10px] rounded-sm bg-cyan-500/30 border border-cyan-500/40" />
+                      <div key={`i${i}`} className="w-[10px] h-[10px] rounded-sm accent-tint-20 border accent-edge-40" />
                     ))}
                     {/* Empty slots */}
                     {Array.from({ length: Math.max(0, max - alive) }, (_, i) => (
@@ -246,7 +246,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
             {todayCompleted.map(t => (
               <div key={t.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover rounded px-1 -mx-1 py-0.5"
                 onClick={() => { onClose(); navigate(`/tasks/${t.id}`); }}>
-                <span className="w-4 h-4 rounded-full bg-green-500/15 text-green-500 flex items-center justify-center shrink-0">
+                <span className="w-4 h-4 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
@@ -720,7 +720,7 @@ export default function PageHeader({ title, theme, onToggleTheme, actions, selec
     chipLabel = `Mem ${memLabel}`;
     chipTitle = `Elevated memory: orchestrator using ${memLabel} (steady state ~200 MB).`;
   } else {
-    chipCls = "bg-green-500/15 text-green-500";
+    chipCls = "bg-green-500/15 text-green-600 dark:text-green-400";
     dotColor = "bg-green-500";
     chipLabel = "OK";
     chipTitle = "System healthy";

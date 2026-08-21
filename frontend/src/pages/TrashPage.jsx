@@ -25,8 +25,8 @@ const TrashRow = memo(function TrashRow({ folder, busy, onRestore, onDelete, sel
       type="button"
       {...longPressHandlers}
       style={{ WebkitTapHighlightColor: "transparent" }}
-      className={`w-full text-left flex items-center justify-between rounded-xl bg-surface shadow-card overflow-hidden px-5 py-4 transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 hover:ring-1 hover:ring-ring-hover ${
-        selecting && selected ? "ring-2 ring-cyan-500/50 brightness-[0.88]" : ""
+      className={`w-full text-left flex items-center justify-between rounded-xl bg-surface shadow-card overflow-hidden px-5 py-4 transform-gpu transition-[transform,box-shadow,ring-color,opacity,background-color,filter] duration-400 ease-[cubic-bezier(0.22,1.15,0.36,1)] active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:ring-1 hover:ring-ring-hover ${
+        selecting && selected ? "ring-2 ring-accent-50 brightness-[0.88]" : ""
       }`}
     >
       <div className="min-w-0">
@@ -39,7 +39,7 @@ const TrashRow = memo(function TrashRow({ folder, busy, onRestore, onDelete, sel
             data-no-longpress
             disabled={busy === folder.name}
             onClick={(e) => { e.stopPropagation(); onRestore(folder.name); }}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg accent-tint-20 text-accent hover:accent-tint-25 disabled:opacity-50 transition-colors"
           >
             {busy === folder.name ? "..." : "Restore"}
           </button>
@@ -174,7 +174,7 @@ export default function TrashPage({ theme, onToggleTheme }) {
             <button
               type="button"
               onClick={allSelected ? deselectAll : selectAll}
-              className="justify-self-start text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-start text-sm font-medium text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               {allSelected ? "Deselect All" : "Select All"}
             </button>
@@ -184,7 +184,7 @@ export default function TrashPage({ theme, onToggleTheme }) {
             <button
               type="button"
               onClick={exitSelectMode}
-              className="justify-self-end text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-end text-sm font-semibold text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               Done
             </button>
@@ -240,7 +240,7 @@ export default function TrashPage({ theme, onToggleTheme }) {
               type="button"
               onClick={handleBulkRestore}
               disabled={bulkBusy}
-              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

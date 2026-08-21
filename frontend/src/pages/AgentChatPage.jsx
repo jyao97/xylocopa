@@ -1510,7 +1510,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
             {isUser && message.source === "web" && !isPreDelivery && (isSlashCommand ? (
               (message.delivered_at || status === "delivered" || isExecuted) && (
                 (message.completed_at || isExecuted) ? (
-                  <span className="ml-auto text-green-400" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
+                  <span className="ml-auto text-green-600 dark:text-green-400" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
                     <svg className="w-4 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 28 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2 13l4 4L16 7" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10 13l4 4L24 7" />
@@ -1525,14 +1525,14 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 )
               )
             ) : isExecuted ? (
-              <span className="ml-auto text-green-400" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
+              <span className="ml-auto text-green-600 dark:text-green-400" title={`Executed ${message.completed_at ? new Date(message.completed_at).toLocaleTimeString() : ""}`}>
                 <svg className="w-4 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 28 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2 13l4 4L16 7" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 13l4 4L24 7" />
                 </svg>
               </span>
             ) : status === "delivered" || message.delivered_at ? (
-              <span className="ml-auto text-green-400" title={`Delivered ${message.delivered_at ? new Date(message.delivered_at).toLocaleTimeString() : ""}`}>
+              <span className="ml-auto text-green-600 dark:text-green-400" title={`Delivered ${message.delivered_at ? new Date(message.delivered_at).toLocaleTimeString() : ""}`}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
@@ -4449,7 +4449,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                   type="button"
                   onClick={() => setShowTaskCard(true)}
                   title="View task"
-                  className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-500 dark:text-orange-400 hover:bg-orange-500/25 transition-colors"
+                  className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500/25 transition-colors"
                 >
                   Task
                 </button>
@@ -4769,7 +4769,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                   return (
                     <div key={msg.id} data-msg-id={msg.id} data-msg-type="retry_marker" className="mx-auto w-[85%] mb-3 rounded-xl bg-orange-500/8 border border-orange-500/20 px-4 py-3">
                       <div className="flex items-center gap-1.5 mb-2">
-                        <span className="text-[10px] font-semibold text-orange-500 dark:text-orange-400 mr-1">Attempts</span>
+                        <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 mr-1">Attempts</span>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {attempts.map((a, i) => (
                             <button
@@ -4779,7 +4779,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                               className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
                                 i === sel
                                   ? "bg-orange-500 text-white"
-                                  : "bg-transparent border border-orange-500/40 text-orange-500 dark:text-orange-400 hover:bg-orange-500/15"
+                                  : "bg-transparent border border-orange-500/40 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15"
                               }`}
                             >
                               #{i + 1}
@@ -4790,7 +4790,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                           <button
                             type="button"
                             onClick={() => embedded && onNavigateAgent ? onNavigateAgent(selAgent.agent_id) : navigate(`/agents/${selAgent.agent_id}`, { state: forwardState(location) })}
-                            className="ml-auto text-[10px] text-orange-500 dark:text-orange-400 hover:underline"
+                            className="ml-auto text-[10px] text-orange-600 dark:text-orange-400 hover:underline"
                           >
                             Enter Chat →
                           </button>
@@ -4801,7 +4801,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                       )}
                       {showSummary && (
                         <details className="mt-2">
-                          <summary className="text-[10px] font-medium text-orange-500 dark:text-orange-400 cursor-pointer select-none list-none flex items-center gap-1">
+                          <summary className="text-[10px] font-medium text-orange-600 dark:text-orange-400 cursor-pointer select-none list-none flex items-center gap-1">
                             <span className="transition-transform duration-200 text-[8px] [details[open]>&]:rotate-90">▶</span>
                             Agent Summary
                           </summary>
@@ -4816,7 +4816,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                       )}
                       {showUserFeedback && (
                         <details className="mt-2">
-                          <summary className="text-[10px] font-medium text-orange-500 dark:text-orange-400 cursor-pointer select-none list-none flex items-center gap-1">
+                          <summary className="text-[10px] font-medium text-orange-600 dark:text-orange-400 cursor-pointer select-none list-none flex items-center gap-1">
                             <span className="transition-transform duration-200 text-[8px] [details[open]>&]:rotate-90">▶</span>
                             User Feedback
                           </summary>

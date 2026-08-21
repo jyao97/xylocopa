@@ -219,8 +219,8 @@ export default function TasksPage({ theme, onToggleTheme, isActive = true }) {
             title="AI batch process — refine prompts & assign projects"
             className={`h-7 px-2.5 flex items-center gap-1.5 rounded-full text-[11px] font-semibold transition-colors ${
               batchProcessing
-                ? "bg-cyan-500 text-white animate-pulse"
-                : "bg-cyan-500/15 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/25 active:scale-95"
+                ? "bg-accent text-white animate-pulse"
+                : "accent-tint-15 text-accent hover:accent-tint-25 active:scale-95"
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -233,7 +233,7 @@ export default function TasksPage({ theme, onToggleTheme, isActive = true }) {
             <button
               type="button"
               onClick={allSelected ? deselectAll : selectAll}
-              className="justify-self-start text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-start text-sm font-medium text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               {allSelected ? "Deselect All" : "Select All"}
             </button>
@@ -243,7 +243,7 @@ export default function TasksPage({ theme, onToggleTheme, isActive = true }) {
             <button
               type="button"
               onClick={exitSelectMode}
-              className="justify-self-end text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors px-2 py-1"
+              className="justify-self-end text-sm font-semibold text-accent hover:opacity-80 transition-colors px-2 py-1"
             >
               Done
             </button>
@@ -289,10 +289,10 @@ export default function TasksPage({ theme, onToggleTheme, isActive = true }) {
               type="button"
               onClick={() => handleBatchProcess([...selected])}
               disabled={batchProcessing || actionLoading}
-              className={`flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg text-sm font-medium text-accent-ink transition-[opacity,background-color] disabled:opacity-50 disabled:cursor-not-allowed ${
                 batchProcessing
-                  ? "bg-gradient-to-r from-cyan-500 to-blue-500 animate-pulse"
-                  : "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500"
+                  ? "bg-accent animate-pulse"
+                  : "bg-accent hover:opacity-90"
               }`}
             >
               <Sparkles className="w-4 h-4" />
@@ -303,7 +303,7 @@ export default function TasksPage({ theme, onToggleTheme, isActive = true }) {
               type="button"
               onClick={handleBulkStart}
               disabled={actionLoading || dispatchableCount === 0}
-              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />

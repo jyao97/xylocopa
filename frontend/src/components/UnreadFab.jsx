@@ -53,7 +53,7 @@ export default function UnreadFab() {
         defaultPosition={defaultPos}
         onClick={handleTap}
         onLongPress={handleLongPress}
-        className="w-11 h-11 flex items-center justify-center rounded-full bg-cyan-500 hover:bg-cyan-400 shadow-lg text-white font-semibold text-base transition-colors"
+        className="w-11 h-11 flex items-center justify-center rounded-full bg-accent hover:opacity-90 shadow-lg text-white font-semibold text-base transition-colors"
       >
         {label}
       </DraggableFab>
@@ -66,7 +66,7 @@ export default function UnreadFab() {
       defaultPosition={defaultPos}
       onClick={handleTap}
       onLongPress={handleLongPress}
-      className="w-11 h-11 flex items-center justify-center rounded-full bg-surface shadow-lg border border-edge text-dim hover:text-cyan-400 hover:border-cyan-500/50 transition-colors hover:shadow-cyan-500/10"
+      className="w-11 h-11 flex items-center justify-center rounded-full bg-surface shadow-lg border border-edge text-dim hover:text-accent hover:accent-edge-60 transition-colors "
     >
       {/* Mobile: top-bottom split icon */}
       <svg className="w-5 h-5 md:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>

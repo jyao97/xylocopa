@@ -13,7 +13,7 @@ export default memo(function TaskCardV2({ task }) {
     <button
       type="button"
       onClick={() => navigate(`/tasks/${task.id}`)}
-      className="w-full text-left rounded-xl bg-surface shadow-card p-4 transition-colors active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 hover:ring-1 hover:ring-ring-hover"
+      className="w-full text-left rounded-xl bg-surface shadow-card p-4 transition-colors active:bg-input focus:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:ring-1 hover:ring-ring-hover"
     >
       {/* Top row: status + project + time */}
       <div className="flex flex-wrap items-center gap-2 mb-1.5">

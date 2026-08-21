@@ -138,7 +138,7 @@ export default function WorktreePill({ name, padY = "py-px", onCopy }) {
                     e.stopPropagation();
                     doCopy();
                   }}
-                  className="text-[10px] text-cyan-500 dark:text-cyan-400 hover:underline"
+                  className="text-[10px] text-accent hover:underline"
                 >
                   Copy
                 </button>

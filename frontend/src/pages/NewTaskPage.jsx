@@ -524,8 +524,8 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
             onDrop={handleDrop}
           >
             {dragOver && (
-              <div className="absolute -inset-5 z-30 rounded-2xl bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
-                <span className="text-sm font-medium text-cyan-400">Drop files here</span>
+              <div className="absolute -inset-5 z-30 rounded-2xl accent-tint-15 border-2 border-dashed border-accent flex items-center justify-center pointer-events-none">
+                <span className="text-sm font-medium text-accent">Drop files here</span>
               </div>
             )}
               <textarea
@@ -544,7 +544,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                 className="w-full min-h-[60px] max-h-[180px] bg-transparent text-sm text-heading placeholder-hint/40 resize-none focus:outline-none leading-relaxed"
               />
               {voice.refining && (
-                <div className="text-sm text-cyan-400/80 italic animate-pulse">
+                <div className="text-sm text-accent-70 italic animate-pulse">
                   Refining...
                 </div>
               )}
@@ -562,7 +562,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                       )}
                       <span className="truncate flex-1 min-w-0 text-dim">{att.originalName}</span>
                       {att.uploading ? (
-                        <svg className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5 text-accent animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
@@ -581,7 +581,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                 <TagPicker options={projectPicker} value={project} onSelect={setProject} placement="top"
                   className={`text-[11px] font-medium rounded-full px-2 py-0.5 cursor-pointer active:scale-90 transition-transform ${
                     project
-                      ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400"
+                      ? "accent-tint-15 text-accent"
                       : `bg-elevated text-faint ${projectFlash ? "bookmark-flash" : ""}`
                   }`}>
                   {project || "Project"}
@@ -606,7 +606,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                       value={worktree === "auto" || worktree === "..." ? "" : worktree}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => { e.stopPropagation(); const val = e.target.value || "auto"; setWorktree(val); try { localStorage.setItem("pref:worktree", val); } catch {} }}
-                      className="w-full mt-1 px-2 py-1.5 rounded-lg text-xs bg-elevated text-heading placeholder-hint outline-none border border-edge/30 focus:border-cyan-500/50 transition-colors"
+                      className="w-full mt-1 px-2 py-1.5 rounded-lg text-xs bg-elevated text-heading placeholder-hint outline-none border border-edge/30 focus:border-accent transition-colors"
                     />
                   ) : null}
                 >
@@ -700,7 +700,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
                   className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-all ${
                     !project || !hasContent || submitting || anyUploading
                       ? "bg-elevated text-dim cursor-not-allowed"
-                      : "bg-cyan-500 text-white hover:bg-cyan-400"
+                      : "bg-accent text-accent-ink hover:opacity-90"
                   }`}
                   title={project ? "Launch agent (⌘/Ctrl+Enter)" : "Pick a project to launch"}
                 >

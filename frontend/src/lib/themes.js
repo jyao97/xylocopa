@@ -40,6 +40,9 @@ export const PRESETS = [
   { id: "silver", name: "Silver", base: "light",
     preview: { page: "#c2c4c7", surface: "#cbcdd0", text: "#26282b" },
     core: { page: "#c2c4c7", surface: "#cbcdd0", heading: "#26282b", body: "#43464a", edge: "#a7a9ad", bubble: "#1d6390" } },
+  { id: "clay", name: "Clay", base: "light",
+    preview: { page: "#cac5be", surface: "#d2cdc6", text: "#2b2723" },
+    core: { page: "#cac5be", surface: "#d2cdc6", heading: "#2b2723", body: "#48423c", edge: "#a8a29a", bubble: "#6f4e37" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
@@ -332,6 +335,11 @@ const TERMINAL_THEMES = {
   silver: {
     background: "#c2c4c7", foreground: "#26282b", cursor: "#1d6390",
     cursorAccent: "#c2c4c7", selectionBackground: "#dadcdf",
+    ...GITHUB_LIGHT_ANSI,
+  },
+  clay: {
+    background: "#cac5be", foreground: "#2b2723", cursor: "#6f4e37",
+    cursorAccent: "#cac5be", selectionBackground: "#e0dbd4",
     ...GITHUB_LIGHT_ANSI,
   },
   // GitHub Dark Dimmed ANSI table.

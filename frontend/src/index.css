@@ -375,7 +375,44 @@
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #b4d0e2;
-}/* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
+}/* Clay — warm greige x brown: the flat tonal model Silver validated,
+   shifted warm. Greige ground, taupe surfaces one small step up,
+   espresso ink, and a cocoa-leather bubble — the classic gray-with-tan
+   pairing, which also sits naturally beside the app's amber tags. */
+.theme-clay {
+  --color-page:       #cac5be;
+  --color-surface:    #d2cdc6;
+  --color-input:      #dad5ce;
+  --color-elevated:   #e0dbd4;
+  --color-hover:      #b9b4ad;
+  --color-inset:      #bcb7b0;
+
+  --color-heading:    #2b2723;
+  --color-body:       #48423c;
+  --color-label:      #5f5952;
+  --color-dim:        #665f57;
+  --color-faint:      #7f776e;
+  --color-ghost:      #989087;
+
+  --color-divider:    #b7b2ab;
+  --color-edge:       #a8a29a;
+  --color-ring-hover: #968f87;
+
+  --color-hint:       #7f776e;
+  --color-shadow:     rgba(43,39,35,0.10);
+  --color-skel:       #dad5ce;
+  --color-glass:      #d2cdc6;
+  --color-glass-nav:  #d6d1ca;
+  --color-glass-edge: rgba(255,255,255,0.35);
+
+  --color-bubble:         #6f4e37;
+  --color-bubble-rgb:     111 78 55;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #dfcbb8;
+}
+
+/* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
    light gray ink. The properly gray theme after two light-gray attempts —
    contrast comes from the dark ground, grayness from the muted ink. */
 .theme-graphite {
@@ -504,6 +541,10 @@
     --color-glass: rgba(203,205,208,0.72);
     --color-glass-nav: rgba(207,209,212,0.68);
   }
+  .theme-clay {
+    --color-glass: rgba(210,205,198,0.72);
+    --color-glass-nav: rgba(214,209,202,0.68);
+  }
   .theme-graphite {
     --color-glass: rgba(45,51,59,0.7);
     --color-glass-nav: rgba(49,56,66,0.68);
@@ -530,6 +571,7 @@ html.no-glass.theme-nord            { --color-glass: #353c4a; --color-glass-nav:
 html.no-glass.theme-everforest      { --color-glass: #313a40; --color-glass-nav: #364046; }
 html.no-glass.theme-ash             { --color-glass: #f4f5f7; --color-glass-nav: #f7f8f9; }
 html.no-glass.theme-silver          { --color-glass: #cbcdd0; --color-glass-nav: #cfd1d4; }
+html.no-glass.theme-clay            { --color-glass: #d2cdc6; --color-glass-nav: #d6d1ca; }
 html.no-glass.theme-graphite        { --color-glass: #2d333b; --color-glass-nav: #313842; }
 html.no-glass.theme-nord-light      { --color-glass: #e0e7f1; --color-glass-nav: #e5ebf4; }
 html.no-glass .glass-bar,

@@ -38,8 +38,8 @@ export const PRESETS = [
     preview: { page: "#f2f3f5", surface: "#ffffff", text: "#1c1e21" },
     core: { page: "#f2f3f5", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
   { id: "silver", name: "Silver", base: "light",
-    preview: { page: "#c2c4c7", surface: "#ffffff", text: "#1c1e21" },
-    core: { page: "#c2c4c7", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
+    preview: { page: "#c2c4c7", surface: "#f2f3f4", text: "#26282b" },
+    core: { page: "#c2c4c7", surface: "#f2f3f4", heading: "#26282b", body: "#43464a", edge: "#aaacb0", bubble: "#1d6390" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
@@ -330,8 +330,8 @@ const TERMINAL_THEMES = {
     ...GITHUB_LIGHT_ANSI,
   },
   silver: {
-    background: "#c2c4c7", foreground: "#2e3135", cursor: "#135b84",
-    cursorAccent: "#c2c4c7", selectionBackground: "#dfe1e4",
+    background: "#c2c4c7", foreground: "#26282b", cursor: "#1d6390",
+    cursorAccent: "#c2c4c7", selectionBackground: "#a9adb2",
     ...GITHUB_LIGHT_ANSI,
   },
   // GitHub Dark Dimmed ANSI table.

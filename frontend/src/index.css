@@ -339,42 +339,45 @@
   --color-bubble-dim:     #b6d2e0;
 }
 
-/* Silver — Ash's deeper sibling: a true medium gray ground (#c2c4c7,
-   user-sampled) with white cards and near-black ink. Secondary tiers run
-   darker than Ash's so on-ground text keeps >=3:1. */
+/* Silver — a palette built AROUND the user-sampled #c2c4c7 ground, after
+   the mid-gray-canvas playbook (Photoshop light UI, classic Mac silver,
+   Figma canvas): OFF-white panels instead of pure white (softer value
+   step), mid-gray borders that are DARKER than the ground so structure
+   reads on both panel and canvas, and a heavier shadow to lift cards. */
 .theme-silver {
   --color-page:       #c2c4c7;
-  --color-surface:    #ffffff;
-  --color-input:      #eef0f2;
-  --color-elevated:   #e3e5e8;
-  --color-hover:      #d7dade;
-  --color-inset:      #c2c4c7;
+  --color-surface:    #f2f3f4;
+  --color-input:      #e6e8ea;
+  --color-elevated:   #dcdee1;
+  --color-hover:      #d0d3d6;
+  --color-inset:      #b8babe;
 
-  --color-heading:    #1c1e21;
-  --color-body:       #3f4247;
-  --color-label:      #5f636a;
-  --color-dim:        #666a70;
-  --color-faint:      #888c92;
-  --color-ghost:      #a3a6ac;
+  --color-heading:    #26282b;
+  --color-body:       #43464a;
+  --color-label:      #5c5f64;
+  --color-dim:        #64676c;
+  --color-faint:      #7f8287;
+  --color-ghost:      #97999e;
 
-  --color-divider:    #e8eaed;
-  --color-edge:       #d9dce0;
-  --color-ring-hover: #b3b6ba;
+  --color-divider:    #d6d8db;
+  --color-edge:       #aaacb0;
+  --color-ring-hover: #96989d;
 
-  --color-hint:       #888c92;
-  --color-shadow:     rgba(28,30,33,0.12);
-  --color-skel:       #eef0f2;
-  --color-glass:      #f4f5f7;
-  --color-glass-nav:  #f7f8f9;
-  --color-glass-edge: rgba(255,255,255,0.6);
+  --color-hint:       #7f8287;
+  --color-shadow:     rgba(30,32,35,0.18);
+  --color-skel:       #e6e8ea;
+  --color-glass:      #eff0f2;
+  --color-glass-nav:  #ebedef;
+  --color-glass-edge: rgba(255,255,255,0.55);
 
-  --color-bubble:         #135b84;
-  --color-bubble-rgb:     19 91 132;
+  /* Steel blue lifted a step from the family #135b84 — the deeper value
+     read near-black against the mid-gray canvas. */
+  --color-bubble:         #1d6390;
+  --color-bubble-rgb:     29 99 144;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
-  --color-bubble-dim:     #b6d2e0;
+  --color-bubble-dim:     #b4d0e2;
 }
-
 /* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
    light gray ink. The properly gray theme after two light-gray attempts —
    contrast comes from the dark ground, grayness from the muted ink. */
@@ -501,8 +504,8 @@
     --color-glass-nav: rgba(246,247,249,0.65);
   }
   .theme-silver {
-    --color-glass: rgba(255,255,255,0.7);
-    --color-glass-nav: rgba(246,247,249,0.65);
+    --color-glass: rgba(242,243,244,0.72);
+    --color-glass-nav: rgba(238,240,242,0.68);
   }
   .theme-graphite {
     --color-glass: rgba(45,51,59,0.7);
@@ -529,7 +532,7 @@ html.no-glass.theme-solarized-light { --color-glass: #eee8d5; --color-glass-nav:
 html.no-glass.theme-nord            { --color-glass: #353c4a; --color-glass-nav: #3a4152; }
 html.no-glass.theme-everforest      { --color-glass: #313a40; --color-glass-nav: #364046; }
 html.no-glass.theme-ash             { --color-glass: #f4f5f7; --color-glass-nav: #f7f8f9; }
-html.no-glass.theme-silver          { --color-glass: #f4f5f7; --color-glass-nav: #f7f8f9; }
+html.no-glass.theme-silver          { --color-glass: #eff0f2; --color-glass-nav: #ebedef; }
 html.no-glass.theme-graphite        { --color-glass: #2d333b; --color-glass-nav: #313842; }
 html.no-glass.theme-nord-light      { --color-glass: #e0e7f1; --color-glass-nav: #e5ebf4; }
 html.no-glass .glass-bar,

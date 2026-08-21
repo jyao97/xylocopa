@@ -35,8 +35,8 @@ export const PRESETS = [
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
   { id: "ash", name: "Ash", base: "light",
-    preview: { page: "#e9e9ea", surface: "#e0e0e2", text: "#55555a" },
-    core: { page: "#e9e9ea", surface: "#e0e0e2", heading: "#55555a", body: "#6b6b70", edge: "#c9c9cd", bubble: "#71717a" } },
+    preview: { page: "#e8eaed", surface: "#e1e4e8", text: "#4a4f55" },
+    core: { page: "#e8eaed", surface: "#e1e4e8", heading: "#4a4f55", body: "#63686f", edge: "#c8ccd2", bubble: "#135b84" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
@@ -322,8 +322,8 @@ const TERMINAL_THEMES = {
     brightCyan: "#83c092", brightWhite: "#fdf1c7",
   },
   ash: {
-    background: "#e9e9ea", foreground: "#55555a", cursor: "#6b6b70",
-    cursorAccent: "#e9e9ea", selectionBackground: "#cccccf",
+    background: "#e8eaed", foreground: "#4a4f55", cursor: "#135b84",
+    cursorAccent: "#e8eaed", selectionBackground: "#ccd1d7",
     ...GITHUB_LIGHT_ANSI,
   },
   // Snow Storm ground, Polar Night ink, nord's own accent set.

@@ -20,21 +20,15 @@
 
 The workflow follows [GTD](https://gettingthingsdone.com/what-is-gtd/), with agents as the executor:
 
-1. **Capture** — an inbox that works from anywhere: type it, speak it (Whisper voice input), or use quick entry; drafts survive closing the app.
-2. **Dispatch** — one click turns a task into an agent: pick a model, optionally enable Auto mode (`--dangerously-skip-permissions`; destructive commands stay blocked by the [safety hook](#safety-guardrails)). Agents are seeded at dispatch with lessons from past sessions in the same project; batch dispatch triages a pile of inbox tasks in one step.
-3. **Monitor** — a mobile-first PWA with split screen and an attention button that always takes you to the oldest unread agent. Chat renders markdown, inline media, LaTeX, and cards for tool approvals and plan review; a deliverable can be a runnable web app opened fullscreen in a sandboxed iframe — the interactive-artifact screenshot above is an agent-built 3D explorer of 6,271 NASA exoplanets, in chat on an iPhone. Push notifications fire when you're away and stay quiet while you watch; a [probe](#agent-control-plane) webhook wakes an agent when CI finishes or a GPU frees up.
-4. **Review** — approve and close, or retry: stopping a missed attempt auto-summarizes what was tried, and the next agent starts from that summary instead of from zero. Per-project diffs, commit history, one-click cleanup and push.
-5. **Remember** — lessons accumulate in a per-project `PROGRESS.md`, editable in the UI and retrieved for future agents; every conversation is persisted, searchable, and resumable.
+1. **Capture** — dump tasks into the inbox from anywhere: type, speak, or quick entry.
+2. **Dispatch** — one click turns a task into an agent; agents run in parallel, each in its own git worktree, seeded with lessons from past sessions.
+3. **Monitor** — the attention button always takes you to the agent that needs you; approve plans and tool calls in chat; notifications fire only when you're away.
+4. **Review** — approve and close, or retry: a stopped attempt is auto-summarized, so the next agent starts from that summary instead of from zero.
+5. **Remember** — lessons land in each project's `PROGRESS.md` and are retrieved for future agents; every conversation stays searchable and resumable.
 
 Every agent runs in a tmux session you can attach to from a terminal, and CLI sessions show up in the web app — sync is two-way:
 
 ![CLI sync demo](docs/cli-sync.gif)
-
-## Why Xylocopa?
-
-Plain `claude` works for one-off sessions. It frays once several run in parallel, across projects, over days: you lose track of which agent needs input, old sessions are hard to find, and every retry starts from scratch. Xylocopa is the task, attention, and memory layer around the same CLI — it launches the `claude` you already use inside tmux on your machine, so your CLAUDE.md files, project setup, and credentials carry over. The only new dependencies are tmux and, for remote access, a VPN such as Tailscale; and it's a server plus PWA rather than a desktop app, so install it once where your code lives and drive it from any browser, including the one in your pocket.
-
-The design assumes agents miss: stopping a bad attempt produces a summary, the next attempt picks it up, and durable lessons land in per-project memory rather than dying with the session.
 
 ## Features
 
@@ -43,7 +37,7 @@ The design assumes agents miss: stopping a bad attempt produces a summary, the n
 | **Tasks & history** | Inbox with voice input, quick capture, drag-to-reorder, draft persistence; retry with auto-summarization; every conversation persisted, full-text searchable, resumable; star sessions, bookmark messages. |
 | **Agent control** | Start/stop/resume; per-agent model, timeout, and permission mode; batch dispatch; lesson retrieval at dispatch; agents read each other's sessions over MCP at ~54× fewer tokens than raw JSONL. |
 | **Chat** | Markdown, inline media, LaTeX; plan-review and tool-approval cards; context-usage and lifetime-cost breakdowns; double-tap a bubble to bookmark, modify, or fork ([gestures](docs/gestures.md)). |
-| **Interactive artifacts** | Agents present runnable deliverables as cards (`webapp_present`): static apps served sandboxed, localhost services reverse-proxied (HTTP + WebSocket), with a console drawer for debugging. |
+| **Interactive artifacts** | Agents present runnable deliverables as cards: web apps served sandboxed, localhost services reverse-proxied (HTTP + WebSocket), console drawer for debugging — the screenshot above is an agent-built 3D explorer of 6,271 NASA exoplanets, in chat on an iPhone. |
 | **Monitoring & notifications** | Split screen (up to 4 panes), real-time WebSocket updates, system monitor (disk, memory, GPU, tokens), weekly stats; hook-based Web Push that fires when you're away and stays quiet while you watch. |
 | **Attention jobs** | Reminders, schedules, and state watchers compiled from natural language ("wake me when the GPU frees up"): time, interval, app-state, and webhook triggers × push-notify, message-agent, and dispatch-task actions. An experimental orb assistant manages them from a chat bubble (off by default). |
 | **Web terminal & CLI sync** | An in-chat terminal attaches to the agent's live tmux session from any browser, phone included; CLI sessions appear in the web app and web sessions resume from a terminal (`tmux attach -t xy-<id>`) — sync is two-way. |

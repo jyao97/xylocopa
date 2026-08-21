@@ -150,7 +150,7 @@ export function deriveCustomTokens({ base, colors }) {
   // (WhatsApp-dark #E9EDEF-style), brighter than body, softer than #fff.
   const bubbleInk = isLightColor(bubble)
     ? "#1f2937"
-    : base === "dark" ? mix(body, "#ffffff", 0.55) : "#ffffff";
+    : base === "dark" ? mix(body, "#ffffff", 0.35) : "#ffffff";
   return {
     page, surface, heading, body, edge, bubble,
     bubbleRgb: channels(bubble),
@@ -231,6 +231,115 @@ export function saveCustomConfig(cfg) {
   // Re-select so a base flip (dark custom → light custom) re-resolves the
   // .dark class, palette bookkeeping, and meta color.
   if (getActivePaletteId() === "custom") selectPalette("custom");
+}
+
+/* ── terminal (xterm.js) themes ─────────────────────────────────────────
+   One theme object per palette so the attached-terminal overlay follows
+   the app theme. Solarized / Nord / Everforest use their canonical ANSI-16
+   tables; the stock light/dark use GitHub Light/Dark; soft-dark uses a
+   muted One-Dark-family table on the theme's own surfaces. */
+
+const GITHUB_DARK_ANSI = {
+  black: "#484f58", red: "#ff7b72", green: "#3fb950", yellow: "#d29922",
+  blue: "#58a6ff", magenta: "#bc8cff", cyan: "#39c5cf", white: "#b1bac4",
+  brightBlack: "#6e7681", brightRed: "#ffa198", brightGreen: "#56d364",
+  brightYellow: "#e3b341", brightBlue: "#79c0ff", brightMagenta: "#d2a8ff",
+  brightCyan: "#56d4dd", brightWhite: "#f0f6fc",
+};
+
+const GITHUB_LIGHT_ANSI = {
+  black: "#24292f", red: "#cf222e", green: "#116329", yellow: "#4d2d00",
+  blue: "#0969da", magenta: "#8250df", cyan: "#1b7c83", white: "#6e7781",
+  brightBlack: "#57606a", brightRed: "#a40e26", brightGreen: "#1a7f37",
+  brightYellow: "#633c01", brightBlue: "#218bff", brightMagenta: "#a475f9",
+  brightCyan: "#3192aa", brightWhite: "#8c959f",
+};
+
+const SOLARIZED_ANSI = {
+  black: "#073642", red: "#dc322f", green: "#859900", yellow: "#b58900",
+  blue: "#268bd2", magenta: "#d33682", cyan: "#2aa198", white: "#eee8d5",
+  brightBlack: "#586e75", brightRed: "#cb4b16", brightGreen: "#859900",
+  brightYellow: "#b58900", brightBlue: "#839496", brightMagenta: "#6c71c4",
+  brightCyan: "#93a1a1", brightWhite: "#fdf6e3",
+};
+
+const TERMINAL_THEMES = {
+  dark: {
+    background: "#0d1117", foreground: "#c9d1d9", cursor: "#58a6ff",
+    cursorAccent: "#0d1117", selectionBackground: "#264f78",
+    ...GITHUB_DARK_ANSI,
+  },
+  light: {
+    background: "#ffffff", foreground: "#24292f", cursor: "#0969da",
+    cursorAccent: "#ffffff", selectionBackground: "#b6d7ff",
+    ...GITHUB_LIGHT_ANSI,
+  },
+  "soft-dark": {
+    background: "#17181c", foreground: "#c9c7c3", cursor: "#8ab4c4",
+    cursorAccent: "#17181c", selectionBackground: "#3e424a",
+    black: "#45464a", red: "#e06c75", green: "#98c379", yellow: "#e5c07b",
+    blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#c9c7c3",
+    brightBlack: "#5f5e5b", brightRed: "#e8858c", brightGreen: "#aad094",
+    brightYellow: "#edd09a", brightBlue: "#81c0f5", brightMagenta: "#d48fe6",
+    brightCyan: "#77c5cf", brightWhite: "#e8e6e3",
+  },
+  "solarized-dark": {
+    background: "#002b36", foreground: "#839496", cursor: "#93a1a1",
+    cursorAccent: "#002b36", selectionBackground: "#073642",
+    ...SOLARIZED_ANSI,
+  },
+  "solarized-light": {
+    background: "#fdf6e3", foreground: "#657b83", cursor: "#586e75",
+    cursorAccent: "#fdf6e3", selectionBackground: "#eee8d5",
+    ...SOLARIZED_ANSI,
+  },
+  nord: {
+    background: "#2e3440", foreground: "#d8dee9", cursor: "#d8dee9",
+    cursorAccent: "#2e3440", selectionBackground: "#434c5e",
+    black: "#3b4252", red: "#bf616a", green: "#a3be8c", yellow: "#ebcb8b",
+    blue: "#81a1c1", magenta: "#b48ead", cyan: "#88c0d0", white: "#e5e9f0",
+    brightBlack: "#4c566a", brightRed: "#bf616a", brightGreen: "#a3be8c",
+    brightYellow: "#ebcb8b", brightBlue: "#81a1c1", brightMagenta: "#b48ead",
+    brightCyan: "#8fbcbb", brightWhite: "#eceff4",
+  },
+  everforest: {
+    background: "#2d353b", foreground: "#d3c6aa", cursor: "#d3c6aa",
+    cursorAccent: "#2d353b", selectionBackground: "#475258",
+    black: "#475258", red: "#e67e80", green: "#a7c080", yellow: "#dbbc7f",
+    blue: "#7fbbb3", magenta: "#d699b6", cyan: "#83c092", white: "#d3c6aa",
+    brightBlack: "#859289", brightRed: "#e67e80", brightGreen: "#a7c080",
+    brightYellow: "#dbbc7f", brightBlue: "#7fbbb3", brightMagenta: "#d699b6",
+    brightCyan: "#83c092", brightWhite: "#fdf1c7",
+  },
+};
+
+// xterm theme for the active palette. Custom themes get their core colors
+// over the base's ANSI table; e-ink gets flat black-on-white.
+export function getTerminalTheme() {
+  if (typeof document !== "undefined" && document.documentElement.classList.contains("eink")) {
+    const dark = document.documentElement.classList.contains("dark");
+    const bg = dark ? "#000000" : "#ffffff";
+    const fg = dark ? "#ffffff" : "#000000";
+    return {
+      background: bg, foreground: fg, cursor: fg, cursorAccent: bg,
+      selectionBackground: dark ? "#444444" : "#d8d8d8",
+      ...(dark ? GITHUB_DARK_ANSI : GITHUB_LIGHT_ANSI),
+    };
+  }
+  const id = getActivePaletteId();
+  if (id === "custom") {
+    const cfg = getCustomConfig();
+    const base = TERMINAL_THEMES[cfg.base];
+    return {
+      ...base,
+      background: cfg.colors.page,
+      foreground: cfg.colors.body,
+      cursor: cfg.colors.heading,
+      cursorAccent: cfg.colors.page,
+      selectionBackground: deriveCustomTokens(cfg).elevated,
+    };
+  }
+  return TERMINAL_THEMES[id] || TERMINAL_THEMES.dark;
 }
 
 /* ── palette resolution / application ── */

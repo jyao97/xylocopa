@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev) [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
 
-> [**The Loop**](#the-loop) · [**Getting Started**](#getting-started) · [**Features**](#features) · [**What's New**](CHANGELOG.md) · [**Architecture**](docs/ARCHITECTURE.md) · [**Contributing**](CONTRIBUTING.md) · [**新手入门（中文）**](docs/getting-started-zh.md)
+> [**The Loop**](#the-loop) · [**Features**](#features) · [**Getting Started**](#getting-started) · [**What's New**](CHANGELOG.md) · [**新手入门（中文）**](docs/getting-started-zh.md)
 
 <p align="center"><img src="docs/hero.png" alt="Xylocopa — Many projects. One attention." width="640"></p>
 

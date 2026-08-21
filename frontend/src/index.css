@@ -143,6 +143,17 @@
    Tokens not listed (attn/orb) inherit from the base theme.
    Registry + custom-theme plumbing: src/lib/themes.js. */
 
+/* Vivid — the original stock light look, kept as an explicit preset.
+   Identical to Light except the classic saturated cyan-600 bubble (Light
+   itself moved to cyan-700 so long message text clears 4.5:1) and the
+   punchier red-500 danger. Everything else inherits :root. */
+.theme-vivid {
+  --color-bubble:         #0891b2;
+  --color-bubble-rgb:     8 145 178;
+  --color-danger:         #ef4444;
+  --color-danger-rgb:     239 68 68;
+}
+
 /* Soft Dark — low-contrast warm charcoal, no pure black. */
 .theme-soft-dark {
   --color-page:       #17181c;

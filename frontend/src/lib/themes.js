@@ -34,6 +34,9 @@ export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0e7490" } },
+  { id: "vivid", name: "Vivid", base: "light",
+    preview: { page: "#ffffff", surface: "#f6f7f8", text: "#0891b2" },
+    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
   { id: "ash", name: "Ash", base: "light",
     preview: { page: "#f2f3f5", surface: "#ffffff", text: "#1c1e21" },
     core: { page: "#f2f3f5", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
@@ -71,7 +74,7 @@ export const PRESETS = [
 
 // Seed values for the custom editor, per base (= the default palettes).
 export const CUSTOM_SEEDS = {
-  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" },
+  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0e7490" },
   dark:  { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" },
 };
 
@@ -300,6 +303,11 @@ const TERMINAL_THEMES = {
   },
   light: {
     background: "#ffffff", foreground: "#24292f", cursor: "#0969da",
+    cursorAccent: "#ffffff", selectionBackground: "#b6d7ff",
+    ...GITHUB_LIGHT_ANSI,
+  },
+  vivid: {
+    background: "#ffffff", foreground: "#24292f", cursor: "#0891b2",
     cursorAccent: "#ffffff", selectionBackground: "#b6d7ff",
     ...GITHUB_LIGHT_ANSI,
   },

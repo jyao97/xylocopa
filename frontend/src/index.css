@@ -81,8 +81,8 @@
      dark treatment (#005C4B + #E9EDEF), transposed to this app's hue. */
   --color-bubble:         #155e75;
   --color-bubble-rgb:     21 94 117;
-  --color-bubble-ink:     #e5e7eb;
-  --color-bubble-ink-rgb: 229 231 235;
+  --color-bubble-ink:     #dbdee3;
+  --color-bubble-ink-rgb: 219 222 227;
   --color-bubble-dim:     #a3c6d1;
 }
 
@@ -125,8 +125,8 @@
   /* Slate teal, desaturated to sit with the warm charcoal; warm off-white ink. */
   --color-bubble:         #375663;
   --color-bubble-rgb:     55 86 99;
-  --color-bubble-ink:     #e6e4e1;
-  --color-bubble-ink-rgb: 230 228 225;
+  --color-bubble-ink:     #d8d6d2;
+  --color-bubble-ink-rgb: 216 214 210;
   --color-bubble-dim:     #b2b0ab;
 }
 
@@ -164,8 +164,8 @@
      cream (which read as glaring at heading size). */
   --color-bubble:         #135b84;
   --color-bubble-rgb:     19 91 132;
-  --color-bubble-ink:     #d9e2e2;
-  --color-bubble-ink-rgb: 217 226 226;
+  --color-bubble-ink:     #bccbcb;
+  --color-bubble-ink-rgb: 188 203 203;
   --color-bubble-dim:     #9dbccb;
 }
 
@@ -234,8 +234,8 @@
   /* Frost steel-blue (the Telegram-dark treatment) + nord5 ink. */
   --color-bubble:         #4a6485;
   --color-bubble-rgb:     74 100 133;
-  --color-bubble-ink:     #e5e9f0;
-  --color-bubble-ink-rgb: 229 233 240;
+  --color-bubble-ink:     #dee4ec;
+  --color-bubble-ink-rgb: 222 228 236;
   --color-bubble-dim:     #bcc8da;
 }
 
@@ -269,8 +269,8 @@
   /* Everforest bg_blue + brightened parchment ink. */
   --color-bubble:         #3a515d;
   --color-bubble-rgb:     58 81 93;
-  --color-bubble-ink:     #e1d8c2;
-  --color-bubble-ink-rgb: 225 216 194;
+  --color-bubble-ink:     #cdc3ab;
+  --color-bubble-ink-rgb: 205 195 171;
   --color-bubble-dim:     #adbcb0;
 }
 

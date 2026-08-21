@@ -29,14 +29,15 @@
   --color-glass-nav:  #f0f2f5;
   --color-glass-edge: rgba(255,255,255,0.5);
 
-  /* User chat bubble. Tokenized so dark palettes can mute the saturated
-     cyan (full cyan-600 reads as a glaring block on dark grounds) and so
-     each preset can pull the bubble into its own hue family. */
-  --color-bubble:         #0891b2;   /* cyan-600 — unchanged light look */
-  --color-bubble-rgb:     8 145 178;
-  --color-bubble-ink:     #ffffff;
-  --color-bubble-ink-rgb: 255 255 255;
-  --color-bubble-dim:     #a5f3fc;   /* timestamp row (was text-cyan-200) */
+  /* User chat bubble. Tokenized per palette; the rule everywhere is that
+     the ink matches the agent bubble's text (--color-body, with -dim for
+     the timestamp row), so the bubble itself carries the "mine" identity —
+     a hue-tinted surface, light wash on light themes, muted blue on dark. */
+  --color-bubble:         #d3eaf2;   /* pale cyan wash */
+  --color-bubble-rgb:     211 234 242;
+  --color-bubble-ink:     #374151;   /* = --color-body */
+  --color-bubble-ink-rgb: 55 65 81;
+  --color-bubble-dim:     #586069;   /* = --color-dim */
 
   /* Attention assistant identity. Still its own token (so it stays
      tunable in one place), but the values sit in the app's amber family —
@@ -74,11 +75,11 @@
   --color-glass-nav:  #283246;
   --color-glass-edge: rgba(255,255,255,0.22);
 
-  /* Two steps darker (cyan-800): keeps the identity but stops glowing.
-     Ink matches the agent bubble's text (--color-body / --color-label)
-     instead of pure white — same rule in every dark palette below. */
-  --color-bubble:         #155e75;
-  --color-bubble-rgb:     21 94 117;
+  /* ~80% surface + 20% cyan-600: reads as the agent card with a whisper
+     of blue, enough to tell the speakers apart while scanning. Same
+     construction in every dark palette below, with body-colored ink. */
+  --color-bubble:         #0f3346;
+  --color-bubble-rgb:     15 51 70;
   --color-bubble-ink:     #d1d5db;
   --color-bubble-ink-rgb: 209 213 219;
   --color-bubble-dim:     #9ca3af;
@@ -120,6 +121,8 @@
   --color-glass-nav:  #2a2c32;
   --color-glass-edge: rgba(255,255,255,0.16);
 
+  --color-bubble:         #1a3740;
+  --color-bubble-rgb:     26 55 64;
   --color-bubble-ink:     #c9c7c3;
   --color-bubble-ink-rgb: 201 199 195;
   --color-bubble-dim:     #9d9b97;
@@ -155,10 +158,9 @@
   --color-glass-nav:  #0a3e4c;
   --color-glass-edge: rgba(238,232,213,0.14);
 
-  /* Solarized blue (#268bd2) pulled down toward base03; one step deeper
-     than before since the ink dropped from white to base0-family body. */
-  --color-bubble:         #0d4a6b;
-  --color-bubble-rgb:     13 74 107;
+  /* base02 surface with ~20% solarized blue folded in. */
+  --color-bubble:         #0e4962;
+  --color-bubble-rgb:     14 73 98;
   --color-bubble-ink:     #90a2a4;
   --color-bubble-ink-rgb: 144 162 164;
   --color-bubble-dim:     #7b8f93;
@@ -191,10 +193,12 @@
   --color-glass-nav:  #f2ecd9;
   --color-glass-edge: rgba(255,255,255,0.5);
 
-  /* Solarized blue, darkened enough for white ink on the cream ground. */
-  --color-bubble:     #1f74b0;
-  --color-bubble-rgb: 31 116 176;
-  --color-bubble-dim: #b8d4ea;
+  /* Pale solarized-blue wash over the cream ground; base01 body ink. */
+  --color-bubble:         #d0e4ec;
+  --color-bubble-rgb:     208 228 236;
+  --color-bubble-ink:     #586e75;
+  --color-bubble-ink-rgb: 88 110 117;
+  --color-bubble-dim:     #839496;
 }
 
 /* Nord — polar-night blue-grays, snow-storm text. */
@@ -224,10 +228,9 @@
   --color-glass-nav:  #3a4152;
   --color-glass-edge: rgba(236,239,244,0.15);
 
-  /* nord10 frost blue blended toward polar night; deepened for the
-     body-colored (snow storm) ink. */
-  --color-bubble:         #445d80;
-  --color-bubble-rgb:     68 93 128;
+  /* nord1 surface with ~30% nord10 frost blue folded in. */
+  --color-bubble:         #46556d;
+  --color-bubble-rgb:     70 85 109;
   --color-bubble-ink:     #d8dee9;
   --color-bubble-ink-rgb: 216 222 233;
   --color-bubble-dim:     #aab2c0;

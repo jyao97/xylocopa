@@ -253,8 +253,8 @@ function SubAgentBubble({ message, project }) {
           {message.source && (
             <span className={`ml-1.5 px-1 py-0.5 rounded text-[10px] font-medium leading-none ${
               message.source === "web"
-                ? "bg-cyan-500/20 text-cyan-300"
-                : "bg-emerald-500/20 text-emerald-300"
+                ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
             }`}>
               {message.source}
             </span>
@@ -1478,7 +1478,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
               <span className="text-gray-200/90">cancelled</span>
             )}
             {!isCancelled && isPreQueued && (
-              <span className="text-cyan-300/70">
+              <span className="text-cyan-700/70 dark:text-cyan-300/70">
                 {queueTotal > 1 ? `queued (${queuePosition} of ${queueTotal})` : "queued"}
               </span>
             )}
@@ -1487,8 +1487,8 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 isCancelled
                   ? "bg-gray-500/40 text-gray-100"
                   : message.source === "web"
-                    ? "bg-cyan-500/20 text-cyan-300"
-                    : "bg-emerald-500/20 text-emerald-300"
+                    ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                    : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
               }`}>
                 {message.source}
               </span>

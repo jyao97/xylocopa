@@ -107,6 +107,38 @@ export function UnreadProvider({ children }) {
     return () => window.removeEventListener("agents-data-changed", onDataChanged);
   }, [resync]);
 
+  // Safety net for silently-dead sockets: resync once when the tab
+  // regains visibility (the classic stale case — laptop sleep, long
+  // background). Event-driven, no polling; a no-op when WS is healthy.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") resync("visible");
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [resync]);
+
+  // Authoritative feed from a full agents list — the SAME payload the
+  // agent cards render. Any page that polls the list pushes it here, so
+  // the badge total is the sum of the numbers on screen rather than a
+  // parallel WS-only view that can diverge from the cards.
+  const syncFromAgents = useCallback((agents) => {
+    if (!Array.isArray(agents)) return;
+    setUnreadMap(() => {
+      const next = {};
+      for (const a of agents) {
+        if (!a?.id || a.is_subagent || !(a.unread_count > 0)) continue;
+        next[a.id] = {
+          id: a.id,
+          unread_count: a.unread_count,
+          last_message_preview: a.last_message_preview || null,
+          last_message_at: a.last_message_at || null,
+        };
+      }
+      return next;
+    });
+  }, []);
+
   const value = useMemo(() => {
     const entries = Object.values(unreadMap).filter((a) => a.unread_count > 0);
     const total = entries.reduce((s, a) => s + (a.unread_count || 0), 0);
@@ -116,14 +148,14 @@ export function UnreadProvider({ children }) {
       const tb = b.last_message_at ? Date.parse(b.last_message_at) : 0;
       return ta - tb;
     });
-    return { unreadMap, list, total };
-  }, [unreadMap]);
+    return { unreadMap, list, total, syncFromAgents };
+  }, [unreadMap, syncFromAgents]);
 
   return <UnreadContext.Provider value={value}>{children}</UnreadContext.Provider>;
 }
 
 // Fallback so consumers rendered outside the provider (e.g. /login) don't crash.
-const _fallback = { unreadMap: {}, list: [], total: 0 };
+const _fallback = { unreadMap: {}, list: [], total: 0, syncFromAgents: () => {} };
 
 export function useUnread() {
   const ctx = useContext(UnreadContext);

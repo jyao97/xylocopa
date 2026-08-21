@@ -10,6 +10,7 @@ import AgentRow from "../components/AgentRow";
 import useDraft from "../hooks/useDraft";
 import useWebSocket, { useWsEvent, isAgentNotificationsEnabled, setAgentNotificationsEnabled } from "../hooks/useWebSocket";
 import usePageVisible from "../hooks/usePageVisible";
+import { useUnread } from "../contexts/UnreadContext";
 import { useToast } from "../contexts/ToastContext";
 import { forwardState } from "../lib/nav";
 import { cacheAgentBriefs, agentBriefCache } from "../lib/detailCache";
@@ -123,6 +124,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
   }, [search]);
 
   const [refreshing, setRefreshing] = useState(false);
+  const { syncFromAgents } = useUnread();
 
   // Authoritative full-replace fetch. Used for initial mount + every
   // explicit invalidation (refresh button, agents-data-changed,
@@ -134,6 +136,8 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
       const t1 = performance.now();
       const list = Array.isArray(data) ? data : [];
       agentsActions.seed(list);
+      // Badge totals derive from the same list the cards render.
+      syncFromAgents(list);
       // Seed the brief cache so AgentChatPage can paint its header
       // (name / project / status) without waiting for fetchAgent.
       cacheAgentBriefs(list);
@@ -144,7 +148,7 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
     } finally {
       setLoading(false);
     }
-  }, [agentsActions]);
+  }, [agentsActions, syncFromAgents]);
 
   // Background 5s poll. Uses merge semantics so a transient API miss
   // doesn't blow away rows held by the store (e.g. a partial response
@@ -156,11 +160,12 @@ export default function AgentsPage({ theme, onToggleTheme, isActive = true }) {
       const list = Array.isArray(data) ? data : [];
       agentsActions.setMany(list, "merge");
       cacheAgentBriefs(list);
+      syncFromAgents(list);
     } catch (err) {
       // Silent — periodic poll, the next tick will retry.
       console.warn("[agents] poll failed:", err.message);
     }
-  }, [agentsActions]);
+  }, [agentsActions, syncFromAgents]);
 
   // --- Unlinked sessions ---
   const [unlinked, setUnlinked] = useState([]);

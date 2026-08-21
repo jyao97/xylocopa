@@ -302,43 +302,43 @@
   --color-bubble-dim:     #adbcb0;
 }
 
-/* Ash — gray-on-gray with a COOL cast: equal-RGB neutral gray reads warm
-   on screen, so the whole ramp carries a few points of blue (the
-   Things/Day One-style chrome gray). Ink stays mid-gray on purpose; the
-   bubble is the steel blue shared with Solarized Dark. */
-.theme-ash {
-  --color-page:       #e8eaed;
-  --color-surface:    #e1e4e8;
-  --color-input:      #d8dce1;
-  --color-elevated:   #ccd1d7;
-  --color-hover:      #bfc5cc;
-  --color-inset:      #e8eaed;
+/* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
+   light gray ink. The properly gray theme after two light-gray attempts —
+   contrast comes from the dark ground, grayness from the muted ink. */
+.theme-graphite {
+  --color-page:       #22272e;
+  --color-surface:    #2d333b;
+  --color-input:      #373e47;
+  --color-elevated:   #444c56;
+  --color-hover:      #545d68;
+  --color-inset:      #22272e;
 
-  --color-heading:    #4a4f55;
-  --color-body:       #63686f;
-  --color-label:      #767b82;
-  --color-dim:        #888d94;
-  --color-faint:      #9ca1a7;
-  --color-ghost:      #b2b6bc;
+  --color-heading:    #c5d1de;
+  --color-body:       #adbac7;
+  --color-label:      #909dab;
+  --color-dim:        #768390;
+  --color-faint:      #636e7b;
+  --color-ghost:      #545d68;
 
-  --color-divider:    #d8dce1;
-  --color-edge:       #c8ccd2;
-  --color-ring-hover: #b5bac1;
+  --color-divider:    #373e47;
+  --color-edge:       #444c56;
+  --color-ring-hover: #545d68;
 
-  --color-hint:       #9ca1a7;
-  --color-shadow:     rgba(32,33,36,0.07);
-  --color-skel:       #d8dce1;
-  --color-glass:      #e1e4e8;
-  --color-glass-nav:  #e5e7ea;
-  --color-glass-edge: rgba(255,255,255,0.45);
+  --color-hint:       #768390;
+  --color-shadow:     rgba(0,0,0,0.35);
+  --color-skel:       #373e47;
+  --color-glass:      #2d333b;
+  --color-glass-nav:  #313842;
+  --color-glass-edge: rgba(205,217,229,0.14);
 
+  /* The steel blue shared with Solarized Dark; off-white ink per the
+     dark-theme bubble rule. */
   --color-bubble:         #135b84;
   --color-bubble-rgb:     19 91 132;
-  --color-bubble-ink:     #ffffff;
-  --color-bubble-ink-rgb: 255 255 255;
-  --color-bubble-dim:     #b6d2e0;
+  --color-bubble-ink:     #d7dfe7;
+  --color-bubble-ink-rgb: 215 223 231;
+  --color-bubble-dim:     #a3c2d1;
 }
-
 /* Nord Light — Snow Storm ground with Polar Night ink; pairs with Nord. */
 .theme-nord-light {
   --color-page:       #e9eef6;
@@ -458,9 +458,9 @@
     --color-glass: rgba(49,58,64,0.7);
     --color-glass-nav: rgba(54,64,70,0.68);
   }
-  .theme-ash {
-    --color-glass: rgba(225,228,232,0.68);
-    --color-glass-nav: rgba(229,231,234,0.65);
+  .theme-graphite {
+    --color-glass: rgba(45,51,59,0.7);
+    --color-glass-nav: rgba(49,56,66,0.68);
   }
   .theme-nord-light {
     --color-glass: rgba(224,231,241,0.68);
@@ -486,7 +486,7 @@ html.no-glass.theme-solarized-dark  { --color-glass: #073642; --color-glass-nav:
 html.no-glass.theme-solarized-light { --color-glass: #eee8d5; --color-glass-nav: #f2ecd9; }
 html.no-glass.theme-nord            { --color-glass: #353c4a; --color-glass-nav: #3a4152; }
 html.no-glass.theme-everforest      { --color-glass: #313a40; --color-glass-nav: #364046; }
-html.no-glass.theme-ash             { --color-glass: #e1e4e8; --color-glass-nav: #e5e7ea; }
+html.no-glass.theme-graphite        { --color-glass: #2d333b; --color-glass-nav: #313842; }
 html.no-glass.theme-nord-light      { --color-glass: #e0e7f1; --color-glass-nav: #e5ebf4; }
 html.no-glass.theme-latte           { --color-glass: #e6e9ef; --color-glass-nav: #ebedf2; }
 html.no-glass .glass-bar,

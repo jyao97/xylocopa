@@ -34,9 +34,6 @@ export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
-  { id: "ash", name: "Ash", base: "light",
-    preview: { page: "#e8eaed", surface: "#e1e4e8", text: "#4a4f55" },
-    core: { page: "#e8eaed", surface: "#e1e4e8", heading: "#4a4f55", body: "#63686f", edge: "#c8ccd2", bubble: "#135b84" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
@@ -49,6 +46,9 @@ export const PRESETS = [
   { id: "dark", name: "Dark", base: "dark",
     preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" },
     core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" } },
+  { id: "graphite", name: "Graphite", base: "dark",
+    preview: { page: "#22272e", surface: "#2d333b", text: "#adbac7" },
+    core: { page: "#22272e", surface: "#2d333b", heading: "#c5d1de", body: "#adbac7", edge: "#444c56", bubble: "#135b84" } },
   { id: "soft-dark", name: "Soft Dark", base: "dark",
     preview: { page: "#17181c", surface: "#1e2024", text: "#e8e6e3" },
     core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41", bubble: "#375663" } },
@@ -321,10 +321,15 @@ const TERMINAL_THEMES = {
     brightYellow: "#dbbc7f", brightBlue: "#7fbbb3", brightMagenta: "#d699b6",
     brightCyan: "#83c092", brightWhite: "#fdf1c7",
   },
-  ash: {
-    background: "#e8eaed", foreground: "#4a4f55", cursor: "#135b84",
-    cursorAccent: "#e8eaed", selectionBackground: "#ccd1d7",
-    ...GITHUB_LIGHT_ANSI,
+  // GitHub Dark Dimmed ANSI table.
+  graphite: {
+    background: "#22272e", foreground: "#adbac7", cursor: "#539bf5",
+    cursorAccent: "#22272e", selectionBackground: "#444c56",
+    black: "#545d68", red: "#f47067", green: "#57ab5a", yellow: "#c69026",
+    blue: "#539bf5", magenta: "#b083f0", cyan: "#39c5cf", white: "#909dab",
+    brightBlack: "#636e7b", brightRed: "#ff938a", brightGreen: "#6bc46d",
+    brightYellow: "#daaa3f", brightBlue: "#6cb6ff", brightMagenta: "#dcbdfb",
+    brightCyan: "#56d4dd", brightWhite: "#cdd9e5",
   },
   // Snow Storm ground, Polar Night ink, nord's own accent set.
   "nord-light": {

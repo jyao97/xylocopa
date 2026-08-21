@@ -28,6 +28,23 @@
   --color-glass:      #e6e9ee;
   --color-glass-nav:  #f0f2f5;
   --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* User chat bubble. Tokenized so dark palettes can mute the saturated
+     cyan (full cyan-600 reads as a glaring block on dark grounds) and so
+     each preset can pull the bubble into its own hue family. */
+  --color-bubble:         #0891b2;   /* cyan-600 — unchanged light look */
+  --color-bubble-rgb:     8 145 178;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #a5f3fc;   /* timestamp row (was text-cyan-200) */
+
+  /* Attention assistant identity. Still its own token (so it stays
+     tunable in one place), but the values sit in the app's amber family —
+     the Auto chip / deferred-clock tone — by explicit request: the earlier
+     saturated red-orange shouted, and amber already means "waiting on you"
+     here, which is exactly what the assistant holds. The face and bubble
+     shapes, not the hue, are what keep it distinct from status chips.
+     Ink is dark on purpose: white on amber-500 is ~2.2:1. */
 }
 
 .dark {
@@ -56,6 +73,9 @@
   --color-glass:      #1e293b;
   --color-glass-nav:  #283246;
   --color-glass-edge: rgba(255,255,255,0.22);
+
+  --color-bubble:     #155e75;
+  --color-bubble-rgb: 21 94 117;
 }
 
 /* ── Preset theme palettes ──────────────────────────────────────────────
@@ -64,7 +84,7 @@
    `.dark` (so every `dark:` Tailwind variant keeps working), light palettes
    don't. Single-class selectors (0,1,0) on purpose: they override :root /
    .dark by source order, while html.eink / html.no-glass (0,1,1) still win.
-   Tokens not listed (attn/orb) inherit from the base theme.
+   Tokens not listed inherit from the base theme.
    Registry + custom-theme plumbing: src/lib/themes.js. */
 
 /* Soft Dark — low-contrast warm charcoal, no pure black. */
@@ -124,6 +144,11 @@
   --color-glass:      #073642;
   --color-glass-nav:  #0a3e4c;
   --color-glass-edge: rgba(238,232,213,0.14);
+
+  /* Solarized blue (#268bd2) pulled down toward base03. */
+  --color-bubble:     #135b84;
+  --color-bubble-rgb: 19 91 132;
+  --color-bubble-dim: #9ec9e2;
 }
 
 /* Solarized Light — warm cream base3/base2 family. */
@@ -152,6 +177,11 @@
   --color-glass:      #eee8d5;
   --color-glass-nav:  #f2ecd9;
   --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* Solarized blue, darkened enough for white ink on the cream ground. */
+  --color-bubble:     #1f74b0;
+  --color-bubble-rgb: 31 116 176;
+  --color-bubble-dim: #b8d4ea;
 }
 
 /* Nord — polar-night blue-grays, snow-storm text. */
@@ -180,6 +210,11 @@
   --color-glass:      #353c4a;
   --color-glass-nav:  #3a4152;
   --color-glass-edge: rgba(236,239,244,0.15);
+
+  /* nord10 frost blue blended toward polar night. */
+  --color-bubble:     #526e91;
+  --color-bubble-rgb: 82 110 145;
+  --color-bubble-dim: #c0cbdd;
 }
 
 /* Everforest — muted forest greens, warm parchment text. */
@@ -208,6 +243,11 @@
   --color-glass:      #313a40;
   --color-glass-nav:  #364046;
   --color-glass-edge: rgba(211,198,170,0.13);
+
+  /* Everforest bg_blue — the palette's own blue-tinted surface. */
+  --color-bubble:     #3a515d;
+  --color-bubble-rgb: 58 81 93;
+  --color-bubble-dim: #a7c0bb;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):
@@ -359,6 +399,15 @@ html.eink {
   --color-glass:      #f5f5f5;
   --color-glass-nav:  #f5f5f5;
   --color-glass-edge: #6a6a6a;
+
+  /* The user bubble goes ink-on-paper: the .bg-bubble utility bypasses
+     the [class*="bg-cyan-"] flattening rules below, so the tokens
+     themselves must carry the e-ink values. */
+  --color-bubble:         #000000;
+  --color-bubble-rgb:     0 0 0;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #d5d5d5;
 }
 html.eink.dark {
   --color-page:       #000000;
@@ -385,6 +434,12 @@ html.eink.dark {
   --color-glass:      #111111;
   --color-glass-nav:  #111111;
   --color-glass-edge: #888888;
+
+  --color-bubble:         #ffffff;
+  --color-bubble-rgb:     255 255 255;
+  --color-bubble-ink:     #000000;
+  --color-bubble-ink-rgb: 0 0 0;
+  --color-bubble-dim:     #2a2a2a;
 }
 
 /* Heavier baseline font weight + crisper rendering. :where() keeps
@@ -1267,6 +1322,15 @@ svg text { font-family: inherit; }
 
   .hover\:ring-ring-hover:hover { --tw-ring-color: var(--color-ring-hover); }
 
+
+  /* User chat bubble. Written out by hand: Tailwind does NOT generate
+     utilities (or `/NN` alpha modifiers) from --color-* declarations in
+     :root, so the alpha steps use rgb() slash-alpha over the -rgb vars. */
+  .bg-bubble        { background-color: var(--color-bubble); }
+  .bg-bubble-60     { background-color: rgb(var(--color-bubble-rgb) / 0.6); }
+  .text-bubble-ink  { color: var(--color-bubble-ink); }
+  .text-bubble-ink-80 { color: rgb(var(--color-bubble-ink-rgb) / 0.8); }
+  .text-bubble-dim  { color: var(--color-bubble-dim); }
   /* Placeholder */
   .placeholder-hint::placeholder { color: var(--color-hint); }
 

@@ -4,7 +4,7 @@
 // (dark palettes also carry `.dark` so Tailwind `dark:` variants keep
 // working). Preset token values live in index.css; this module only knows
 // each preset's id, base, and preview swatches. The "custom" palette is
-// user-authored: 5 core colors + base are stored in localStorage, the full
+// user-authored: 6 core colors + base are stored in localStorage, the full
 // ~20-token set is derived here, compiled to CSS, and injected as a
 // <style id="xy-custom-theme"> that sits BEFORE the bundled stylesheet
 // (html.theme-custom at (0,1,1) beats .dark/:root by specificity, while
@@ -32,31 +32,31 @@ export const THEME_EVENT = "xy:theme-changed";
 export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
-    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db" } },
+    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
   { id: "dark", name: "Dark", base: "dark",
     preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" },
-    core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151" } },
+    core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" } },
   { id: "soft-dark", name: "Soft Dark", base: "dark",
     preview: { page: "#17181c", surface: "#1e2024", text: "#e8e6e3" },
-    core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41" } },
+    core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41", bubble: "#155e75" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
-    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4" } },
+    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#1f74b0" } },
   { id: "solarized-dark", name: "Solarized Dark", base: "dark",
     preview: { page: "#002b36", surface: "#073642", text: "#aebcba" },
-    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e" } },
+    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e", bubble: "#135b84" } },
   { id: "nord", name: "Nord", base: "dark",
     preview: { page: "#2e3440", surface: "#3b4252", text: "#eceff4" },
-    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a" } },
+    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a", bubble: "#526e91" } },
   { id: "everforest", name: "Everforest", base: "dark",
     preview: { page: "#272e33", surface: "#2d353b", text: "#d3c6aa" },
-    core: { page: "#272e33", surface: "#2d353b", heading: "#d3c6aa", body: "#b9ad93", edge: "#4a555b" } },
+    core: { page: "#272e33", surface: "#2d353b", heading: "#d3c6aa", body: "#b9ad93", edge: "#4a555b", bubble: "#3a515d" } },
 ];
 
 // Seed values for the custom editor, per base (= the default palettes).
 export const CUSTOM_SEEDS = {
-  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db" },
-  dark:  { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151" },
+  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" },
+  dark:  { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" },
 };
 
 export const CUSTOM_COLOR_FIELDS = [
@@ -65,6 +65,7 @@ export const CUSTOM_COLOR_FIELDS = [
   { key: "heading", label: "Heading text" },
   { key: "body", label: "Body text" },
   { key: "edge", label: "Border" },
+  { key: "bubble", label: "User bubble" },
 ];
 
 /* ── color math ── */
@@ -90,6 +91,18 @@ function mix(a, b, t) {
 function rgba(hex, alpha) {
   const c = hexToRgb(hex);
   return c ? `rgba(${c[0]},${c[1]},${c[2]},${alpha})` : hex;
+}
+
+// Space-separated channels for rgb(var(--x-rgb) / a) token consumers.
+function channels(hex) {
+  const c = hexToRgb(hex);
+  return c ? `${c[0]} ${c[1]} ${c[2]}` : "0 0 0";
+}
+
+// Perceived brightness (YIQ); > 150 means dark ink reads better on it.
+function isLightColor(hex) {
+  const c = hexToRgb(hex);
+  return c ? (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000 > 150 : false;
 }
 
 /* ── custom theme ── */
@@ -127,12 +140,17 @@ export function getCustomConfig() {
 // dark bases / black on light ones, so "elevated" always moves away from the
 // page and text steps always fade toward it.
 export function deriveCustomTokens({ base, colors }) {
-  const { page, surface, heading, body, edge } = colors;
+  const { page, surface, heading, body, edge, bubble } = colors;
   const pole = base === "dark" ? "#ffffff" : "#000000";
   const glass = mix(surface, pole, 0.04);
   const glassNav = mix(surface, pole, 0.08);
+  const bubbleInk = isLightColor(bubble) ? "#1f2937" : "#ffffff";
   return {
-    page, surface, heading, body, edge,
+    page, surface, heading, body, edge, bubble,
+    bubbleRgb: channels(bubble),
+    bubbleInk,
+    bubbleInkRgb: channels(bubbleInk),
+    bubbleDim: mix(bubble, bubbleInk, 0.62),
     input: mix(surface, pole, 0.05),
     elevated: mix(surface, pole, 0.14),
     hover: mix(surface, pole, 0.22),
@@ -165,6 +183,9 @@ function buildCustomCss(cfg) {
     `--color-divider:${t.divider};--color-edge:${t.edge};--color-ring-hover:${t.ringHover};`,
     `--color-hint:${t.hint};--color-shadow:${t.shadow};--color-skel:${t.skel};`,
     `--color-glass:${t.glass};--color-glass-nav:${t.glassNav};--color-glass-edge:${t.glassEdge};`,
+    `--color-bubble:${t.bubble};--color-bubble-rgb:${t.bubbleRgb};`,
+    `--color-bubble-ink:${t.bubbleInk};--color-bubble-ink-rgb:${t.bubbleInkRgb};`,
+    `--color-bubble-dim:${t.bubbleDim};`,
     "}",
     "@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){",
     `html.theme-custom{--color-glass:${t.glassRgba};--color-glass-nav:${t.glassNavRgba};}`,
@@ -183,7 +204,14 @@ function ensureCustomStyle(css) {
     el.id = "xy-custom-theme";
     document.head.prepend(el);
   }
-  const text = css ?? localStorage.getItem(CUSTOM_CSS_KEY) ?? buildCustomCss(getCustomConfig());
+  // No arg → rebuild from config rather than trusting the stored CSS: a
+  // schema change (e.g. new bubble tokens) would otherwise stick around
+  // until the user next edits a color. Keep the pre-paint copy fresh too.
+  let text = css;
+  if (text == null) {
+    text = buildCustomCss(getCustomConfig());
+    try { localStorage.setItem(CUSTOM_CSS_KEY, text); } catch { /* blocked */ }
+  }
   if (el.textContent !== text) el.textContent = text;
 }
 

@@ -1432,10 +1432,10 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 : isScheduled
                   ? "bg-amber-600/80 text-white rounded-br-md"
                   : isPreQueued
-                    ? "bg-cyan-600/60 text-white/80 rounded-br-md"
+                    ? "bg-bubble-60 text-bubble-ink-80 rounded-br-md"
                     : isUndeliveredTimedOut
                       ? "bg-red-600/40 text-white/70 rounded-br-md"
-                      : "bg-cyan-600 text-white rounded-br-md"
+                      : "bg-bubble text-bubble-ink rounded-br-md"
               : "bg-surface shadow-card text-body rounded-bl-md"
           } ${canModify ? "select-none" : ""} ${isBeingEdited ? "ring-2 ring-white/70" : ""} overflow-hidden`}
           onDoubleClick={handleDoubleClick}
@@ -1460,7 +1460,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
           )}
           <div className={`text-xs mt-1 flex items-center gap-1.5 ${
             isUser
-              ? isCancelled ? "text-gray-100" : isScheduled ? "text-amber-200" : "text-cyan-200"
+              ? isCancelled ? "text-gray-100" : isScheduled ? "text-amber-200" : "text-bubble-dim"
               : "text-dim"
           }`}>
             {isScheduled ? (

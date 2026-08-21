@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-21
+
+Theme release. The app gains a theme system: five preset palettes beyond the stock Light/Dark, a custom theme editor, per-palette user-bubble colors following messenger conventions, and a terminal overlay that follows the active theme. Also a set of smaller fixes: UTF-8-pinned telemetry file IO, WebSocket forwarding for port-preview cards, keyboard-focus delegation for sandboxed preview iframes, log rotation for the frontend/kb debug logs, and an mcp<2 dependency pin.
+
+### Added
+
+- **Theme palettes.** Soft Dark, Solarized Light, Solarized Dark, Nord, and Everforest join the stock Light/Dark. Each palette is a `theme-<id>` token-override class layered over its light/dark base, so every existing `dark:` Tailwind variant keeps working; glass surfaces, e-ink mode, and reduced-transparency fallbacks retain their existing precedence. The picker lives in Monitor > Display as swatch cards; picking a palette also switches to its base, and the sun/moon header button flips between the palettes chosen for light and dark. The `index.html` init script restores the palette class pre-paint. (2d67946b, 0a25910d, 113c8863)
+- **Custom theme editor.** Six core colors (background, card, heading text, body text, border, user bubble) plus a light/dark base; the remaining ~20 tokens derive automatically, compile to CSS, and inject ahead of the bundled stylesheet. The editor mirrors whichever palette is selected — with a preset active it shows that preset's colors, and the first edit forks them into the Custom palette. (b065453a, 0f253635)
+- **Per-palette user chat bubble.** Bubble colors are tokenized (`--color-bubble/-ink/-dim`) and follow messenger conventions: light themes keep a saturated blue bubble with white ink; dark themes use a deep desaturated hue with off-white ink pulled toward each theme's body color. Source chips in the shared timestamp row now branch on message side, fixing agent-side chip readability in light mode. (7b486d20, 2c9b4088, d71cefdb, 3a336b0e, 2c1afc04)
+- **Themed terminal.** The attached-terminal overlay resolves its xterm.js theme from the active palette — canonical ANSI-16 tables for Solarized, Nord, and Everforest, GitHub Light/Dark for the stock palettes, derived colors for custom themes — and hot-swaps it if the theme changes while open. The overlay chrome (header, reconnect banner, mobile key bar) uses theme tokens instead of hardcoded dark colors. (f7590bb6)
+
+### Fixed
+
+- **Telemetry file IO pinned to UTF-8.** CJK-locale Windows read `package.json`/`config.yaml` with the locale codec, reporting version "unknown" and silently ignoring the config opt-out. (de2c548e)
+- **Port-preview WebSockets.** The frontend dev/preview proxy forwards `/api` with `ws: true`, so port-preview cards' WebSockets connect. (fc9983ee)
+- **Sandboxed preview iframes** get keyboard focus delegated, so typing works without tapping inside first. (77b3bba6)
+- **Debug log rotation.** `frontend-debug` and `kb-debug` logs size-rotate (20 MB x 3) and are covered by the truncate endpoint; the frontend debug logger no longer propagates to the root logger. (0548246c, 49f4a86f)
+- **mcp pinned below 2.0** — SDK 2.0 removed `mcp.server.fastmcp`, breaking MCP server startup. (dc192b48)
+
+### Changed
+
+- **Git identity migration.** Managed repos with the legacy "AgentHive" committer identity migrate to "Xylocopa" on startup; `GIT_USER_NAME` env documented. (20f0861a, 367dfd55)
+
 ### Fixed
 
 - **Agents still committing as `AgentHive`.** Pre-rebrand orchestrators wrote `user.name=AgentHive` / `user.email=agenthive@localhost` into each managed repo's `.git/config` on merge; the rebrand changed the code but not configs already on disk, so agents (and their worktrees, which share the parent's config) kept authoring commits as AgentHive. Startup now rewrites that exact legacy identity in every DB-known project repo to `Xylocopa <xylocopa@localhost>` (idempotent; user-set identities untouched). Author name is now overridable via `GIT_USER_NAME`, alongside the existing `GIT_USER_EMAIL`.

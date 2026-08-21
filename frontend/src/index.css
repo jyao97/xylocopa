@@ -393,7 +393,9 @@
   --color-bubble-dim:     #c9cbce;
   --color-accent:         #4a6378;
   --color-accent-rgb:     74 99 120;
-}/* Clay — warm greige x brown: the flat tonal model Silver validated,
+}
+
+/* Clay — warm greige x brown: the flat tonal model Silver validated,
    shifted warm. Greige ground, taupe surfaces one small step up,
    espresso ink, and a cocoa-leather bubble — the classic gray-with-tan
    pairing, which also sits naturally beside the app's amber tags. */
@@ -1658,6 +1660,16 @@ svg text { font-family: inherit; }
   .text-bubble-ink  { color: var(--color-bubble-ink); }
   .text-bubble-ink-80 { color: rgb(var(--color-bubble-ink-rgb) / 0.8); }
   .text-bubble-dim  { color: var(--color-bubble-dim); }
+
+  /* Accent — the tag-chip / link / inline-code family (project chips,
+     active mode pills, markdown links). Hand-written like attn/bubble
+     above: Tailwind generates nothing from a --color-* var in :root, so
+     every step used in JSX must exist here, hover forms included. */
+  .text-accent      { color: var(--color-accent); }
+  .hover\:text-accent:hover { color: var(--color-accent); }
+  .text-accent-70   { color: rgb(var(--color-accent-rgb) / 0.7); }
+  .accent-tint-15   { background-color: rgb(var(--color-accent-rgb) / 0.15); }
+  .hover\:accent-tint-25:hover { background-color: rgb(var(--color-accent-rgb) / 0.25); }
 
   .attn-tint-6  { background-color: rgb(var(--color-attn-rgb) / 0.06); }
   .attn-tint-8  { background-color: rgb(var(--color-attn-rgb) / 0.08); }

@@ -677,7 +677,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
                       <p className="text-xs text-dim/80 whitespace-pre-wrap">{task.agent_summary}</p>
                     ) : (
                       <button
-                        className="text-xs text-accent/70 hover:text-accent"
+                        className="text-xs text-accent-70 hover:text-accent"
                         onClick={(e) => { e.stopPropagation(); regenerateTaskSummary(task.id); }}
                       >Generate summary</button>
                     )}

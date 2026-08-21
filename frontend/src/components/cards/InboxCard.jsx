@@ -80,7 +80,7 @@ function placeCaretAtPoint(el, x, y) {
 }
 
 export default memo(function InboxCard({ task, selecting, selected, onToggle, onEnterSelect, expanded, onExpand, onRefresh, dragHandleProps }) {
-  const projColor = "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
+  const projColor = "accent-tint-15 text-accent";
   const isExpanded = expanded && !selecting;
   const { projects } = useProjects();
   const projectPicker = useMemo(() => [

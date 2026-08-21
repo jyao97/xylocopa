@@ -175,7 +175,7 @@ const AgentRow = memo(function AgentRow({
             {!hideProjectTag && agent.project && (
               <span
                 data-no-longpress
-                className="text-[10px] font-medium px-1.5 py-px rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 truncate cursor-pointer hover:bg-cyan-500/25 transition-colors"
+                className="text-[10px] font-medium px-1.5 py-px rounded-full accent-tint-15 text-accent truncate cursor-pointer hover:accent-tint-25 transition-colors"
                 onClick={(e) => { e.stopPropagation(); navigate(`/projects/${encodeURIComponent(agent.project)}`); }}
                 title={agent.project}
               >{agent.project}</span>

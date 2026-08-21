@@ -340,7 +340,7 @@ function linkifyAgentIds(text, keyPrefix) {
       <a
         key={`${keyPrefix}-a${m.index}`}
         href={`/agents/${agentId}`}
-        className="text-cyan-400 hover:underline font-mono"
+        className="text-accent hover:underline font-mono"
         onClick={(e) => { e.stopPropagation(); }}
         onDoubleClick={(e) => {
           e.preventDefault();
@@ -377,7 +377,7 @@ export function renderInline(text) {
       elements.push(
         <code
           key={i}
-          className="px-1 py-0.5 rounded bg-input text-cyan-300 text-xs font-mono"
+          className="px-1 py-0.5 rounded bg-input text-accent text-xs font-mono"
         >
           {linked || inner}
         </code>
@@ -404,7 +404,7 @@ export function renderInline(text) {
         if (token.type === "link") {
           elements.push(
             <a key={key} href={token.href} target="_blank" rel="noopener noreferrer"
-              className="text-cyan-400 hover:underline" onClick={(e) => e.stopPropagation()}>
+              className="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
               {token.text}
             </a>
           );

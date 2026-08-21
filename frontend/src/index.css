@@ -40,6 +40,8 @@
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #a5f3fc;   /* timestamp row (cyan-200) */
+  --color-accent:         #0891b2;
+  --color-accent-rgb:     8 145 178;
 
   /* Attention assistant identity. Still its own token (so it stays
      tunable in one place), but the values sit in the app's amber family —
@@ -104,6 +106,8 @@
   --color-bubble-ink:     #dbdee3;
   --color-bubble-ink-rgb: 219 222 227;
   --color-bubble-dim:     #a3c6d1;
+  --color-accent:         #22d3ee;
+  --color-accent-rgb:     34 211 238;
 
   /* One Tailwind step brighter on dark surfaces (#030712 page), matching
      how the app's amber accents flip to amber-400 in dark mode. The orb
@@ -156,6 +160,8 @@
   --color-bubble-ink:     #d8d6d2;
   --color-bubble-ink-rgb: 216 214 210;
   --color-bubble-dim:     #b2b0ab;
+  --color-accent:         #7fc0cf;
+  --color-accent-rgb:     127 192 207;
 }
 
 /* Solarized Dark — Ethan Schoonover's base03/base02 family. */
@@ -195,6 +201,8 @@
   --color-bubble-ink:     #bccbcb;
   --color-bubble-ink-rgb: 188 203 203;
   --color-bubble-dim:     #9dbccb;
+  --color-accent:         #4ba1d3;
+  --color-accent-rgb:     75 161 211;
 }
 
 /* Solarized Light — warm cream base3/base2 family. */
@@ -230,6 +238,8 @@
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #cfe6f5;
+  --color-accent:         #1f74b0;
+  --color-accent-rgb:     31 116 176;
 }
 
 /* Nord — polar-night blue-grays, snow-storm text. */
@@ -265,6 +275,8 @@
   --color-bubble-ink:     #dee4ec;
   --color-bubble-ink-rgb: 222 228 236;
   --color-bubble-dim:     #bcc8da;
+  --color-accent:         #88c0d0;
+  --color-accent-rgb:     136 192 208;
 }
 
 /* Everforest — muted forest greens, warm parchment text. */
@@ -300,6 +312,8 @@
   --color-bubble-ink:     #cdc3ab;
   --color-bubble-ink-rgb: 205 195 171;
   --color-bubble-dim:     #adbcb0;
+  --color-accent:         #7fbbb3;
+  --color-accent-rgb:     127 187 179;
 }
 
 /* Ash — the Bear/Things-style gray: cool light-gray ground with WHITE
@@ -337,6 +351,8 @@
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #b6d2e0;
+  --color-accent:         #1d6390;
+  --color-accent-rgb:     29 99 144;
 }
 
 /* Silver — flat industrial gray: the WHOLE interface lives at the
@@ -370,11 +386,13 @@
   --color-glass-nav:  #cfd1d4;
   --color-glass-edge: rgba(255,255,255,0.35);
 
-  --color-bubble:         #1d6390;
-  --color-bubble-rgb:     29 99 144;
+  --color-bubble:         #45484d;
+  --color-bubble-rgb:     69 72 77;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
-  --color-bubble-dim:     #b4d0e2;
+  --color-bubble-dim:     #c9cbce;
+  --color-accent:         #4a6378;
+  --color-accent-rgb:     74 99 120;
 }/* Clay — warm greige x brown: the flat tonal model Silver validated,
    shifted warm. Greige ground, taupe surfaces one small step up,
    espresso ink, and a cocoa-leather bubble — the classic gray-with-tan
@@ -410,6 +428,8 @@
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #dfcbb8;
+  --color-accent:         #7d5230;
+  --color-accent-rgb:     125 82 48;
 }
 
 /* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
@@ -448,6 +468,8 @@
   --color-bubble-ink:     #d7dfe7;
   --color-bubble-ink-rgb: 215 223 231;
   --color-bubble-dim:     #a3c2d1;
+  --color-accent:         #539bf5;
+  --color-accent-rgb:     83 155 245;
 }
 /* Nord Light — Snow Storm ground with Polar Night ink; pairs with Nord. */
 .theme-nord-light {
@@ -482,6 +504,8 @@
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #cdd9e8;
+  --color-accent:         #48709c;
+  --color-accent-rgb:     72 112 156;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):
@@ -670,6 +694,8 @@ html.eink {
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #d5d5d5;
+  --color-accent:         #000000;
+  --color-accent-rgb:     0 0 0;
 
   --color-attn:       #000000;
   --color-attn-rgb:   0 0 0;
@@ -713,6 +739,8 @@ html.eink.dark {
   --color-bubble-ink:     #000000;
   --color-bubble-ink-rgb: 0 0 0;
   --color-bubble-dim:     #2a2a2a;
+  --color-accent:         #ffffff;
+  --color-accent-rgb:     255 255 255;
 
   --color-attn:       #ffffff;
   --color-attn-rgb:   255 255 255;

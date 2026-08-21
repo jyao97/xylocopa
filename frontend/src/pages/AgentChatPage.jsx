@@ -401,14 +401,14 @@ function QuestionBubble({ item, agentId, onAnswered }) {
           badgeClass = "bg-elevated text-dim";
         } else if (answeredIdx != null) {
           badgeText = "Choice Sent";
-          badgeClass = "bg-cyan-500/15 text-cyan-500";
+          badgeClass = "accent-tint-15 text-accent";
         }
 
         return (
           <div key={qi} className={`rounded-xl bg-surface p-3 ${isLocked ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2 mb-1.5">
               {q.header && (
-                <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
+                <span className="inline-block px-2 py-0.5 rounded-full accent-tint-15 text-accent text-[10px] font-semibold uppercase tracking-wider">
                   {q.header}
                 </span>
               )}
@@ -565,14 +565,14 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
     if (optLabel.startsWith("no") || optLabel === "deny") {
       badgeText = "Denied"; badgeClass = "bg-red-500/15 text-red-500";
     } else {
-      badgeText = "Allowed"; badgeClass = "bg-cyan-500/15 text-cyan-500";
+      badgeText = "Allowed"; badgeClass = "accent-tint-15 text-accent";
     }
   }
 
   return (
     <div className="mt-3 rounded-xl bg-surface p-3">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
+        <span className="inline-block px-2 py-0.5 rounded-full accent-tint-15 text-accent text-[10px] font-semibold uppercase tracking-wider">
           Permission
         </span>
         {item.tool_name && (
@@ -1018,13 +1018,13 @@ function PlanBubble({ item, agentId, onAnswered }) {
     badgeClass = "bg-elevated text-dim";
   } else if (effectiveIdx != null) {
     badgeText = "Choice Sent";
-    badgeClass = "bg-cyan-500/15 text-cyan-500";
+    badgeClass = "accent-tint-15 text-accent";
   }
 
   return (
     <div className="mt-3 rounded-xl bg-surface p-3">
       <div className="flex items-center gap-2 mb-2">
-        <span className="inline-block px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 text-[10px] font-semibold uppercase tracking-wider">
+        <span className="inline-block px-2 py-0.5 rounded-full accent-tint-15 text-accent text-[10px] font-semibold uppercase tracking-wider">
           Plan Approval
         </span>
         {planContent && (

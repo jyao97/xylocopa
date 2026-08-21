@@ -39,7 +39,7 @@ export const PRESETS = [
     core: { page: "#f2f3f5", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
   { id: "silver", name: "Silver", base: "light",
     preview: { page: "#c2c4c7", surface: "#cbcdd0", text: "#26282b" },
-    core: { page: "#c2c4c7", surface: "#cbcdd0", heading: "#26282b", body: "#43464a", edge: "#a7a9ad", bubble: "#1d6390" } },
+    core: { page: "#c2c4c7", surface: "#cbcdd0", heading: "#26282b", body: "#43464a", edge: "#a7a9ad", bubble: "#45484d" } },
   { id: "clay", name: "Clay", base: "light",
     preview: { page: "#cac5be", surface: "#d2cdc6", text: "#2b2723" },
     core: { page: "#cac5be", surface: "#d2cdc6", heading: "#2b2723", body: "#48423c", edge: "#a8a29a", bubble: "#6f4e37" } },
@@ -167,8 +167,14 @@ export function deriveCustomTokens({ base, colors }) {
   const bubbleInk = isLightColor(bubble)
     ? "#1f2937"
     : base === "dark" ? mix(body, "#ffffff", 0.35) : "#ffffff";
+  // Accent (tags, links, inline code) rides the bubble hue: lightened on
+  // dark bases so it reads as text, used near-directly on light ones.
+  const accent = base === "dark" ? mix(bubble, "#ffffff", 0.45)
+    : isLightColor(bubble) ? mix(bubble, "#000000", 0.3) : bubble;
   return {
     page, surface, heading, body, edge, bubble,
+    accent,
+    accentRgb: channels(accent),
     bubbleRgb: channels(bubble),
     bubbleInk,
     bubbleInkRgb: channels(bubbleInk),
@@ -208,6 +214,7 @@ function buildCustomCss(cfg) {
     `--color-bubble:${t.bubble};--color-bubble-rgb:${t.bubbleRgb};`,
     `--color-bubble-ink:${t.bubbleInk};--color-bubble-ink-rgb:${t.bubbleInkRgb};`,
     `--color-bubble-dim:${t.bubbleDim};`,
+    `--color-accent:${t.accent};--color-accent-rgb:${t.accentRgb};`,
     "}",
     "@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){",
     `html.theme-custom{--color-glass:${t.glassRgba};--color-glass-nav:${t.glassNavRgba};}`,
@@ -333,7 +340,7 @@ const TERMINAL_THEMES = {
     ...GITHUB_LIGHT_ANSI,
   },
   silver: {
-    background: "#c2c4c7", foreground: "#26282b", cursor: "#1d6390",
+    background: "#c2c4c7", foreground: "#26282b", cursor: "#45484d",
     cursorAccent: "#c2c4c7", selectionBackground: "#dadcdf",
     ...GITHUB_LIGHT_ANSI,
   },

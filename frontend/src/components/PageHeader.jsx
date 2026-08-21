@@ -39,7 +39,7 @@ function QueueItem({ status, label, sub, dim, onClick }) {
   const s = status || "";
   const isIdle = s === "IDLE";
   const bgClass = isIdle ? "bg-green-500/15 text-green-500"
-    : "bg-cyan-500/15 text-cyan-500";
+    : "accent-tint-15 text-accent";
   return (
     <div className="flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover rounded px-1 -mx-1 py-0.5" onClick={onClick}>
       <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bgClass}`}>
@@ -122,7 +122,7 @@ function QueuePopover({ onClose, containerRef, navigate }) {
 
         {/* Summary header */}
         <div className="px-4 pt-3.5 pb-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-cyan-500/15 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-lg accent-tint-15 flex items-center justify-center">
             <svg className="w-4.5 h-4.5 text-cyan-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
             </svg>
@@ -489,7 +489,7 @@ function ModeToggle({ mode, onModeChange }) {
       onClick={() => onModeChange(key)}
       className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
         mode === key
-          ? "bg-cyan-500/15 text-cyan-500"
+          ? "accent-tint-15 text-accent"
           : "bg-transparent text-dim hover:bg-input"
       }`}
     >
@@ -773,7 +773,7 @@ export default function PageHeader({ title, theme, onToggleTheme, actions, selec
                 type="button"
                 onClick={() => setShowTimePopover(v => !v)}
                 title={badgeTitle}
-                className="shrink-0 inline-flex items-center gap-1 px-2 h-7 rounded-full bg-cyan-500/15 text-cyan-500 hover:bg-cyan-500/25 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1 px-2 h-7 rounded-full accent-tint-15 text-accent hover:accent-tint-25 transition-colors"
               >
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
                   <circle cx="12" cy="12" r="9" />

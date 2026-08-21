@@ -74,13 +74,25 @@
           }).catch(function(){});
           return; // stop further init until reload
         }
-        // Theme init — read new key, fall back to legacy "agenthive-theme"
+        // Theme init — read new key, fall back to legacy "agenthive-theme".
+        // Also restore the palette class (theme-soft-dark, theme-custom, …)
+        // chosen for that base so first paint matches; see src/lib/themes.js.
         var s=localStorage.getItem("xylocopa-theme")||localStorage.getItem("agenthive-theme");
         var d=window.matchMedia("(prefers-color-scheme:dark)").matches;
-        if(s==="dark"||(s!=="light"&&d)){
-          document.documentElement.classList.add("dark");
-          document.querySelector('meta[name="theme-color"]').setAttribute("content","#030712");
+        var base=(s==="dark"||(s!=="light"&&d))?"dark":"light";
+        if(base==="dark")document.documentElement.classList.add("dark");
+        var p=localStorage.getItem("xy:palette-"+base);
+        if(p&&p!==base){
+          document.documentElement.classList.add("theme-"+p);
+          if(p==="custom"){
+            // Injected here (mid-<head>) it lands BEFORE the bundled CSS,
+            // which is what lets html.eink / html.no-glass still win ties.
+            var css=localStorage.getItem("xy:custom-theme-css");
+            if(css){var st=document.createElement("style");st.id="xy-custom-theme";st.textContent=css;document.head.appendChild(st);}
+          }
         }
+        var mc=localStorage.getItem("xy:themecolor-"+base)||(base==="dark"?"#030712":"#ffffff");
+        document.querySelector('meta[name="theme-color"]').setAttribute("content",mc);
       })();
     </script>
   </head>

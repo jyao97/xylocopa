@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   PRESETS, CUSTOM_SEEDS, CUSTOM_COLOR_FIELDS, THEME_EVENT,
   getActivePaletteId, selectPalette, getCustomConfig, saveCustomConfig,
+  hasCustomConfig, customConfigFromPreset,
 } from "../lib/themes";
 
 // Monitor > Display > Theme: preset palette picker + custom-theme editor.
@@ -61,9 +62,30 @@ export default function ThemeSettings({ theme }) {
     if (getActivePaletteId() !== "custom") selectPalette("custom");
   }, []);
 
+  // Track the preset the user came from, so the editor can offer it as a
+  // starting point ("Copy from Nord") after they've switched to Custom.
+  const [sourcePreset, setSourcePreset] = useState(null);
+
   const handlePickCustom = useCallback(() => {
+    const current = getActivePaletteId();
+    if (current !== "custom") {
+      setSourcePreset(current);
+      // First time customizing: start from what's on screen right now,
+      // not from the stock light/dark palette.
+      if (!hasCustomConfig()) {
+        const seeded = customConfigFromPreset(current);
+        setCustom(seeded);
+        saveCustomConfig(seeded);
+      }
+    }
     selectPalette("custom");
     setEditorOpen(true);
+  }, []);
+
+  const handleCopyFromPreset = useCallback((id) => {
+    const seeded = customConfigFromPreset(id);
+    setCustom(seeded);
+    saveCustomConfig(seeded);
   }, []);
 
   return (
@@ -156,13 +178,24 @@ export default function ThemeSettings({ theme }) {
               </div>
             ))}
 
-            <button
-              type="button"
-              onClick={() => handleCustomChange({ base: custom.base, colors: { ...CUSTOM_SEEDS[custom.base] } })}
-              className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
-            >
-              Reset to {custom.base} defaults
-            </button>
+            <div className="flex items-center gap-4">
+              {sourcePreset && sourcePreset !== custom.base && (
+                <button
+                  type="button"
+                  onClick={() => handleCopyFromPreset(sourcePreset)}
+                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+                >
+                  Copy from {PRESETS.find((p) => p.id === sourcePreset)?.name}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleCustomChange({ base: custom.base, colors: { ...CUSTOM_SEEDS[custom.base] } })}
+                className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+              >
+                Reset to {custom.base} defaults
+              </button>
+            </div>
           </div>
         )}
       </div>

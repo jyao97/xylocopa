@@ -27,21 +27,30 @@ const CUSTOM_CSS_KEY = "xy:custom-theme-css";
 const META_COLOR_KEY = (base) => `xy:themecolor-${base}`;
 export const THEME_EVENT = "xy:theme-changed";
 
+// `core` mirrors the preset's page/surface/heading/body/edge tokens in
+// index.css — it seeds the custom editor when starting from that preset.
 export const PRESETS = [
   { id: "light", name: "Light", base: "light",
-    preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" } },
+    preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
+    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db" } },
   { id: "dark", name: "Dark", base: "dark",
-    preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" } },
+    preview: { page: "#030712", surface: "#111827", text: "#f3f4f6" },
+    core: { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151" } },
   { id: "soft-dark", name: "Soft Dark", base: "dark",
-    preview: { page: "#17181c", surface: "#1e2024", text: "#e8e6e3" } },
+    preview: { page: "#17181c", surface: "#1e2024", text: "#e8e6e3" },
+    core: { page: "#17181c", surface: "#1e2024", heading: "#e8e6e3", body: "#c9c7c3", edge: "#383b41" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
-    preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" } },
+    preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
+    core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4" } },
   { id: "solarized-dark", name: "Solarized Dark", base: "dark",
-    preview: { page: "#002b36", surface: "#073642", text: "#eee8d5" } },
+    preview: { page: "#002b36", surface: "#073642", text: "#aebcba" },
+    core: { page: "#002b36", surface: "#073642", heading: "#aebcba", body: "#90a2a4", edge: "#29525e" } },
   { id: "nord", name: "Nord", base: "dark",
-    preview: { page: "#2e3440", surface: "#3b4252", text: "#eceff4" } },
+    preview: { page: "#2e3440", surface: "#3b4252", text: "#eceff4" },
+    core: { page: "#2e3440", surface: "#3b4252", heading: "#eceff4", body: "#d8dee9", edge: "#4c566a" } },
   { id: "everforest", name: "Everforest", base: "dark",
-    preview: { page: "#272e33", surface: "#2d353b", text: "#d3c6aa" } },
+    preview: { page: "#272e33", surface: "#2d353b", text: "#d3c6aa" },
+    core: { page: "#272e33", surface: "#2d353b", heading: "#d3c6aa", body: "#b9ad93", edge: "#4a555b" } },
 ];
 
 // Seed values for the custom editor, per base (= the default palettes).
@@ -84,6 +93,21 @@ function rgba(hex, alpha) {
 }
 
 /* ── custom theme ── */
+
+export function hasCustomConfig() {
+  try {
+    return localStorage.getItem(CUSTOM_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+// Custom config seeded from a preset's core colors — the editor starts
+// from what the user is currently looking at, not from the stock palette.
+export function customConfigFromPreset(id) {
+  const p = PRESETS.find((x) => x.id === id) || PRESETS[0];
+  return { base: p.base, colors: { ...p.core } };
+}
 
 export function getCustomConfig() {
   try {

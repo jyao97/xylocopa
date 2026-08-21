@@ -6,9 +6,7 @@
 
 <p align="center"><img src="docs/hero.png" alt="Xylocopa — Many projects. One attention." width="640"></p>
 
-**Xylocopa is a visual orchestrator for your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents — it keeps you focused while they do the work.**
-
-Capture a task from anywhere — your phone included — and hand it to an agent. Agents run in parallel across your projects, each in its own git worktree; one attention button always takes you to the agent that needs you; what's learned lands in per-project memory instead of dying with the session. The workflow follows [GTD](https://gettingthingsdone.com/what-is-gtd/), with agents as the executor.
+**Xylocopa is a visual orchestrator for your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents — it keeps you focused while they do the work. Deploy it on your computer and manage your work from anywhere.**
 
 *Named after [Xylocopa caerulea](https://en.wikipedia.org/wiki/Xylocopa_caerulea), the blue carpenter bee — xylocopa (zy-LOCK-uh-puh) is Greek for "wood-cutter". If you find it useful, a star helps others find it.*
 
@@ -19,6 +17,8 @@ Capture a task from anywhere — your phone included — and hand it to an agent
 | Chat | Interactive artifact | Monitor |
 
 ## The Loop
+
+The workflow follows [GTD](https://gettingthingsdone.com/what-is-gtd/), with agents as the executor:
 
 1. **Capture** — an inbox that works from anywhere: type it, speak it (Whisper voice input), or use quick entry; drafts survive closing the app.
 2. **Dispatch** — one click turns a task into an agent: pick a model, optionally enable Auto mode (`--dangerously-skip-permissions`; destructive commands stay blocked by the [safety hook](#safety-guardrails)). Agents are seeded at dispatch with lessons from past sessions in the same project; batch dispatch triages a pile of inbox tasks in one step.

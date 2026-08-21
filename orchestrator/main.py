@@ -6,6 +6,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
 
 # Clear Claude Code nesting-detection vars from the orchestrator process
 # so spawned agents don't refuse to start.
@@ -27,13 +28,30 @@ from auth import get_jwt_secret, get_password_hash, verify_token
 setup_logging()
 logger = logging.getLogger("orchestrator")
 
-# Frontend debug logger — writes to a dedicated file for easy tailing
-_fe_handler = logging.FileHandler(
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "frontend-debug.log")
+# Frontend debug logger — writes to a dedicated file for easy tailing.
+# Size-rotated (20 MB × 3 files): unbounded FileHandler let this grow to 100 MB+.
+_fe_handler = RotatingFileHandler(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "frontend-debug.log"),
+    maxBytes=20 * 1024 * 1024, backupCount=2, encoding="utf-8",
 )
 _fe_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-logging.getLogger("frontend.debug").addHandler(_fe_handler)
-logging.getLogger("frontend.debug").setLevel(logging.DEBUG)
+_fe_logger = logging.getLogger("frontend.debug")
+_fe_logger.addHandler(_fe_handler)
+_fe_logger.setLevel(logging.DEBUG)
+_fe_logger.propagate = False  # dedicated file only — keep [fe] chatter out of orchestrator.log
+
+# Keyboard-viewport debug logger — high-volume per-frame samples from
+# /api/debug/kb-log. Raw lines, no timestamp prefix (samples carry t=).
+# Size-rotated (20 MB × 3): the old raw-append writer grew to 1.2 GB.
+_kb_handler = RotatingFileHandler(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "kb-debug.log"),
+    maxBytes=20 * 1024 * 1024, backupCount=2, encoding="utf-8",
+)
+_kb_handler.setFormatter(logging.Formatter("%(message)s"))
+_kb_logger = logging.getLogger("kb.debug")
+_kb_logger.addHandler(_kb_handler)
+_kb_logger.setLevel(logging.DEBUG)
+_kb_logger.propagate = False  # per-frame samples must not spill into orchestrator.log
 
 
 # ---- Registry loader ----
@@ -376,6 +394,13 @@ async def lifespan(app: FastAPI):
     app.state.agent_dispatcher = agent_dispatcher
     app.state.worker_manager = wm
     app.state.git_manager = gm
+    # One-time migration: pre-rebrand orchestrators wrote user.name=AgentHive
+    # into each managed repo's .git/config; rewrite to the current identity so
+    # agents stop committing as AgentHive. Idempotent, non-fatal.
+    try:
+        _migrate_legacy_git_identity(gm)
+    except Exception:
+        logger.exception("Legacy git identity migration failed (non-fatal)")
     agent_dispatch_task = asyncio.create_task(agent_dispatcher.run())
     logger.info("Dispatcher started")
 
@@ -624,6 +649,34 @@ def _migrate_legacy_user_dirs():
     if os.path.isdir(old) and not os.path.exists(new):
         os.rename(old, new)
         logger.info("Migrated legacy %s → %s", old, new)
+
+
+def _migrate_legacy_git_identity(gm) -> int:
+    """Rewrite the legacy ``AgentHive`` git identity in every managed repo.
+
+    Iterates all projects known to the DB (registry + filesystem-scanned),
+    including archived ones — an archived project can be un-archived later
+    and its worktrees share the parent's config. Only the exact legacy values
+    are rewritten (see ``git_manager.migrate_legacy_identity``); user-set
+    identities are never touched. Returns the number of repos changed.
+    """
+    db = SessionLocal()
+    try:
+        paths = [p for (p,) in db.query(Project.path).all() if p]
+    finally:
+        db.close()
+    changed = 0
+    for path in paths:
+        if not os.path.isdir(path):
+            continue
+        try:
+            if gm.migrate_legacy_identity(path):
+                changed += 1
+        except Exception:
+            logger.debug("git identity migration skipped for %s", path, exc_info=True)
+    if changed:
+        logger.info("Migrated legacy git identity in %d repo(s)", changed)
+    return changed
 
 
 # ---- App creation ----

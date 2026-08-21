@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { applyPalette, THEME_EVENT } from "../lib/themes";
 
 const STORAGE_KEY = "xylocopa-theme";
 const LEGACY_STORAGE_KEY = "agenthive-theme";
@@ -16,19 +17,10 @@ function getSystemTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function applyTheme(resolved) {
-  const root = document.documentElement;
-  if (resolved === "dark") {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) {
-    meta.setAttribute("content", resolved === "dark" ? "#030712" : "#ffffff");
-  }
-}
-
+// `theme` is the resolved base mode ("light" | "dark"). Which palette that
+// base maps to (default, soft-dark, solarized, custom, …) is resolved by
+// applyPalette from localStorage — see lib/themes.js. The toggle flips
+// between the palette chosen for light and the one chosen for dark.
 export default function useTheme() {
   const [theme, setTheme] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -38,8 +30,15 @@ export default function useTheme() {
   });
 
   useEffect(() => {
-    applyTheme(theme);
+    applyPalette(theme);
   }, [theme]);
+
+  // Palette picker (Monitor > Display) may switch the base — stay in sync.
+  useEffect(() => {
+    const onChange = (e) => setTheme(e.detail.base);
+    window.addEventListener(THEME_EVENT, onChange);
+    return () => window.removeEventListener(THEME_EVENT, onChange);
+  }, []);
 
   const toggle = useCallback(() => {
     setTheme((prev) => {

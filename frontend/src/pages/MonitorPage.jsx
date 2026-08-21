@@ -8,6 +8,7 @@ import {
 } from "../lib/api";
 import { useMonitor } from "../contexts/MonitorContext";
 import { getEinkMode, setEinkMode } from "../lib/einkMode";
+import ThemeSettings from "../components/ThemeSettings";
 
 const HEALTH_COLORS = {
   ok: "bg-green-500",
@@ -732,6 +733,9 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                 : `Freed ${formatBytes(orphanResult.freed_bytes)} (${orphanResult.deleted_sessions} sessions, ${orphanResult.deleted_logs} logs, ${orphanResult.deleted_dirs} dirs, ${orphanResult.deleted_projects || 0} projects)`}
           </p>
         )}
+
+        {/* Display: theme palettes + custom editor */}
+        <ThemeSettings theme={theme} />
 
         {/* Display: e-ink mode toggle */}
         <section className="rounded-xl bg-surface shadow-card p-4">

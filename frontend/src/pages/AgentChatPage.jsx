@@ -253,8 +253,8 @@ function SubAgentBubble({ message, project }) {
           {message.source && (
             <span className={`ml-1.5 px-1 py-0.5 rounded text-[10px] font-medium leading-none ${
               message.source === "web"
-                ? "bg-cyan-500/20 text-cyan-300"
-                : "bg-emerald-500/20 text-emerald-300"
+                ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
             }`}>
               {message.source}
             </span>
@@ -1432,10 +1432,10 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 : isScheduled
                   ? "bg-amber-600/80 text-white rounded-br-md"
                   : isPreQueued
-                    ? "bg-cyan-600/60 text-white/80 rounded-br-md"
+                    ? "bg-bubble-60 text-bubble-ink-80 rounded-br-md"
                     : isUndeliveredTimedOut
                       ? "bg-red-600/40 text-white/70 rounded-br-md"
-                      : "bg-cyan-600 text-white rounded-br-md"
+                      : "bg-bubble text-bubble-ink rounded-br-md"
               : "bg-surface shadow-card text-body rounded-bl-md"
           } ${canModify ? "select-none" : ""} ${isBeingEdited ? "ring-2 ring-white/70" : ""} overflow-hidden`}
           onDoubleClick={handleDoubleClick}
@@ -1460,7 +1460,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
           )}
           <div className={`text-xs mt-1 flex items-center gap-1.5 ${
             isUser
-              ? isCancelled ? "text-gray-100" : isScheduled ? "text-amber-200" : "text-cyan-200"
+              ? isCancelled ? "text-gray-100" : isScheduled ? "text-amber-200" : "text-bubble-dim"
               : "text-dim"
           }`}>
             {isScheduled ? (
@@ -1487,8 +1487,12 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 isCancelled
                   ? "bg-gray-500/40 text-gray-100"
                   : message.source === "web"
-                    ? "bg-cyan-500/20 text-cyan-300"
-                    : "bg-emerald-500/20 text-emerald-300"
+                    ? isUser
+                      ? "bg-cyan-500/20 text-cyan-100"
+                      : "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                    : isUser
+                      ? "bg-emerald-500/20 text-emerald-100"
+                      : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
               }`}>
                 {message.source}
               </span>

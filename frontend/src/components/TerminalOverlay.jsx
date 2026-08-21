@@ -18,18 +18,11 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { getAuthToken } from "../lib/api";
+import { getTerminalTheme, THEME_EVENT } from "../lib/themes";
 
 const TOUCH_DEVICE =
   typeof window !== "undefined" &&
   ("ontouchstart" in window || navigator.maxTouchPoints > 0);
-
-const TERM_THEME = {
-  background: "#0d1117",
-  foreground: "#c9d1d9",
-  cursor: "#58a6ff",
-  cursorAccent: "#0d1117",
-  selectionBackground: "#264f78",
-};
 
 const STATUS_META = {
   connecting: { color: "#d29922", label: "Connecting…" },
@@ -68,6 +61,18 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
   const [status, setStatus] = useState("connecting");
   const [errMsg, setErrMsg] = useState("");
   const [ctrlArmed, setCtrlArmed] = useState(false);
+  // xterm theme follows the app palette; hot-swapped if it changes while open.
+  const [termTheme, setTermTheme] = useState(getTerminalTheme);
+
+  useEffect(() => {
+    const onThemeChange = () => {
+      const next = getTerminalTheme();
+      setTermTheme(next);
+      if (termRef.current) termRef.current.options.theme = next;
+    };
+    window.addEventListener(THEME_EVENT, onThemeChange);
+    return () => window.removeEventListener(THEME_EVENT, onThemeChange);
+  }, []);
 
   const armCtrl = (on) => {
     ctrlArmedRef.current = on;
@@ -174,7 +179,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
       fontSize: window.innerWidth < 640 ? 13 : 14,
       fontFamily:
         "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
-      theme: TERM_THEME,
+      theme: getTerminalTheme(),
       scrollback: 2000,
     });
     const fit = new FitAddon();
@@ -299,7 +304,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
     // never peek through.
     <div
       className="fixed inset-0 z-[120] overflow-hidden"
-      style={{ background: "#0d1117" }}
+      style={{ background: termTheme.background }}
     >
       {/* iOS zooms into focused inputs with font-size < 16px; xterm's hidden
           helper textarea triggers that. Scoped override while overlay is open. */}
@@ -310,12 +315,12 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
       >
 
       {/* Header */}
-      <div className="shrink-0 h-11 flex items-center gap-2 px-2 border-b border-white/10">
+      <div className="shrink-0 h-11 flex items-center gap-2 px-2 border-b border-divider bg-surface">
         <button
           type="button"
           onClick={onClose}
           title="Close (detach — session keeps running)"
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/10 transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-dim hover:text-heading hover:bg-hover transition-colors"
         >
           <ArrowLeft className="w-4.5 h-4.5" strokeWidth={2} />
         </button>
@@ -327,25 +332,25 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
           }}
         />
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium text-zinc-200 truncate leading-tight">
+          <div className="text-[13px] font-medium text-heading truncate leading-tight">
             {agentName || "Terminal"}
           </div>
-          <div className="text-[10px] text-zinc-500 leading-tight">
+          <div className="text-[10px] text-dim leading-tight">
             tmux · {meta.label}
           </div>
         </div>
-        <div className="text-[10px] text-zinc-600 pr-1 text-right shrink-0">
+        <div className="text-[10px] text-faint pr-1 text-right shrink-0">
           close = detach only
         </div>
       </div>
 
       {/* Terminal */}
-      <div className="flex-1 min-h-0 relative pl-2 pt-1" style={{ background: "#0d1117" }}>
+      <div className="flex-1 min-h-0 relative pl-2 pt-1" style={{ background: termTheme.background }}>
         <div ref={mountRef} className="absolute inset-0 pl-2 pr-1 pt-1" />
         {showBanner && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
-            <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl border border-white/10 bg-[#161b22]">
-              <div className="text-sm text-zinc-300">
+            <div className="flex flex-col items-center gap-3 px-6 py-5 rounded-2xl border border-edge bg-surface">
+              <div className="text-sm text-body">
                 {status === "error"
                   ? errMsg || "Connection error"
                   : status === "exited"
@@ -368,7 +373,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
       {/* Mobile key bar */}
       {TOUCH_DEVICE && (
         <div
-          className="shrink-0 flex items-stretch gap-1 px-1.5 pt-1 border-t border-white/10"
+          className="shrink-0 flex items-stretch gap-1 px-1.5 pt-1 border-t border-divider bg-surface"
           style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
         >
           {KEYS.map((k) => (
@@ -384,7 +389,7 @@ export default function TerminalOverlay({ agentId, agentName, onClose }) {
               className={`flex-1 h-9 rounded-md text-[13px] font-medium transition-colors ${
                 k.ctrl && ctrlArmed
                   ? "bg-cyan-600 text-white"
-                  : "bg-white/5 text-zinc-300 active:bg-white/15"
+                  : "bg-input text-body active:bg-hover"
               }`}
             >
               {k.label}

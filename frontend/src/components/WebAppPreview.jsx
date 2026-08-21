@@ -91,9 +91,15 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
   // Console messages from the sandboxed iframe (opaque origin → filter by source).
   useEffect(() => {
     const onMessage = (e) => {
+      if (iframeRef.current && e.source !== iframeRef.current.contentWindow) return;
+      // Keyboard-focus delegation: a sandboxed (opaque-origin) iframe cannot
+      // take keyboard focus by itself — even clicks inside it leave focus on
+      // the parent document, so key-driven apps (game/world-model demos) go
+      // deaf. The page posts this request on pointerdown; focusing the
+      // iframe ELEMENT routes keystrokes into the inner browsing context.
+      if (e.data === "xylo:focus-preview") { iframeRef.current?.focus(); return; }
       const d = e.data;
       if (!d || d.__xy_preview !== 1 || d.kind !== "console") return;
-      if (iframeRef.current && e.source !== iframeRef.current.contentWindow) return;
       setLogs((prev) => [...prev.slice(-499), { level: d.level, text: String(d.text ?? "") }]);
     };
     window.addEventListener("message", onMessage);
@@ -208,7 +214,7 @@ export default function WebAppPreview({ project, path, src: directSrc, filename,
             src={src}
             sandbox={SANDBOX}
             title={filename}
-            onLoad={() => setLoaded(true)}
+            onLoad={() => { setLoaded(true); iframeRef.current?.focus(); }}
             className={`w-full h-full border-0 bg-white ${loaded ? "" : "opacity-0"}`}
           />
         )}

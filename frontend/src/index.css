@@ -28,6 +28,26 @@
   --color-glass:      #e6e9ee;
   --color-glass-nav:  #f0f2f5;
   --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* User chat bubble. Tokenized per palette, following messenger
+     convention (iMessage / WhatsApp / Telegram): light themes use a
+     saturated brand-blue bubble with pure white ink; dark themes use a
+     deep desaturated hue with OFF-white ink (#E9EDEF-class) — brighter
+     than --color-body so "my" messages keep presence, dimmer than pure
+     white so they don't glare. */
+  --color-bubble:         #0891b2;   /* cyan-600 — the classic light look */
+  --color-bubble-rgb:     8 145 178;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #a5f3fc;   /* timestamp row (cyan-200) */
+
+  /* Attention assistant identity. Still its own token (so it stays
+     tunable in one place), but the values sit in the app's amber family —
+     the Auto chip / deferred-clock tone — by explicit request: the earlier
+     saturated red-orange shouted, and amber already means "waiting on you"
+     here, which is exactly what the assistant holds. The face and bubble
+     shapes, not the hue, are what keep it distinct from status chips.
+     Ink is dark on purpose: white on amber-500 is ~2.2:1. */
 }
 
 .dark {
@@ -56,6 +76,202 @@
   --color-glass:      #1e293b;
   --color-glass-nav:  #283246;
   --color-glass-edge: rgba(255,255,255,0.22);
+
+  /* Deep muted cyan (cyan-800) + off-white gray-200 ink — the WhatsApp
+     dark treatment (#005C4B + #E9EDEF), transposed to this app's hue. */
+  --color-bubble:         #155e75;
+  --color-bubble-rgb:     21 94 117;
+  --color-bubble-ink:     #dbdee3;
+  --color-bubble-ink-rgb: 219 222 227;
+  --color-bubble-dim:     #a3c6d1;
+}
+
+/* ── Preset theme palettes ──────────────────────────────────────────────
+   Selected in Monitor > Display > Theme. Each palette is a `theme-<id>`
+   class on <html> layered OVER the matching base: dark palettes also carry
+   `.dark` (so every `dark:` Tailwind variant keeps working), light palettes
+   don't. Single-class selectors (0,1,0) on purpose: they override :root /
+   .dark by source order, while html.eink / html.no-glass (0,1,1) still win.
+   Tokens not listed inherit from the base theme.
+   Registry + custom-theme plumbing: src/lib/themes.js. */
+
+/* Soft Dark — low-contrast warm charcoal, no pure black. */
+.theme-soft-dark {
+  --color-page:       #17181c;
+  --color-surface:    #1e2024;
+  --color-input:      #26282d;
+  --color-elevated:   #33363c;
+  --color-hover:      #3e424a;
+  --color-inset:      #17181c;
+
+  --color-heading:    #e8e6e3;
+  --color-body:       #c9c7c3;
+  --color-label:      #9d9b97;
+  --color-dim:        #83817d;
+  --color-faint:      #5f5e5b;
+  --color-ghost:      #45464a;
+
+  --color-divider:    #26282d;
+  --color-edge:       #383b41;
+  --color-ring-hover: #4a4e56;
+
+  --color-hint:       #83817d;
+  --color-shadow:     rgba(0,0,0,0.35);
+  --color-skel:       #26282d;
+  --color-glass:      #24262b;
+  --color-glass-nav:  #2a2c32;
+  --color-glass-edge: rgba(255,255,255,0.16);
+
+  /* Slate teal, desaturated to sit with the warm charcoal; warm off-white ink. */
+  --color-bubble:         #375663;
+  --color-bubble-rgb:     55 86 99;
+  --color-bubble-ink:     #d8d6d2;
+  --color-bubble-ink-rgb: 216 214 210;
+  --color-bubble-dim:     #b2b0ab;
+}
+
+/* Solarized Dark — Ethan Schoonover's base03/base02 family. */
+.theme-solarized-dark {
+  --color-page:       #002b36;
+  --color-surface:    #073642;
+  --color-input:      #0d4250;
+  --color-elevated:   #16505f;
+  --color-hover:      #1f5e6e;
+  --color-inset:      #002b36;
+
+  /* Text stays in Solarized's base0/base1 cyan-gray band — base2 cream
+     (#eee8d5) as heading read as glaring near-white on the teal ground.
+     heading ≈6.8:1 / body ≈5:1 on --color-surface. */
+  --color-heading:    #aebcba;
+  --color-body:       #90a2a4;
+  --color-label:      #7b8f93;
+  --color-dim:        #657b83;
+  --color-faint:      #52676f;
+  --color-ghost:      #40565e;
+
+  --color-divider:    #0d4250;
+  --color-edge:       #29525e;
+  --color-ring-hover: #38707f;
+
+  --color-hint:       #657b83;
+  --color-shadow:     rgba(0,0,0,0.4);
+  --color-skel:       #0d4250;
+  --color-glass:      #073642;
+  --color-glass-nav:  #0a3e4c;
+  --color-glass-edge: rgba(238,232,213,0.14);
+
+  /* Solarized blue pulled toward base03; ink one step softer than base2
+     cream (which read as glaring at heading size). */
+  --color-bubble:         #135b84;
+  --color-bubble-rgb:     19 91 132;
+  --color-bubble-ink:     #bccbcb;
+  --color-bubble-ink-rgb: 188 203 203;
+  --color-bubble-dim:     #9dbccb;
+}
+
+/* Solarized Light — warm cream base3/base2 family. */
+.theme-solarized-light {
+  --color-page:       #fdf6e3;
+  --color-surface:    #f3ecd9;
+  --color-input:      #eee8d5;
+  --color-elevated:   #e4ddc8;
+  --color-hover:      #d8d1bc;
+  --color-inset:      #fdf6e3;
+
+  --color-heading:    #073642;
+  --color-body:       #586e75;
+  --color-label:      #657b83;
+  --color-dim:        #839496;
+  --color-faint:      #93a1a1;
+  --color-ghost:      #b0bcbb;
+
+  --color-divider:    #eee8d5;
+  --color-edge:       #d5cdb4;
+  --color-ring-hover: #c3bba2;
+
+  --color-hint:       #93a1a1;
+  --color-shadow:     rgba(101,123,131,0.12);
+  --color-skel:       #eee8d5;
+  --color-glass:      #eee8d5;
+  --color-glass-nav:  #f2ecd9;
+  --color-glass-edge: rgba(255,255,255,0.5);
+
+  /* Canonical solarized blue + white — the iMessage treatment on cream. */
+  --color-bubble:         #268bd2;
+  --color-bubble-rgb:     38 139 210;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #cfe6f5;
+}
+
+/* Nord — polar-night blue-grays, snow-storm text. */
+.theme-nord {
+  --color-page:       #2e3440;
+  --color-surface:    #3b4252;
+  --color-input:      #434c5e;
+  --color-elevated:   #4c566a;
+  --color-hover:      #59657c;
+  --color-inset:      #2e3440;
+
+  --color-heading:    #eceff4;
+  --color-body:       #d8dee9;
+  --color-label:      #aab2c0;
+  --color-dim:        #8892a4;
+  --color-faint:      #6a7488;
+  --color-ghost:      #525b6e;
+
+  --color-divider:    #434c5e;
+  --color-edge:       #4c566a;
+  --color-ring-hover: #5e6a82;
+
+  --color-hint:       #8892a4;
+  --color-shadow:     rgba(0,0,0,0.35);
+  --color-skel:       #3b4252;
+  --color-glass:      #353c4a;
+  --color-glass-nav:  #3a4152;
+  --color-glass-edge: rgba(236,239,244,0.15);
+
+  /* Frost steel-blue (the Telegram-dark treatment) + nord5 ink. */
+  --color-bubble:         #4a6485;
+  --color-bubble-rgb:     74 100 133;
+  --color-bubble-ink:     #dee4ec;
+  --color-bubble-ink-rgb: 222 228 236;
+  --color-bubble-dim:     #bcc8da;
+}
+
+/* Everforest — muted forest greens, warm parchment text. */
+.theme-everforest {
+  --color-page:       #272e33;
+  --color-surface:    #2d353b;
+  --color-input:      #343f44;
+  --color-elevated:   #3d484d;
+  --color-hover:      #475258;
+  --color-inset:      #272e33;
+
+  --color-heading:    #d3c6aa;
+  --color-body:       #b9ad93;
+  --color-label:      #9da9a0;
+  --color-dim:        #859289;
+  --color-faint:      #6b766d;
+  --color-ghost:      #525d54;
+
+  --color-divider:    #343f44;
+  --color-edge:       #4a555b;
+  --color-ring-hover: #56636a;
+
+  --color-hint:       #859289;
+  --color-shadow:     rgba(0,0,0,0.35);
+  --color-skel:       #343f44;
+  --color-glass:      #313a40;
+  --color-glass-nav:  #364046;
+  --color-glass-edge: rgba(211,198,170,0.13);
+
+  /* Everforest bg_blue + brightened parchment ink. */
+  --color-bubble:         #3a515d;
+  --color-bubble-rgb:     58 81 93;
+  --color-bubble-ink:     #cdc3ab;
+  --color-bubble-ink-rgb: 205 195 171;
+  --color-bubble-dim:     #adbcb0;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):
@@ -86,6 +302,27 @@
     --color-glass: rgba(30,41,59,0.7);
     --color-glass-nav: rgba(40,50,70,0.68);
   }
+  /* Preset palettes: same alpha treatment over their own surface hues. */
+  .theme-soft-dark {
+    --color-glass: rgba(36,38,43,0.7);
+    --color-glass-nav: rgba(42,44,50,0.68);
+  }
+  .theme-solarized-dark {
+    --color-glass: rgba(7,54,66,0.72);
+    --color-glass-nav: rgba(10,62,76,0.7);
+  }
+  .theme-solarized-light {
+    --color-glass: rgba(238,232,213,0.68);
+    --color-glass-nav: rgba(242,236,217,0.65);
+  }
+  .theme-nord {
+    --color-glass: rgba(53,60,74,0.7);
+    --color-glass-nav: rgba(58,65,82,0.68);
+  }
+  .theme-everforest {
+    --color-glass: rgba(49,58,64,0.7);
+    --color-glass-nav: rgba(54,64,70,0.68);
+  }
 }
 
 html.no-glass {
@@ -96,6 +333,12 @@ html.no-glass.dark {
   --color-glass: #1e293b;
   --color-glass-nav: #283246;
 }
+/* Glass-incapable engines keep each palette's own opaque surface. */
+html.no-glass.theme-soft-dark       { --color-glass: #24262b; --color-glass-nav: #2a2c32; }
+html.no-glass.theme-solarized-dark  { --color-glass: #073642; --color-glass-nav: #0a3e4c; }
+html.no-glass.theme-solarized-light { --color-glass: #eee8d5; --color-glass-nav: #f2ecd9; }
+html.no-glass.theme-nord            { --color-glass: #353c4a; --color-glass-nav: #3a4152; }
+html.no-glass.theme-everforest      { --color-glass: #313a40; --color-glass-nav: #364046; }
 html.no-glass .glass-bar,
 html.no-glass .glass-bar-nav {
   backdrop-filter: none;
@@ -180,6 +423,15 @@ html.eink {
   --color-glass:      #f5f5f5;
   --color-glass-nav:  #f5f5f5;
   --color-glass-edge: #6a6a6a;
+
+  /* The user bubble goes ink-on-paper: the .bg-bubble utility bypasses
+     the [class*="bg-cyan-"] flattening rules below, so the tokens
+     themselves must carry the e-ink values. */
+  --color-bubble:         #000000;
+  --color-bubble-rgb:     0 0 0;
+  --color-bubble-ink:     #ffffff;
+  --color-bubble-ink-rgb: 255 255 255;
+  --color-bubble-dim:     #d5d5d5;
 }
 html.eink.dark {
   --color-page:       #000000;
@@ -206,6 +458,12 @@ html.eink.dark {
   --color-glass:      #111111;
   --color-glass-nav:  #111111;
   --color-glass-edge: #888888;
+
+  --color-bubble:         #ffffff;
+  --color-bubble-rgb:     255 255 255;
+  --color-bubble-ink:     #000000;
+  --color-bubble-ink-rgb: 0 0 0;
+  --color-bubble-dim:     #2a2a2a;
 }
 
 /* Heavier baseline font weight + crisper rendering. :where() keeps
@@ -1088,6 +1346,15 @@ svg text { font-family: inherit; }
 
   .hover\:ring-ring-hover:hover { --tw-ring-color: var(--color-ring-hover); }
 
+
+  /* User chat bubble. Written out by hand: Tailwind does NOT generate
+     utilities (or `/NN` alpha modifiers) from --color-* declarations in
+     :root, so the alpha steps use rgb() slash-alpha over the -rgb vars. */
+  .bg-bubble        { background-color: var(--color-bubble); }
+  .bg-bubble-60     { background-color: rgb(var(--color-bubble-rgb) / 0.6); }
+  .text-bubble-ink  { color: var(--color-bubble-ink); }
+  .text-bubble-ink-80 { color: rgb(var(--color-bubble-ink-rgb) / 0.8); }
+  .text-bubble-dim  { color: var(--color-bubble-dim); }
   /* Placeholder */
   .placeholder-hint::placeholder { color: var(--color-hint); }
 

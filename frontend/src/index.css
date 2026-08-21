@@ -104,9 +104,12 @@
   --color-hover:      #1f5e6e;
   --color-inset:      #002b36;
 
-  --color-heading:    #eee8d5;
-  --color-body:       #a7b5b4;
-  --color-label:      #869697;
+  /* Text stays in Solarized's base0/base1 cyan-gray band — base2 cream
+     (#eee8d5) as heading read as glaring near-white on the teal ground.
+     heading ≈6.8:1 / body ≈5:1 on --color-surface. */
+  --color-heading:    #aebcba;
+  --color-body:       #90a2a4;
+  --color-label:      #7b8f93;
   --color-dim:        #657b83;
   --color-faint:      #52676f;
   --color-ghost:      #40565e;

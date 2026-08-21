@@ -34,6 +34,9 @@ export const PRESETS = [
   { id: "light", name: "Light", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
+  { id: "ash", name: "Ash", base: "light",
+    preview: { page: "#f2f3f5", surface: "#ffffff", text: "#1c1e21" },
+    core: { page: "#f2f3f5", surface: "#ffffff", heading: "#1c1e21", body: "#3f4247", edge: "#d9dce0", bubble: "#135b84" } },
   { id: "solarized-light", name: "Solarized Light", base: "light",
     preview: { page: "#fdf6e3", surface: "#f3ecd9", text: "#073642" },
     core: { page: "#fdf6e3", surface: "#f3ecd9", heading: "#073642", body: "#586e75", edge: "#d5cdb4", bubble: "#268bd2" } },
@@ -320,6 +323,11 @@ const TERMINAL_THEMES = {
     brightBlack: "#859289", brightRed: "#e67e80", brightGreen: "#a7c080",
     brightYellow: "#dbbc7f", brightBlue: "#7fbbb3", brightMagenta: "#d699b6",
     brightCyan: "#83c092", brightWhite: "#fdf1c7",
+  },
+  ash: {
+    background: "#f2f3f5", foreground: "#3f4247", cursor: "#135b84",
+    cursorAccent: "#f2f3f5", selectionBackground: "#d7dade",
+    ...GITHUB_LIGHT_ANSI,
   },
   // GitHub Dark Dimmed ANSI table.
   graphite: {

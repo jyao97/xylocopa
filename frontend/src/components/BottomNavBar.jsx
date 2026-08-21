@@ -82,10 +82,8 @@ function CenterFab({ tab, onNewTask }) {
     <button
       type="button"
       {...handlers}
-      className={`flex items-center justify-center mx-auto -mt-4 w-13 h-13 rounded-full transition-colors shadow-lg shadow-cyan-500/20 select-none touch-none ${
-        isActive
-          ? "bg-cyan-500 text-white"
-          : "bg-cyan-600 text-white hover:bg-cyan-500"
+      className={`flex items-center justify-center mx-auto -mt-4 w-13 h-13 rounded-full transition-[opacity,background-color] shadow-accent-fab select-none touch-none bg-accent text-accent-ink ${
+        isActive ? "opacity-100" : "hover:opacity-90"
       }`}
     >
       {tab.icon}
@@ -137,7 +135,7 @@ export default function BottomNavBar({ badges, onDoubleTap, onProjectsTap, onNew
               className={({ isActive }) => {
                 const active = tab.key === "projects" ? location.pathname.startsWith("/projects") : isActive;
                 return `relative flex flex-col items-center justify-center min-h-[58px] py-2.5 transition-colors ${
-                  active ? "text-cyan-400" : "text-dim hover:text-body"
+                  active ? "text-accent" : "text-dim hover:text-body"
                 }`;
               }}
             >

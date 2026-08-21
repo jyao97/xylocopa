@@ -1697,7 +1697,9 @@ svg text { font-family: inherit; }
   .accent-tint-10   { background-color: rgb(var(--color-accent-rgb) / 0.10); }
   .accent-tint-15   { background-color: rgb(var(--color-accent-rgb) / 0.15); }
   .accent-tint-20   { background-color: rgb(var(--color-accent-rgb) / 0.20); }
+  .hover\:accent-tint-10:hover { background-color: rgb(var(--color-accent-rgb) / 0.10); }
   .hover\:accent-tint-25:hover { background-color: rgb(var(--color-accent-rgb) / 0.25); }
+  .enabled\:hover\:accent-tint-25:hover:enabled { background-color: rgb(var(--color-accent-rgb) / 0.25); }
   .accent-edge-40   { border-color: rgb(var(--color-accent-rgb) / 0.40); }
   .accent-edge-60   { border-color: rgb(var(--color-accent-rgb) / 0.60); }
   .ring-accent      { --tw-ring-color: var(--color-accent); }

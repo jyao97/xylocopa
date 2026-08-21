@@ -212,17 +212,17 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
             </span>
           )}
           {task.model && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-elevated text-dim">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-elevated text-label">
               {modelDisplayName(task.model)}
             </span>
           )}
           {task.effort && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-elevated text-dim uppercase">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-elevated text-label uppercase">
               {task.effort}
             </span>
           )}
           {task.use_worktree && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">Worktree</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400">Worktree</span>
           )}
           {task.sync_mode && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">Tmux</span>
@@ -261,7 +261,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-heading text-sm focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-heading text-sm focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
@@ -270,7 +270,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
                   rows={4}
-                  className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-heading text-sm resize-none focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-lg bg-input border border-edge px-3 py-2 text-heading text-sm resize-none focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
@@ -301,7 +301,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                   type="button"
                   onClick={handleSaveEdit}
                   disabled={actionLoading}
-                  className="px-4 py-2 rounded-lg bg-cyan-500 text-white text-sm font-medium hover:bg-cyan-400 transition-colors"
+                  className="px-4 py-2 rounded-lg bg-accent text-accent-ink text-sm font-medium hover:opacity-90 transition-colors"
                 >
                   Save
                 </button>
@@ -330,7 +330,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                   onClick={startEdit}
                   className="w-full rounded-xl bg-surface shadow-card p-3 flex items-center gap-2 text-sm text-label hover:text-heading transition-colors"
                 >
-                  <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                   Edit task details
@@ -358,15 +358,15 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               return new Date(s).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
             };
             const steps = [
-              { label: "Created", ts: task.created_at, icon: "plus", color: "text-blue-400", bg: "bg-blue-500" },
+              { label: "Created", ts: task.created_at, icon: "plus", color: "text-accent", bg: "bg-accent" },
             ];
             if (task.started_at) {
-              steps.push({ label: "Started", ts: task.started_at, icon: "play", color: "text-cyan-400", bg: "bg-cyan-500",
+              steps.push({ label: "Started", ts: task.started_at, icon: "play", color: "text-accent", bg: "bg-accent",
                 dur: durationDisplay(task.created_at, task.started_at) });
             }
             if (task.completed_at) {
               const termLabel = task.status === "COMPLETE" ? "Completed" : task.status === "FAILED" ? "Failed" : task.status === "TIMEOUT" ? "Timed Out" : task.status === "CANCELLED" ? "Dropped" : task.status === "REJECTED" ? "Rejected" : "Ended";
-              const termColor = task.status === "COMPLETE" ? "text-green-400" : task.status === "CANCELLED" ? "text-gray-400" : "text-red-400";
+              const termColor = task.status === "COMPLETE" ? "text-green-600 dark:text-green-400" : task.status === "CANCELLED" ? "text-gray-400" : "text-red-600 dark:text-red-400";
               const termBg = task.status === "COMPLETE" ? "bg-green-500" : task.status === "CANCELLED" ? "bg-gray-500" : "bg-red-500";
               steps.push({ label: termLabel, ts: task.completed_at, icon: "end", color: termColor, bg: termBg,
                 dur: task.started_at ? durationDisplay(task.started_at, task.completed_at) : null });
@@ -421,7 +421,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
             <div className="rounded-xl bg-surface shadow-card p-3">
               <div className="flex items-center gap-2">
                 {task.status === "EXECUTING" ? (
-                  <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
                 ) : (
                   <svg className="w-3.5 h-3.5 text-dim shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47-2.47" />
@@ -432,7 +432,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                 <button
                   type="button"
                   onClick={() => navigate(`/agents/${task.agent_id}`, { state: forwardState(location) })}
-                  className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 text-xs text-cyan-400 hover:bg-cyan-500/20 transition-colors font-medium"
+                  className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg accent-tint-10 text-xs text-accent hover:accent-tint-25 transition-colors font-medium"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -469,7 +469,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               {(() => {
                 const arts = task.review_artifacts ? (() => { try { return JSON.parse(task.review_artifacts); } catch { return {}; } })() : {};
                 if (!arts.verify_status || arts.verify_status === "running") return null;
-                const colors = { pass: "text-green-400 bg-green-500/10", fail: "text-red-400 bg-red-500/10", warn: "text-amber-400 bg-amber-500/10", done: "text-cyan-400 bg-cyan-500/10", error: "text-red-400 bg-red-500/10" };
+                const colors = { pass: "text-green-600 dark:text-green-400 bg-green-500/10", fail: "text-red-600 dark:text-red-400 bg-red-500/10", warn: "text-amber-600 dark:text-amber-400 bg-amber-500/10", done: "text-accent accent-tint-10", error: "text-red-600 dark:text-red-400 bg-red-500/10" };
                 const labels = { pass: "Verification Passed", fail: "Verification Failed", warn: "Verification Warning", done: "Verification Complete", error: "Verification Error" };
                 return (
                   <div className="space-y-2">
@@ -483,7 +483,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
                       <button
                         type="button"
                         onClick={() => navigate(`/agents/${arts.verify_agent_id}`, { state: forwardState(location) })}
-                        className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"
+                        className="inline-flex items-center gap-1 text-xs text-accent hover:opacity-80"
                       >
                         View verification agent
                       </button>
@@ -628,9 +628,9 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-label">Flags</span>
                 <div className="flex items-center gap-1.5">
-                  {task.use_worktree && <span className="text-[10px] px-1.5 py-px rounded bg-purple-500/15 text-purple-400">Worktree</span>}
-                  {task.sync_mode && <span className="text-[10px] px-1.5 py-px rounded bg-emerald-500/15 text-emerald-400">Sync</span>}
-                  {task.skip_permissions && <span className="text-[10px] px-1.5 py-px rounded bg-amber-500/15 text-amber-400">Skip perms</span>}
+                  {task.use_worktree && <span className="text-[10px] px-1.5 py-px rounded bg-purple-500/15 text-purple-600 dark:text-purple-400">Worktree</span>}
+                  {task.sync_mode && <span className="text-[10px] px-1.5 py-px rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">Sync</span>}
+                  {task.skip_permissions && <span className="text-[10px] px-1.5 py-px rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">Skip perms</span>}
                   {!task.use_worktree && !task.sync_mode && !task.skip_permissions && <span className="text-[11px] text-faint">None</span>}
                 </div>
               </div>
@@ -656,7 +656,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               onClick={() => doAction(dispatchTask, id)}
               disabled={actionLoading || !task.project_name}
               title={!task.project_name ? "Set a project before dispatching" : "Dispatch directly"}
-              className="whitespace-nowrap px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+              className="whitespace-nowrap px-4 py-2 rounded-lg bg-accent text-accent-ink text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-colors"
             >
               Dispatch
             </button>
@@ -678,7 +678,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               type="button"
               onClick={() => doAction(dispatchTask, id)}
               disabled={actionLoading || !task.project_name}
-              className="whitespace-nowrap px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+              className="whitespace-nowrap px-4 py-2 rounded-lg bg-accent text-accent-ink text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-colors"
             >
               Dispatch
             </button>
@@ -744,7 +744,7 @@ export default function TaskDetailPage({ theme, onToggleTheme }) {
               type="button"
               onClick={() => doAction(dispatchTask, id)}
               disabled={actionLoading || !task.project_name}
-              className="whitespace-nowrap px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+              className="whitespace-nowrap px-4 py-2 rounded-lg bg-accent text-accent-ink text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-colors"
             >
               Retry
             </button>

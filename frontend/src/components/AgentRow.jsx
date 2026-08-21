@@ -132,7 +132,7 @@ const AgentRow = memo(function AgentRow({
                 </span>
               )}
               {agent.has_pending_suggestions && (
-                <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-px rounded-full bg-amber-500/15 text-amber-500 dark:text-amber-400">
+                <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-px rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
                   insights
                 </span>
               )}
@@ -182,17 +182,17 @@ const AgentRow = memo(function AgentRow({
             )}
             {agent.worktree && <WorktreePill name={agent.worktree} />}
             {agent.skip_permissions && (
-              <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-amber-500/15 text-amber-500 dark:text-amber-400">
+              <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
                 Auto
               </span>
             )}
             {agent.model && (
-              <span className="text-[10px] text-dim font-medium px-1.5 py-px rounded-full bg-elevated">
+              <span className="text-[10px] text-label font-medium px-1.5 py-px rounded-full bg-elevated">
                 {modelDisplayName(agent.model)}
               </span>
             )}
             {agent.effort && (
-              <span className="text-[10px] text-dim font-medium px-1.5 py-px rounded-full bg-elevated">
+              <span className="text-[10px] text-label font-medium px-1.5 py-px rounded-full bg-elevated">
                 {agent.effort.charAt(0).toUpperCase() + agent.effort.slice(1)}
               </span>
             )}

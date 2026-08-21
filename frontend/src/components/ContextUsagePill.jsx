@@ -24,8 +24,8 @@ export default function ContextUsagePill({ usage, agentId }) {
     chipCls = "bg-gray-500/15 text-gray-400";
     dotCls = "bg-gray-400";
   } else if (pct < 70) {
-    chipCls = "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
-    dotCls = "bg-cyan-500";
+    chipCls = "accent-tint-15 text-accent";
+    dotCls = "bg-accent";
   } else {
     chipCls = "bg-orange-500/15 text-orange-600 dark:text-orange-400";
     dotCls = "bg-orange-500";
@@ -64,7 +64,7 @@ export default function ContextUsagePill({ usage, agentId }) {
 const SEVERITY_ICON_COLOR = {
   urgent: "text-red-500 dark:text-red-400",
   warn: "text-amber-500 dark:text-amber-400",
-  info: "text-cyan-500 dark:text-cyan-400",
+  info: "text-accent",
 };
 
 function SeverityIcon({ severity, className }) {
@@ -252,10 +252,10 @@ function LifetimeSection({ lifetime }) {
 
 const END_REASON_STYLE = {
   active:        { dot: "bg-emerald-500", label: "active" },
-  rotation:      { dot: "bg-cyan-500",    label: "rotation" },
-  compact:       { dot: "bg-cyan-500",    label: "compact" },
-  clear:         { dot: "bg-cyan-500",    label: "clear" },
-  reconciled:    { dot: "bg-cyan-500",    label: "reconciled" },
+  rotation:      { dot: "bg-accent",     label: "rotation" },
+  compact:       { dot: "bg-accent",     label: "compact" },
+  clear:         { dot: "bg-accent",     label: "clear" },
+  reconciled:    { dot: "bg-accent",     label: "reconciled" },
   subagent_done: { dot: "bg-violet-500",  label: "subagent" },
   stopped:       { dot: "bg-gray-500",    label: "stopped" },
   error:         { dot: "bg-gray-500",    label: "error" },
@@ -402,7 +402,7 @@ function LifetimeRow({ label, tokens, rate }) {
 }
 
 const COMPONENT_COLOR = {
-  "Messages": "bg-cyan-500",
+  "Messages": "bg-accent",
   "MCP tools": "bg-violet-500",
   "Memory files": "bg-amber-500",
   "Custom Agents": "bg-emerald-500",

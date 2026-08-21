@@ -1,7 +1,11 @@
+// Status colors: EXECUTING follows the theme accent token; the fixed hues
+// (green/red/orange/…) are semantic and stay, but their TEXT form uses the
+// app's paired convention (600 on light bases, 400 on dark) — the bare 400
+// grades washed out to 1.7-2.8:1 on the light-base palettes.
 export const STATUS_COLORS = {
   PENDING: "bg-gray-500",
   IDLE: "bg-green-500",
-  EXECUTING: "bg-cyan-500",
+  EXECUTING: "bg-accent",
   COMPLETED: "bg-green-500",
   FAILED: "bg-red-500",
   TIMEOUT: "bg-orange-500",
@@ -10,33 +14,33 @@ export const STATUS_COLORS = {
 
 export const STATUS_TEXT_COLORS = {
   PENDING: "text-dim",
-  IDLE: "text-green-400",
-  EXECUTING: "text-cyan-400",
-  COMPLETED: "text-green-400",
-  FAILED: "text-red-400",
-  TIMEOUT: "text-orange-400",
+  IDLE: "text-green-600 dark:text-green-400",
+  EXECUTING: "text-accent",
+  COMPLETED: "text-green-600 dark:text-green-400",
+  FAILED: "text-red-600 dark:text-red-400",
+  TIMEOUT: "text-orange-600 dark:text-orange-400",
   CANCELLED: "text-faint",
 };
 
 export const AGENT_STATUS_COLORS = {
   STARTING: "bg-gray-500",
   IDLE: "bg-green-500",
-  EXECUTING: "bg-cyan-500",
+  EXECUTING: "bg-accent",
   ERROR: "bg-red-500",
   STOPPED: "bg-gray-600",
 };
 
 export const AGENT_STATUS_TEXT_COLORS = {
   STARTING: "text-dim",
-  IDLE: "text-green-400",
-  EXECUTING: "text-cyan-400",
-  ERROR: "text-red-400",
+  IDLE: "text-green-600 dark:text-green-400",
+  EXECUTING: "text-accent",
+  ERROR: "text-red-600 dark:text-red-400",
   STOPPED: "text-faint",
 };
 
 export const MODE_COLORS = {
-  INTERVIEW: "bg-violet-500/20 text-violet-400 border border-violet-500/40",
-  AUTO: "bg-green-500/20 text-green-400 border border-green-500/40",
+  INTERVIEW: "bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/40",
+  AUTO: "bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/40",
 };
 
 export const AGENT_MODES = [
@@ -78,24 +82,16 @@ export function modelDisplayName(modelId) {
     .join(" ");
 }
 
-/** Deterministic color palette for project badges. */
-const PROJECT_PALETTE = [
-  "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400",
-  "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-  "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-  "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
-];
-
-export function projectBadgeColor(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  }
-  return PROJECT_PALETTE[Math.abs(hash) % PROJECT_PALETTE.length];
+/** Project badge classes — the shared accent chip.
+ *
+ * Used to hash the name into a fixed Tailwind palette, which made the same
+ * project change hue between routes (accent chip on the agents list, hashed
+ * violet on task-detail) and picked colors foreign to every non-stock
+ * palette. One project = one look = the theme's accent chip. If per-project
+ * identity colors ever return, they need per-theme mapping, not literals.
+ */
+export function projectBadgeColor() {
+  return "accent-tint-15 text-accent";
 }
 
 export const POLL_INTERVAL = 5000;
@@ -171,7 +167,7 @@ export const TASK_STATUS_COLORS = {
   INBOX: "bg-blue-500",
   PLANNING: "bg-violet-500",
   PENDING: "bg-gray-500",
-  EXECUTING: "bg-cyan-500 animate-pulse",
+  EXECUTING: "bg-accent animate-pulse",
   REVIEW: "bg-amber-500",
   MERGING: "bg-purple-500",
   CONFLICT: "bg-red-500",
@@ -183,18 +179,18 @@ export const TASK_STATUS_COLORS = {
 };
 
 export const TASK_STATUS_TEXT_COLORS = {
-  INBOX: "text-blue-400",
-  PLANNING: "text-violet-400",
+  INBOX: "text-blue-600 dark:text-blue-400",
+  PLANNING: "text-violet-600 dark:text-violet-400",
   PENDING: "text-dim",
-  EXECUTING: "text-cyan-400",
-  REVIEW: "text-amber-400",
-  MERGING: "text-purple-400",
-  CONFLICT: "text-red-400",
-  COMPLETE: "text-green-400",
-  REJECTED: "text-orange-400",
+  EXECUTING: "text-accent",
+  REVIEW: "text-amber-600 dark:text-amber-400",
+  MERGING: "text-purple-600 dark:text-purple-400",
+  CONFLICT: "text-red-600 dark:text-red-400",
+  COMPLETE: "text-green-600 dark:text-green-400",
+  REJECTED: "text-orange-600 dark:text-orange-400",
   CANCELLED: "text-faint",
-  FAILED: "text-red-400",
-  TIMEOUT: "text-orange-400",
+  FAILED: "text-red-600 dark:text-red-400",
+  TIMEOUT: "text-orange-600 dark:text-orange-400",
 };
 
 export const TASK_PERSPECTIVE_TABS = [

@@ -253,7 +253,7 @@ function SubAgentBubble({ message, project }) {
           {message.source && (
             <span className={`ml-1.5 px-1 py-0.5 rounded text-[10px] font-medium leading-none ${
               message.source === "web"
-                ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                ? "accent-tint-20 text-accent"
                 : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
             }`}>
               {message.source}
@@ -277,7 +277,7 @@ function InsightsBubble({ insights }) {
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-hover transition-colors text-left"
       >
-        <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
         <span className="text-xs text-label flex-1 min-w-0">Past Insights ({insights.length})</span>
@@ -448,7 +448,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
                   >
                     <div className="flex items-start gap-2">
                       <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                        isChosen ? "border-cyan-400 bg-cyan-400" : "border-ring-hover"
+                        isChosen ? "border-accent bg-accent" : "border-ring-hover"
                       }`}>
                         {isChosen && (
                           <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -469,7 +469,7 @@ function QuestionBubble({ item, agentId, onAnswered }) {
             </div>
             {submittingQi === qi && (
               <p className="text-xs text-dim mt-2 flex items-center gap-1.5">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                 Sending answer...
               </p>
             )}
@@ -609,7 +609,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-ring-hover"
+                  isChosen ? "border-accent bg-accent" : "border-ring-hover"
                 }`}>
                   {isChosen && (
                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -628,7 +628,7 @@ function PermissionPromptBubble({ item, agentId, onAnswered }) {
       </div>
       {submitting && (
         <p className="text-xs text-dim mt-2 flex items-center gap-1.5">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
           Sending response...
         </p>
       )}
@@ -1075,7 +1075,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
             >
               <div className="flex items-start gap-2">
                 <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                  isChosen ? "border-cyan-400 bg-cyan-400" : "border-ring-hover"
+                  isChosen ? "border-accent bg-accent" : "border-ring-hover"
                 }`}>
                   {isChosen && (
                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1094,7 +1094,7 @@ function PlanBubble({ item, agentId, onAnswered }) {
       </div>
       {submitting && (
         <p className="text-xs text-dim mt-2 flex items-center gap-1.5">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
           Sending response...
         </p>
       )}
@@ -1478,7 +1478,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
               <span className="text-gray-200/90">cancelled</span>
             )}
             {!isCancelled && isPreQueued && (
-              <span className="text-cyan-300/70">
+              <span className="text-accent-70">
                 {queueTotal > 1 ? `queued (${queuePosition} of ${queueTotal})` : "queued"}
               </span>
             )}
@@ -1488,10 +1488,10 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                   ? "bg-gray-500/40 text-gray-100"
                   : message.source === "web"
                     ? isUser
-                      ? "bg-cyan-500/20 text-cyan-100"
-                      : "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                      ? "bg-white/20 text-bubble-ink"
+                      : "accent-tint-20 text-accent"
                     : isUser
-                      ? "bg-emerald-500/20 text-emerald-100"
+                      ? "bg-white/20 text-bubble-ink"
                       : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
               }`}>
                 {message.source}
@@ -1501,7 +1501,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
               <span className="text-red-400" title={message.error_message || ""}>Failed</span>
             )}
             {message.status === "TIMEOUT" && (
-              <span className="text-orange-400">Timed out</span>
+              <span className="text-orange-600 dark:text-orange-400">Timed out</span>
             )}
             {/* Check icon: three-state delivery indicator (skipped for
                 pre-sent states — queued/scheduled/cancelled — and
@@ -1517,7 +1517,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                     </svg>
                   </span>
                 ) : (
-                  <span className="ml-auto text-cyan-300/60" title="Received — executing...">
+                  <span className="ml-auto text-accent-60" title="Received — executing...">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -1550,7 +1550,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                 </svg>
               </span>
             ) : (
-              <span className="ml-auto text-cyan-300/40" title="Sending...">
+              <span className="ml-auto text-accent-40" title="Sending...">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" opacity="0.5" />
                 </svg>
@@ -1659,7 +1659,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
                   type="button"
                   onClick={handleDivergeOpen}
                   title="Diverge — branch a new conversation from here"
-                  className="px-3 py-2 text-cyan-500 hover:bg-cyan-600/10 transition-colors"
+                  className="px-3 py-2 text-accent hover:accent-tint-10 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 17h-8l-3.5-5H3" />
@@ -1714,7 +1714,7 @@ function ChatBubble({ message, project, onCancelMessage, onUpdateMessage, onSend
 // --- Tool log entry rendering helpers ---
 
 const _tlIcon = () => "▸";
-const _tlColor = () => "text-cyan-300";
+const _tlColor = () => "text-accent";
 
 function ToolLogEntry({ entry }) {
   return (
@@ -1742,7 +1742,7 @@ function ToolLogBubble({ entries }) {
       <div className="max-w-[min(85%,30rem)] rounded-2xl px-4 py-2.5 bg-surface shadow-card rounded-bl-md">
         <div className="space-y-0.5 text-xs font-mono">
           {shouldCollapse && !expanded ? (
-            <button type="button" onClick={() => setExpanded(true)} className="flex items-center gap-1.5 text-dim hover:text-cyan-300">
+            <button type="button" onClick={() => setExpanded(true)} className="flex items-center gap-1.5 text-dim hover:text-accent">
               <span className="shrink-0">▸</span>
               <span>{entries.length} tool calls</span>
             </button>
@@ -1779,7 +1779,7 @@ function ActiveToolEntry({ entry, nameColor }) {
       {entry.kind === "permission" ? (
         <span className="text-amber-400 shrink-0">&#x23F3;</span>
       ) : (
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
       )}
       <span className={nameColor(entry)}>{entry.name}</span>
       {entry.summary && <span className="text-faint truncate max-w-[160px]">{entry.summary}</span>}
@@ -1808,8 +1808,8 @@ function ToolActivityBubble({ message }) {
   const nameColor = () => {
     if (toolKind === "permission") return "text-amber-400";
     if (toolKind === "subagent") return "text-violet-400";
-    if (toolKind === "compact") return "text-orange-400";
-    return "text-cyan-300";
+    if (toolKind === "compact") return "text-orange-600 dark:text-orange-400";
+    return "text-accent";
   };
 
   return (
@@ -2331,18 +2331,18 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
       >
         {/* Drop zone overlay */}
         {dragOver && (
-          <div className="absolute inset-0 z-30 rounded-[22px] bg-cyan-500/15 border-2 border-dashed border-cyan-500 flex items-center justify-center pointer-events-none">
-            <span className="text-sm font-medium text-cyan-400">Drop files here</span>
+          <div className="absolute inset-0 z-30 rounded-[22px] accent-tint-15 border-2 border-dashed border-accent flex items-center justify-center pointer-events-none">
+            <span className="text-sm font-medium text-accent">Drop files here</span>
           </div>
         )}
         {/* Edit-mode banner: pencil + original snippet + cancel ✕ */}
         {isEditing && (
           <div className="flex items-center gap-2 px-2 pt-1">
-            <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-accent shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
-            <div className="flex-1 min-w-0 border-l-2 border-cyan-500/60 pl-2">
-              <p className="text-[11px] font-medium text-cyan-400 leading-tight">Editing message</p>
+            <div className="flex-1 min-w-0 border-l-2 accent-edge-60 pl-2">
+              <p className="text-[11px] font-medium text-accent leading-tight">Editing message</p>
               <p className="text-xs text-dim truncate leading-tight">{editingMessage.content}</p>
             </div>
             <button
@@ -2370,7 +2370,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
           className="w-full min-h-[48px] max-h-[180px] rounded-xl bg-transparent px-3 py-2 text-sm text-heading placeholder-hint resize-none focus:outline-none transition-colors disabled:opacity-50"
         />
         {(voice.streamingText || voice.refining) && (
-          <div className="px-3 pb-1 text-sm text-cyan-400/80 italic animate-pulse">
+          <div className="px-3 pb-1 text-sm text-accent-70 italic animate-pulse">
             {voice.refining ? "Refining..." : voice.streamingText}
           </div>
         )}
@@ -2391,13 +2391,13 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
                   {att.error ? "Failed" : att.originalName}
                 </span>
                 {att.uploading ? (
-                  <svg className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 text-accent animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : att.error ? (
                   <div className="flex items-center gap-0.5 shrink-0">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(att.id); }} className="text-cyan-400 hover:text-cyan-300" title="Retry upload">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(att.id); }} className="text-accent hover:opacity-80" title="Retry upload">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
                       </svg>
@@ -2512,7 +2512,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
               className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                 saveDisabled
                   ? "bg-elevated text-dim cursor-not-allowed"
-                  : "bg-cyan-500 hover:bg-cyan-400 text-white"
+                  : "bg-accent hover:opacity-90 text-accent-ink"
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -2527,7 +2527,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
             className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
               sendDisabled
                 ? "bg-elevated text-dim cursor-not-allowed"
-                : "bg-cyan-500 hover:bg-cyan-400 text-white"
+                : "bg-accent hover:opacity-90 text-accent-ink"
             }`}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -4221,7 +4221,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     return (
       <div className="flex flex-col items-center justify-center py-20 text-faint">
         <p>Agent not found</p>
-        <button type="button" onClick={() => { if (onClose) onClose(); else navigate("/agents"); }} className="mt-2 text-sm text-cyan-400 underline">
+        <button type="button" onClick={() => { if (onClose) onClose(); else navigate("/agents"); }} className="mt-2 text-sm text-accent underline">
           Back to Agents
         </button>
       </div>
@@ -4244,12 +4244,12 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     healthLabel = "...";
     healthTitle = "Checking...";
   } else if (!isHealthy) {
-    healthChipCls = "bg-red-500/15 text-red-400";
+    healthChipCls = "bg-red-500/15 text-red-600 dark:text-red-400";
     healthDotColor = "bg-red-500";
     healthLabel = "Error";
     healthTitle = "System issue";
   } else if (_memHigh) {
-    healthChipCls = "bg-red-500/15 text-red-400";
+    healthChipCls = "bg-red-500/15 text-red-600 dark:text-red-400";
     healthDotColor = "bg-red-500";
     healthLabel = `Mem ${_memLabel}`;
     healthTitle = `High memory: ${_memLabel} (steady ~200 MB)`;
@@ -4259,7 +4259,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
     healthLabel = `Mem ${_memLabel}`;
     healthTitle = `Elevated memory: ${_memLabel}`;
   } else {
-    healthChipCls = "bg-green-500/15 text-green-500";
+    healthChipCls = "bg-green-500/15 text-green-600 dark:text-green-400";
     healthDotColor = "bg-green-500";
     healthLabel = "OK";
     healthTitle = "System healthy";
@@ -4314,15 +4314,15 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                   if (e.key === "Escape") setEditingName(false);
                 }}
                 maxLength={200}
-                className="text-sm font-semibold text-heading min-w-0 flex-1 bg-input border border-cyan-500 rounded px-1.5 py-0.5 outline-none"
+                className="text-sm font-semibold text-heading min-w-0 flex-1 bg-input border border-accent rounded px-1.5 py-0.5 outline-none"
               />
             ) : (
               <div className="min-w-0 flex-1 flex items-center gap-2">
                 {/* Status dot — left of title, matches ProjectsPage running-pulse style */}
                 <span
                   className={`shrink-0 w-1.5 h-1.5 rounded-full ${
-                    agent.status === "EXECUTING" ? "bg-cyan-400 animate-glow"
-                      : agent.status === "IDLE" ? "bg-cyan-300/50"
+                    agent.status === "EXECUTING" ? "bg-accent animate-glow"
+                      : agent.status === "IDLE" ? "bg-green-500/50"
                       : agent.status === "ERROR" ? "bg-red-400"
                       : "bg-zinc-400/50"
                   }`}
@@ -4343,7 +4343,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
               <div className="shrink-0 flex items-center gap-1.5">
                 {(isStopped || isError) ? (
                   <button type="button" onClick={() => handleResume()} disabled={resuming}
-                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 transition-colors disabled:opacity-50 enabled:hover:bg-cyan-500/25">
+                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium accent-tint-15 text-accent transition-colors disabled:opacity-50 enabled:hover:accent-tint-25">
                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z" /></svg>
                     {resuming ? "..." : "Resume"}
                   </button>
@@ -4381,7 +4381,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                     type="button"
                     onClick={() => handleResume()}
                     disabled={resuming}
-                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 transition-colors disabled:opacity-50 enabled:hover:bg-cyan-500/25"
+                    className="px-2 py-0.5 flex items-center gap-0.5 rounded-full text-[10px] font-medium accent-tint-15 text-accent transition-colors disabled:opacity-50 enabled:hover:accent-tint-25"
                   >
                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M6 4l14 8-14 8V4z" />
@@ -4431,7 +4431,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
             <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto no-scrollbar">
               {agent.project && (
                 <span
-                  className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 max-w-[140px] truncate cursor-pointer hover:bg-cyan-500/25 transition-colors"
+                  className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full accent-tint-15 text-accent max-w-[140px] truncate cursor-pointer hover:accent-tint-25 transition-colors"
                   onClick={() => navigate(`/projects/${encodeURIComponent(agent.project)}`)}
                   title={agent.project}
                 >
@@ -4534,7 +4534,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                               setShowIdPopover(false);
                             }).catch(() => {});
                           }}
-                          className="text-[10px] text-cyan-500 dark:text-cyan-400 hover:underline"
+                          className="text-[10px] text-accent hover:underline"
                         >
                           Copy
                         </button>
@@ -4594,7 +4594,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                 {muted ? (
                   <BellOff className="w-4 h-4 text-zinc-400 hover:text-zinc-300 transition-colors" strokeWidth={1.75} />
                 ) : (
-                  <Bell className="w-4 h-4 text-cyan-400" strokeWidth={1.75} />
+                  <Bell className="w-4 h-4 text-accent" strokeWidth={1.75} />
                 )}
               </button>
 
@@ -4903,7 +4903,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
                         <div className="flex gap-2 mt-1 mr-1">
                           <button
                             onClick={() => handleRetryFailed(msg.id)}
-                            className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                            className="text-xs text-accent hover:opacity-80 transition-colors"
                           >Retry</button>
                           <button
                             onClick={() => handleDismissFailed(msg.id)}

@@ -35,7 +35,7 @@ export const PRESETS = [
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0e7490" } },
   { id: "vivid", name: "Vivid", base: "light",
-    preview: { page: "#ffffff", surface: "#f6f7f8", text: "#0891b2" },
+    preview: { page: "#ffffff", surface: "#f6f7f8", text: "#06b6d4" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
   { id: "ash", name: "Ash", base: "light",
     preview: { page: "#f2f3f5", surface: "#ffffff", text: "#1c1e21" },
@@ -307,7 +307,7 @@ const TERMINAL_THEMES = {
     ...GITHUB_LIGHT_ANSI,
   },
   vivid: {
-    background: "#ffffff", foreground: "#24292f", cursor: "#0891b2",
+    background: "#ffffff", foreground: "#24292f", cursor: "#06b6d4",
     cursorAccent: "#ffffff", selectionBackground: "#b6d7ff",
     ...GITHUB_LIGHT_ANSI,
   },

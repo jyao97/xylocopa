@@ -143,13 +143,19 @@
    Tokens not listed (attn/orb) inherit from the base theme.
    Registry + custom-theme plumbing: src/lib/themes.js. */
 
-/* Vivid — the original stock light look, kept as an explicit preset.
-   Identical to Light except the classic saturated cyan-600 bubble (Light
-   itself moved to cyan-700 so long message text clears 4.5:1) and the
-   punchier red-500 danger. Everything else inherits :root. */
+/* Vivid — the original stock light look (pre-token 367dfd55), kept as an
+   explicit preset. Faithful to the classes the sweep replaced: cyan-500
+   fills/tints/rings/glows (bg-cyan-500 was the dominant hue), cyan-600
+   bubble, green-500 ok, red-500 danger. Deliberately NOT contrast-tuned —
+   that's what Light is for; Vivid trades AA text ratios for the original
+   saturation on purpose. */
 .theme-vivid {
+  --color-accent:         #06b6d4;
+  --color-accent-rgb:     6 182 212;
   --color-bubble:         #0891b2;
   --color-bubble-rgb:     8 145 178;
+  --color-ok:             #22c55e;
+  --color-ok-rgb:         34 197 94;
   --color-danger:         #ef4444;
   --color-danger-rgb:     239 68 68;
 }

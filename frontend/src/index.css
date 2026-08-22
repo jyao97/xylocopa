@@ -54,6 +54,17 @@
   --color-danger:         #dc2626;
   --color-danger-rgb:     220 38 38;
 
+  /* Monitor storage-chart hues (Tailwind 500s). --chart-mute pulls them
+     toward the page color so branded palettes can quiet the carnival;
+     0% keeps the stock look. The primary "cyan" slot rides --color-accent
+     instead, so ring and legend agree with the theme. */
+  --chart-mute:    0%;
+  --chart-violet:  color-mix(in srgb, var(--color-page) var(--chart-mute), #8b5cf6);
+  --chart-amber:   color-mix(in srgb, var(--color-page) var(--chart-mute), #f59e0b);
+  --chart-emerald: color-mix(in srgb, var(--color-page) var(--chart-mute), #10b981);
+  --chart-orange:  color-mix(in srgb, var(--color-page) var(--chart-mute), #f97316);
+  --chart-rose:    color-mix(in srgb, var(--color-page) var(--chart-mute), #f43f5e);
+
   /* Attention assistant identity. Still its own token (so it stays
      tunable in one place), but the values sit in the app's amber family —
      the Auto chip / deferred-clock tone — by explicit request: the earlier
@@ -196,6 +207,13 @@
   --color-accent:         #7fc0cf;
   --color-accent-rgb:     127 192 207;
   --color-accent-ink:     #17181c;
+  /* One-Dark green/red (the theme's own terminal table) — the inherited
+     green-400 was the one neon note on the muted charcoal */
+  --color-ok:             #98c379;
+  --color-ok-rgb:         152 195 121;
+  --color-danger:         #e06c75;
+  --color-danger-rgb:     224 108 117;
+  --chart-mute:           20%;
 }
 
 /* Solarized Dark — Ethan Schoonover's base03/base02 family. */
@@ -238,11 +256,13 @@
   --color-accent:         #4ba1d3;
   --color-accent-rgb:     75 161 211;
   --color-accent-ink:     #002b36;
-  /* Schoonover green; red lifted one step for base03 */
-  --color-ok:             #859900;
-  --color-ok-rgb:         133 153 0;
+  /* Solarized cyan as ok — the olive #859900 read as murky yellow next to
+     the blue accent on base03; red lifted one step for base03 */
+  --color-ok:             #2aa198;
+  --color-ok-rgb:         42 161 152;
   --color-danger:         #e04b48;
   --color-danger-rgb:     224 75 72;
+  --chart-mute:           18%;
 }
 
 /* Solarized Light — warm cream base3/base2 family. */
@@ -282,10 +302,13 @@
   --color-accent:         #1f74b0;
   --color-accent-rgb:     31 116 176;
   --color-accent-ink:     #ffffff;
-  --color-ok:             #788f07;
-  --color-ok-rgb:         120 143 7;
+  /* Solarized cyan (darkened one step for the cream ground) as ok — the
+     olive family looked like mustard on base3, worst on the Auto chips */
+  --color-ok:             #238f87;
+  --color-ok-rgb:         35 143 135;
   --color-danger:         #dc322f;
   --color-danger-rgb:     220 50 47;
+  --chart-mute:           22%;
 }
 
 /* Nord — polar-night blue-grays, snow-storm text. */
@@ -329,6 +352,7 @@
   --color-ok-rgb:         163 190 140;
   --color-danger:         #c7747c;
   --color-danger-rgb:     199 116 124;
+  --chart-mute:           18%;
 }
 
 /* Everforest — muted forest greens, warm parchment text. */
@@ -371,6 +395,7 @@
   --color-ok-rgb:         167 192 128;
   --color-danger:         #e67e80;
   --color-danger-rgb:     230 126 128;
+  --chart-mute:           18%;
 }
 
 /* Ash — the Bear/Things-style gray: cool light-gray ground with WHITE
@@ -452,6 +477,12 @@
   --color-accent:         #4a6378;
   --color-accent-rgb:     74 99 120;
   --color-accent-ink:     #ffffff;
+  /* Grayed spruce + oxide red — saturated green/red broke the monotone */
+  --color-ok:             #4e6b59;
+  --color-ok-rgb:         78 107 89;
+  --color-danger:         #9c4640;
+  --color-danger-rgb:     156 70 64;
+  --chart-mute:           35%;
 }
 
 /* Clay — warm greige x brown: the flat tonal model Silver validated,
@@ -492,6 +523,12 @@
   --color-accent:         #7d5230;
   --color-accent-rgb:     125 82 48;
   --color-accent-ink:     #ffffff;
+  /* Warm moss + brick — Tailwind green/red clashed with the greige ground */
+  --color-ok:             #5f7040;
+  --color-ok-rgb:         95 112 64;
+  --color-danger:         #a63d2a;
+  --color-danger-rgb:     166 61 42;
+  --chart-mute:           30%;
 }
 
 /* Graphite — GitHub-Dimmed-family gray: deep gray ground (not black),
@@ -538,6 +575,7 @@
   --color-ok-rgb:         87 171 90;
   --color-danger:         #e5534b;
   --color-danger-rgb:     229 83 75;
+  --chart-mute:           15%;
 }
 /* Nord Light — Snow Storm ground with Polar Night ink; pairs with Nord. */
 .theme-nord-light {
@@ -580,6 +618,7 @@
   --color-ok-rgb:         111 129 95;
   --color-danger:         #a95a64;
   --color-danger-rgb:     169 90 100;
+  --chart-mute:           22%;
 }
 
 /* Translucent glass surfaces (opt-in via @supports below):
@@ -1802,6 +1841,13 @@ svg text { font-family: inherit; }
   .hover\:danger-edge-40:hover { border-color: rgb(var(--color-danger-rgb) / 0.40); }
   .ring-danger-30 { --tw-ring-color: rgb(var(--color-danger-rgb) / 0.3); }
   .form-danger    { accent-color: var(--color-danger); }
+
+  /* Storage-chart legend dots (SVG segments read the same vars inline). */
+  .bg-chart-violet  { background-color: var(--chart-violet); }
+  .bg-chart-amber   { background-color: var(--chart-amber); }
+  .bg-chart-emerald { background-color: var(--chart-emerald); }
+  .bg-chart-orange  { background-color: var(--chart-orange); }
+  .bg-chart-rose    { background-color: var(--chart-rose); }
 
   .attn-tint-6  { background-color: rgb(var(--color-attn-rgb) / 0.06); }
   .attn-tint-8  { background-color: rgb(var(--color-attn-rgb) / 0.08); }

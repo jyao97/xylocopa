@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-08-21
+
+Theme system release. The light lineup is rebuilt around new palettes, the hardcoded cyan family now rides theme tokens, status colors are tuned per palette, the Monitor charts follow the active theme, and the original saturated stock look (Vivid) becomes the default light palette.
+
+### Added
+
+- **Light palettes: Ash, Silver, Clay.** Ash is a gray-ground/white-card look with near-black ink; Silver is a flat monotone built around a user-sampled #c2c4c7; Clay is warm greige with a cocoa-brown accent. With Nord Light and Solarized Light the light lineup is six palettes; Soft Light, Rosé Pine Dawn and Latte were dropped in the consolidation. (f363017d, aab960b2, ae24f870, 24a5f439, d8bc1177)
+- **Per-theme accent and status tokens.** A global sweep replaced hardcoded cyan classes with `--color-accent` (tags, markdown links, inline code, status maps, nav chrome, chat surface, glows), and `--color-ok`/`--color-danger` let each palette carry its own green/red: Solarized uses its cyan for ok (the olive read as mustard next to the blue accent), Clay warm moss + brick, Silver grayed spruce + oxide red, Soft Dark its One-Dark terminal table. Values contrast-checked ≥3:1 against page and surface. (c8186e2e, 6390df14, 00cd48b7, d31cda1b, 8296587d, 4e73e7f9, 03a6fbf4)
+- **Theme-aware Monitor charts.** Storage-donut segments read the same tokens as their legend dots (the ring previously hardcoded bright Tailwind hexes — on Clay it drew cyan next to a cocoa legend dot), categorical hues are muted per palette via `--chart-mute`, and the usage bars' warning states ride the attn/danger tokens. (6ee2126e)
+
+### Changed
+
+- **Vivid is the stock light palette; Light retired.** The pre-token stock look (cyan-500 accent and fills, cyan-600 bubble, green-500/red-500 status) now lives directly in `:root`, verified hex-for-hex against the pre-token commit. The retired Light preset's AA-tuned green/red live on in Ash; stored `vivid`/`light` selections keep rendering identically. (91a83f9f, 7eb2661e, 85bccb87)
+- **Docs.** Getting-started rewritten against the current UI (en + zh, unified structure); README restructured into flowing prose. (48cebf52, 2a3965b1, d00bb1c7)
+
+### Fixed
+
+- **Tag chips and links rendered unstyled** — the accent sweep referenced `.text-accent`/`.accent-tint-15` utilities that were never defined, so chips lost their background and text color. (29bcd5a9)
+- **Solarized Dark dim/hint text below 3:1** — lifted to 3.2:1, the one sub-3:1 text tier in the lineup. (05b63b00)
+
 ## [0.16.0] - 2026-08-21
 
 Assistant character release (experimental). The UI layer for the attention job engine that shipped in v0.15.1: an orb assistant with an animated face, a speech-bubble chat that turns natural-language requests into attention jobs, and a character-skin system. Off by default — enabled via an Experimental toggle in Monitor > Display.

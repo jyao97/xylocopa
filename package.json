@@ -1,6 +1,6 @@
 {
   "name": "create-xylocopa",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "One-command installer for Xylocopa — multi-agent Claude Code dashboard",
   "bin": {
     "create-xylocopa": "./install.js",

@@ -14,7 +14,7 @@ import ThemeSettings from "../components/ThemeSettings";
 const HEALTH_COLORS = {
   ok: "bg-ok",
   error: "bg-danger",
-  degraded: "bg-yellow-500",
+  degraded: "bg-attn",
   unavailable: "bg-danger",
   unknown: "bg-gray-500",
 };
@@ -39,7 +39,7 @@ function formatResetTime(isoStr) {
 
 function UsageBar({ label, pct, detail }) {
   const barColor =
-    pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-accent";
+    pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-attn" : "bg-accent";
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -69,20 +69,18 @@ function HealthCard({ label, status }) {
   );
 }
 
+// Legend dots ride the token utilities; SVG segments read the same vars
+// via inline style (presentation attributes can't hold var()). "cyan" is
+// the theme accent so ring and legend agree with the palette; the rest are
+// --chart-* tokens, per-theme muted via --chart-mute in index.css.
 const STORAGE_COLORS = {
-  cyan: { ring: "stroke-accent", dot: "bg-accent", bar: "bg-accent" },
-  violet: { ring: "stroke-violet-500", dot: "bg-violet-500", bar: "bg-violet-500" },
-  amber: { ring: "stroke-amber-500", dot: "bg-amber-500", bar: "bg-amber-500" },
-  emerald: { ring: "stroke-emerald-500", dot: "bg-emerald-500", bar: "bg-emerald-500" },
-  orange: { ring: "stroke-orange-500", dot: "bg-orange-500", bar: "bg-orange-500" },
-  rose: { ring: "stroke-rose-500", dot: "bg-rose-500", bar: "bg-rose-500" },
-  gray: { ring: "stroke-gray-400", dot: "bg-gray-400", bar: "bg-gray-400" },
-};
-
-// Hex values for SVG stroke (Tailwind classes don't work on SVG stroke directly)
-const STORAGE_HEX = {
-  cyan: "#06b6d4", violet: "#8b5cf6", amber: "#f59e0b",
-  emerald: "#10b981", orange: "#f97316", rose: "#f43f5e", gray: "#9ca3af",
+  cyan: { dot: "bg-accent", stroke: "var(--color-accent)" },
+  violet: { dot: "bg-chart-violet", stroke: "var(--chart-violet)" },
+  amber: { dot: "bg-chart-amber", stroke: "var(--chart-amber)" },
+  emerald: { dot: "bg-chart-emerald", stroke: "var(--chart-emerald)" },
+  orange: { dot: "bg-chart-orange", stroke: "var(--chart-orange)" },
+  rose: { dot: "bg-chart-rose", stroke: "var(--chart-rose)" },
+  gray: { dot: "bg-gray-400", stroke: "#9ca3af" },
 };
 
 function formatBytes(bytes) {
@@ -146,7 +144,7 @@ function StorageChart({ data, onRefresh }) {
                 key={seg.name}
                 cx={size / 2} cy={size / 2} r={radius}
                 fill="none" strokeWidth={stroke}
-                stroke={STORAGE_HEX[seg.color] || STORAGE_HEX.gray}
+                style={{ stroke: (STORAGE_COLORS[seg.color] || STORAGE_COLORS.gray).stroke }}
                 strokeDasharray={`${seg.dash} ${seg.gap}`}
                 strokeDashoffset={-seg.offset}
                 strokeLinecap="butt"

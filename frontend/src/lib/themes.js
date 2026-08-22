@@ -31,10 +31,9 @@ export const THEME_EVENT = "xy:theme-changed";
 // index.css — it seeds the custom editor when starting from that preset.
 // Grouped light-first, then dark, for the picker grid.
 export const PRESETS = [
-  { id: "light", name: "Light", base: "light",
-    preview: { page: "#ffffff", surface: "#f6f7f8", text: "#222222" },
-    core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0e7490" } },
-  { id: "vivid", name: "Vivid", base: "light",
+  // "light" is the bare-:root palette (no theme-* class) — since the Light
+  // preset was retired, :root carries the original vivid stock look.
+  { id: "light", name: "Vivid", base: "light",
     preview: { page: "#ffffff", surface: "#f6f7f8", text: "#06b6d4" },
     core: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" } },
   { id: "ash", name: "Ash", base: "light",
@@ -74,7 +73,7 @@ export const PRESETS = [
 
 // Seed values for the custom editor, per base (= the default palettes).
 export const CUSTOM_SEEDS = {
-  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0e7490" },
+  light: { page: "#ffffff", surface: "#f6f7f8", heading: "#222222", body: "#374151", edge: "#d1d5db", bubble: "#0891b2" },
   dark:  { page: "#030712", surface: "#111827", heading: "#f3f4f6", body: "#d1d5db", edge: "#374151", bubble: "#155e75" },
 };
 
@@ -302,11 +301,6 @@ const TERMINAL_THEMES = {
     ...GITHUB_DARK_ANSI,
   },
   light: {
-    background: "#ffffff", foreground: "#24292f", cursor: "#0969da",
-    cursorAccent: "#ffffff", selectionBackground: "#b6d7ff",
-    ...GITHUB_LIGHT_ANSI,
-  },
-  vivid: {
     background: "#ffffff", foreground: "#24292f", cursor: "#06b6d4",
     cursorAccent: "#ffffff", selectionBackground: "#b6d7ff",
     ...GITHUB_LIGHT_ANSI,

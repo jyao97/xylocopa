@@ -35,24 +35,25 @@
      deep desaturated hue with OFF-white ink (#E9EDEF-class) — brighter
      than --color-body so "my" messages keep presence, dimmer than pure
      white so they don't glare. */
-  --color-bubble:         #0e7490;   /* cyan-700 — white ink reads at 5.4:1;
-                                        the old cyan-600 sat at 3.7 for full
-                                        paragraphs of message text */
-  --color-bubble-rgb:     14 116 144;
+  --color-bubble:         #0891b2;   /* cyan-600 — the original stock bubble */
+  --color-bubble-rgb:     8 145 178;
   --color-bubble-ink:     #ffffff;
   --color-bubble-ink-rgb: 255 255 255;
   --color-bubble-dim:     #a5f3fc;   /* timestamp row (cyan-200) */
-  --color-accent:         #0891b2;
-  --color-accent-rgb:     8 145 178;
+  --color-accent:         #06b6d4;   /* cyan-500 — the pre-token stock hue */
+  --color-accent-rgb:     6 182 212;
   --color-accent-ink:     #ffffff;   /* text/glyph on a filled accent surface */
-  /* Semantic status family (dots, badges, status words). Green-600/red-600
-     here, 400-grade on .dark; branded palettes override with their own
-     native green/red. Filled DESTRUCTIVE buttons deliberately stay
-     Tailwind red-600+white everywhere — a universal alarm affordance. */
-  --color-ok:             #16a34a;
-  --color-ok-rgb:         22 163 74;
-  --color-danger:         #dc2626;
-  --color-danger-rgb:     220 38 38;
+  /* Semantic status family (dots, badges, status words). The stock light
+     base is the original Vivid palette — green-500/red-500, deliberately
+     not contrast-tuned (the retired "Light" preset held the AA-tuned
+     green-600/red-600; Ash keeps those). 400-grade on .dark; branded
+     palettes override with their own native green/red. Filled DESTRUCTIVE
+     buttons deliberately stay Tailwind red-600+white everywhere — a
+     universal alarm affordance. */
+  --color-ok:             #22c55e;
+  --color-ok-rgb:         34 197 94;
+  --color-danger:         #ef4444;
+  --color-danger-rgb:     239 68 68;
 
   /* Monitor storage-chart hues (Tailwind 500s). --chart-mute pulls them
      toward the page color so branded palettes can quiet the carnival;
@@ -153,23 +154,6 @@
    .dark by source order, while html.eink / html.no-glass (0,1,1) still win.
    Tokens not listed (attn/orb) inherit from the base theme.
    Registry + custom-theme plumbing: src/lib/themes.js. */
-
-/* Vivid — the original stock light look (pre-token 367dfd55), kept as an
-   explicit preset. Faithful to the classes the sweep replaced: cyan-500
-   fills/tints/rings/glows (bg-cyan-500 was the dominant hue), cyan-600
-   bubble, green-500 ok, red-500 danger. Deliberately NOT contrast-tuned —
-   that's what Light is for; Vivid trades AA text ratios for the original
-   saturation on purpose. */
-.theme-vivid {
-  --color-accent:         #06b6d4;
-  --color-accent-rgb:     6 182 212;
-  --color-bubble:         #0891b2;
-  --color-bubble-rgb:     8 145 178;
-  --color-ok:             #22c55e;
-  --color-ok-rgb:         34 197 94;
-  --color-danger:         #ef4444;
-  --color-danger-rgb:     239 68 68;
-}
 
 /* Soft Dark — low-contrast warm charcoal, no pure black. */
 .theme-soft-dark {
@@ -436,6 +420,12 @@
   --color-accent:         #1d6390;
   --color-accent-rgb:     29 99 144;
   --color-accent-ink:     #ffffff;
+  /* AA-tuned green-600/red-600 — inherited from the retired Light preset;
+     the stock :root now carries the vivid 500s. */
+  --color-ok:             #16a34a;
+  --color-ok-rgb:         22 163 74;
+  --color-danger:         #dc2626;
+  --color-danger-rgb:     220 38 38;
 }
 
 /* Silver — flat industrial gray: the WHOLE interface lives at the

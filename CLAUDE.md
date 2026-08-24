@@ -32,6 +32,12 @@
 - Check which files other agents are currently modifying before editing shared files
 - Prefer creating new files over modifying existing shared ones when possible
 
+## Working Log (context recovery)
+- Each agent keeps a log at `working_logs/working_<agent-id>.log` in the MAIN project root — never inside a worktree (resolve the main checkout path first); `<agent-id>` = first 8 chars of `$XY_AGENT_ID`
+- At task start: read your existing log if present, then append `[YYYY-MM-DD HH:MM] START <one-line goal>`
+- Append one line per milestone only — key decisions, completed steps, blockers — not every action
+- Append-only, never rewrite or delete entries; `working_logs/` is gitignored — never commit it
+
 ## Code Style
 - Follow existing patterns in the codebase — don't introduce new conventions
 - Match the indentation, naming, and structure of surrounding code

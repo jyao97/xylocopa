@@ -57,6 +57,12 @@ DEFAULT_UNIVERSAL = """\
 - Check which files other agents are currently modifying before editing shared files
 - Prefer creating new files over modifying existing shared ones when possible
 
+## Working Log (context recovery)
+- Each agent keeps a log at `working_logs/working_<agent-id>.log` in the MAIN project root — never inside a worktree (resolve the main checkout path first); `<agent-id>` = first 8 chars of `$XY_AGENT_ID`
+- At task start: read your existing log if present, then append `[YYYY-MM-DD HH:MM] START <one-line goal>`
+- Append one line per milestone only — key decisions, completed steps, blockers — not every action
+- Append-only, never rewrite or delete entries; `working_logs/` is gitignored — never commit it
+
 ## Code Style
 - Follow existing patterns in the codebase — don't introduce new conventions
 - Match the indentation, naming, and structure of surrounding code
@@ -426,6 +432,31 @@ def _overflow_to_readme(project_path: str, project_name: str, overflow: str) -> 
         logger.error("Failed to write README.md for '%s': %s", project_name, e)
 
 
+def _ensure_working_logs_ignored(project_path: str) -> None:
+    """Ensure working_logs/ is listed in the project's .gitignore.
+
+    Agent working logs (working_logs/working_<id>.log) must never be
+    committed — they can contain internal paths and in-flight notes.
+    Creates .gitignore if the project doesn't have one.
+    """
+    gi_path = os.path.join(project_path, ".gitignore")
+    try:
+        content = ""
+        if os.path.isfile(gi_path):
+            with open(gi_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        lines = {ln.strip() for ln in content.splitlines()}
+        if lines & {"working_logs/", "working_logs", "/working_logs/", "/working_logs"}:
+            return
+        with open(gi_path, "a", encoding="utf-8") as f:
+            if content and not content.endswith("\n"):
+                f.write("\n")
+            f.write("working_logs/\n")
+        logger.info("Added working_logs/ to .gitignore in %s", project_path)
+    except OSError as e:
+        logger.warning("Could not update .gitignore in %s: %s", project_path, e)
+
+
 def scaffold_project(project_name: str, project_path: str,
                      force: bool = False) -> dict:
     """Generate CLAUDE.md and PROGRESS.md for a project.
@@ -441,6 +472,8 @@ def scaffold_project(project_name: str, project_path: str,
         return {"claude_md": False, "progress_md": False}
 
     result = {"claude_md": False, "progress_md": False}
+
+    _ensure_working_logs_ignored(project_path)
 
     claude_path = os.path.join(project_path, "CLAUDE.md")
     progress_path = os.path.join(project_path, "PROGRESS.md")

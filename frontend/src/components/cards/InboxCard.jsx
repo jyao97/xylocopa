@@ -21,6 +21,7 @@ const EFFORT_PICKER = [
   { value: "high", label: "High" },
   { value: "xhigh", label: "XHigh" },
   { value: "max", label: "Max" },
+  { value: "ultracode", label: "Ultracode" },
 ];
 const WT_PICKER = [
   { value: true, label: "On" },

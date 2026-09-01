@@ -524,6 +524,9 @@ def task_create(
         - high     → half-day, cross-cutting changes with research
         - xhigh    → full day, requires design + implementation + testing
         - max      → multi-day, needs scope decomposition
+        - ultracode → xhigh + standing multi-agent workflow orchestration
+                     (claude --effort ultracode). Very token-heavy — pick
+                     only when the user explicitly asks for ultracode
 
     Args:
         title: Short task title (required, max 300 chars).
@@ -533,8 +536,8 @@ def task_create(
             want a task in a project other than the one you're in.
         description: Longer task body (optional, markdown supported).
         model: Claude model id (see guidance above). Empty = project default.
-        effort: low | medium | high | xhigh | max (see guidance above).
-            Empty = project default.
+        effort: low | medium | high | xhigh | max | ultracode (see
+            guidance above). Empty = project default.
         priority: 0 (normal) or 1 (high). Default 0.
     """
     # Lazy imports so read-only callers don't pay the cost
@@ -638,7 +641,7 @@ def task_update(
             claude-opus-4-8 | claude-opus-5 | claude-fable-5 |
             claude-fable-5-1).
             Empty = leave unchanged.
-        effort: New effort level (low|medium|high|xhigh|max).
+        effort: New effort level (low|medium|high|xhigh|max|ultracode).
             Empty = leave unchanged.
         priority: New priority (0 normal, 1 high). None = leave unchanged.
     """

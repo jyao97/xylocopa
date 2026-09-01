@@ -28,6 +28,9 @@ const EFFORT_PICKER = [
   { value: "high", label: "High" },
   { value: "xhigh", label: "XHigh" },
   { value: "max", label: "Max" },
+  // xhigh + standing multi-agent workflow orchestration (claude --effort
+  // ultracode). Token-heavy — opt-in per task, never the default.
+  { value: "ultracode", label: "Ultracode" },
 ];
 const WT_PICKER = [
   { value: true, label: "On" },

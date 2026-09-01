@@ -12,6 +12,7 @@ const EFFORT_PICKER = [
   { value: "high", label: "High" },
   { value: "xhigh", label: "XHigh" },
   { value: "max", label: "Max" },
+  { value: "ultracode", label: "Ultra" },
 ];
 
 export default memo(function QueueCard({ task, position, selecting, selected, onToggle, expanded, onExpand, onRefresh }) {

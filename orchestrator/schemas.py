@@ -21,7 +21,7 @@ class TaskCreate(BaseModel):
     description: str | None = Field(None, max_length=50000)
     project_name: str | None = None
     model: str | None = None
-    effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+    effort: Literal["low", "medium", "high", "xhigh", "max", "ultracode"] | None = None
     priority: int = 0
     skip_permissions: bool = True
     sync_mode: bool = False
@@ -121,7 +121,7 @@ class AgentCreate(BaseModel):
     prompt: str
     mode: AgentMode = AgentMode.AUTO
     model: str | None = None  # None = use project default
-    effort: str | None = None  # low, medium, high, xhigh, max
+    effort: str | None = None  # low, medium, high, xhigh, max, ultracode
     worktree: str | None = None  # None = shared main, string = worktree name
     timeout_seconds: int = 1800
     resume_session_id: str | None = None  # Resume an existing Claude session

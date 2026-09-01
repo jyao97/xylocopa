@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-09-01
+
+Model support release: Claude Fable 5.1.
+
+### Added
+
+- **Claude Fable 5.1 (`claude-fable-5-1`).** Available in the model picker (leads the list; new-task default stays Opus 5) and accepted everywhere models are validated. Context tracking uses its 1M window; cost tracking carries an explicit pricing entry — $10/$50 per MTok with cache reads at $0.25/MTok, cheaper than Fable 5's $1.00, which the suffix-strip pricing fallback would otherwise have applied. Also listed in the MCP `task_create`/`task_update` model guidance. (5fac5921)
+
+### Changed
+
+- **Installer model prompt refreshed.** `install.js` and `.env.example` offered a stale lineup (Opus 4.8/4.7, Sonnet 4.6) with `claude-opus-4-8` as the suggested default; both now match the current picker with `claude-opus-5` as the default, in line with `DEFAULT_CLAUDE_MODEL`. (5fac5921)
+
 ## [0.16.1] - 2026-08-21
 
 Theme system release. The light lineup is rebuilt around new palettes, the hardcoded cyan family now rides theme tokens, status colors are tuned per palette, the Monitor charts follow the active theme, and the original saturated stock look (Vivid) becomes the default light palette.

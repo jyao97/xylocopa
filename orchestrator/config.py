@@ -43,13 +43,13 @@ DEFAULT_CLAUDE_MODEL = "claude-opus-5"
 CC_MODEL = os.getenv("CC_MODEL", DEFAULT_CLAUDE_MODEL)
 
 # Model for internal claude -p summarization jobs (agent insights, retry
-# summaries, PROGRESS.md summaries, insight dedup). Pinned to the explicit
-# "claude-sonnet-5" id (standard 200K tier, NOT the "[1m]" variant) rather
-# than the bare "sonnet" CLI alias: the alias resolves through the inherited
-# ANTHROPIC_DEFAULT_SONNET_MODEL env var, which once mis-resolved to a
-# 1M-context model and failed insight generation with "Usage credits
-# required for 1M context". Cheaper/faster than CC_MODEL for text-in/text-out.
-SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "claude-sonnet-5")
+# summaries, PROGRESS.md summaries, insight dedup). Opus by explicit user
+# preference (2026-09-01): summary quality over sonnet's small per-job
+# saving. Keep an EXPLICIT model id here — never the bare "sonnet"/"opus"
+# CLI alias: aliases resolve through the inherited ANTHROPIC_DEFAULT_*_MODEL
+# env vars, which once mis-resolved to a 1M-context variant and failed
+# insight generation with "Usage credits required for 1M context".
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "claude-opus-5")
 
 # Attention assistant's interactive turns (bubble chat + compile) — its own
 # knob because the user is watching a spinner here, unlike the background

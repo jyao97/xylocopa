@@ -515,6 +515,8 @@ def task_create(
                                        go-to for complex agentic coding
         - claude-fable-5              → most capable; flagship for the
                                        hardest tasks (~2x cost of Opus)
+        - claude-fable-5-1            → newest flagship point release;
+                                       same price tier as Fable 5
 
       effort:
         - low      → < 1 hour, well-scoped (~30 lines or contained tweak)
@@ -633,7 +635,8 @@ def task_update(
             Empty = leave unchanged.
         model: New Claude model id (claude-haiku-4-5-20251001 |
             claude-sonnet-5 | claude-opus-4-6 | claude-opus-4-7 |
-            claude-opus-4-8 | claude-opus-5 | claude-fable-5).
+            claude-opus-4-8 | claude-opus-5 | claude-fable-5 |
+            claude-fable-5-1).
             Empty = leave unchanged.
         effort: New effort level (low|medium|high|xhigh|max).
             Empty = leave unchanged.

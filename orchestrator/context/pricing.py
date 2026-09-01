@@ -10,7 +10,8 @@ cache writes at a higher rate than 5min:
 JSONL `usage.cache_creation` exposes the split:
   ephemeral_5m_input_tokens, ephemeral_1h_input_tokens
 
-Cache read price is 0.10× input regardless of which TTL was used to write.
+Cache read price is 0.10× input regardless of which TTL was used to write —
+except Fable 5.1, which reads cache at $0.25/MTok (0.025× input).
 """
 from __future__ import annotations
 
@@ -19,7 +20,10 @@ from __future__ import annotations
 # Pricing — USD per 1M tokens.
 # ---------------------------------------------------------------------------
 PRICING: dict[str, dict[str, float]] = {
-    # --- Fable 5 ($10/$50 — flagship) ---
+    # --- Fable 5.1 / 5 ($10/$50 — flagship) ---
+    # 5.1 must stay an explicit entry: resolve_pricing's suffix-strip fallback
+    # would hand it Fable 5's $1.00 cache_read, but 5.1 reads at $0.25/MTok.
+    "claude-fable-5-1":  {"input": 10.00, "cache_create_5m": 12.50, "cache_create_1h": 20.00, "cache_read": 0.25, "output": 50.00},
     "claude-fable-5":    {"input": 10.00, "cache_create_5m": 12.50, "cache_create_1h": 20.00, "cache_read": 1.00, "output": 50.00},
     # --- Opus 4.5+ / Opus 5 ($5/$25 — current generation) ---
     "claude-opus-5":     {"input": 5.00,  "cache_create_5m": 6.25,  "cache_create_1h": 10.00, "cache_read": 0.50, "output": 25.00},

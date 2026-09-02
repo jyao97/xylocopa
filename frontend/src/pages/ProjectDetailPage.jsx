@@ -35,6 +35,7 @@ import PopoverArrow from "../components/PopoverArrow";
 import ProjectRing from "../components/ProjectRing";
 import EmojiPicker from "../components/EmojiPicker";
 import AgentRow from "../components/AgentRow";
+import DropboxSyncRow from "../components/dropbox/DropboxSyncRow";
 import useDraft from "../hooks/useDraft";
 import { relativeTime } from "../lib/formatters";
 import { AGENT_STATUS_COLORS, AGENT_STATUS_TEXT_COLORS, modelDisplayName, agentBotState } from "../lib/constants";
@@ -1462,6 +1463,12 @@ export default function ProjectDetailPage({ theme, onToggleTheme }) {
             {rebuildingInsights ? "Rebuilding..." : "Rebuild"}
           </button>
         </div>
+        {project.active && (
+          <DropboxSyncRow
+            project={project}
+            onProjectChange={(p) => setProject((prev) => ({ ...prev, ...p }))}
+          />
+        )}
         {project.active ? (
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">

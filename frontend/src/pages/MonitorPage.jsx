@@ -10,6 +10,7 @@ import { useMonitor } from "../contexts/MonitorContext";
 import { getEinkMode, setEinkMode } from "../lib/einkMode";
 import { getOrbEnabled, setOrbEnabled } from "../lib/orbMode";
 import ThemeSettings from "../components/ThemeSettings";
+import DropboxMonitorCard from "../components/dropbox/DropboxMonitorCard";
 
 const HEALTH_COLORS = {
   ok: "bg-ok",
@@ -739,6 +740,8 @@ export default function MonitorPage({ theme, onToggleTheme }) {
                 : `Freed ${formatBytes(orphanResult.freed_bytes)} (${orphanResult.deleted_sessions} sessions, ${orphanResult.deleted_logs} logs, ${orphanResult.deleted_dirs} dirs, ${orphanResult.deleted_projects || 0} projects)`}
           </p>
         )}
+
+        <DropboxMonitorCard />
 
         {/* Display: theme palettes + custom editor */}
         <ThemeSettings theme={theme} />

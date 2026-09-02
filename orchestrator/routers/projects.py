@@ -2533,10 +2533,42 @@ async def update_project_settings(name: str, request: Request, db: Session = Dep
             proj.emoji = None
         else:
             proj.emoji = str(raw)[:16]
+    dropbox_changed = False
+    if "dropbox_sync" in body:
+        proj.dropbox_sync = bool(body["dropbox_sync"])
+        dropbox_changed = True
+    if "dropbox_folders" in body:
+        raw = body["dropbox_folders"]
+        if raw is None:
+            proj.dropbox_folders = None
+        elif isinstance(raw, list) and all(isinstance(x, str) for x in raw):
+            # Top-level entry names only — no separators, no traversal.
+            bad = [x for x in raw if not x or "/" in x or "\\" in x or x == ".."]
+            if bad:
+                raise HTTPException(status_code=400, detail=f"Invalid folder entries: {bad[:3]}")
+            proj.dropbox_folders = json.dumps(sorted(set(raw)))
+        else:
+            raise HTTPException(status_code=400, detail="dropbox_folders must be a list of names or null")
+        dropbox_changed = True
+    if "dropbox_ignore" in body:
+        raw = body["dropbox_ignore"]
+        if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+            proj.dropbox_ignore = None
+        elif isinstance(raw, str):
+            proj.dropbox_ignore = raw[:20000]
+        else:
+            raise HTTPException(status_code=400, detail="dropbox_ignore must be a string or null")
+        dropbox_changed = True
     db.commit()
     db.refresh(proj)
     from websocket import emit_project_update
     asyncio.ensure_future(emit_project_update(name))
+    if dropbox_changed:
+        try:
+            from dropbox_sync.engine import on_project_settings_changed
+            on_project_settings_changed(name)
+        except Exception:
+            logger.debug("dropbox engine notify failed", exc_info=True)
     return ProjectOut.model_validate(proj)
 
 

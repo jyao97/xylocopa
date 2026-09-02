@@ -241,6 +241,11 @@ class Project(Base):
     resume_emoji: Mapped[str | None] = mapped_column(String(16), nullable=True)
     resume_hint: Mapped[str | None] = mapped_column(String(80), nullable=True)
     resume_hint_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dropbox_sync: Mapped[bool] = mapped_column(Boolean, default=False)
+    # JSON array of selected top-level entries ("." = files in project root);
+    # NULL = everything not excluded by ignore rules.
+    dropbox_folders: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dropbox_ignore: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class StarredSession(Base):

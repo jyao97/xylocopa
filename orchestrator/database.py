@@ -142,6 +142,22 @@ def init_db():
             conn.execute(text("ALTER TABLE projects ADD COLUMN resume_hint_at DATETIME"))
             conn.commit()
 
+        # Dropbox sync per-project settings
+        columns = _table_columns(conn, "projects")
+        if "dropbox_sync" not in columns:
+            conn.execute(text(
+                "ALTER TABLE projects ADD COLUMN dropbox_sync BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+        columns = _table_columns(conn, "projects")
+        if "dropbox_folders" not in columns:
+            conn.execute(text("ALTER TABLE projects ADD COLUMN dropbox_folders TEXT"))
+            conn.commit()
+        columns = _table_columns(conn, "projects")
+        if "dropbox_ignore" not in columns:
+            conn.execute(text("ALTER TABLE projects ADD COLUMN dropbox_ignore TEXT"))
+            conn.commit()
+
         # Add cli_sync column to agents if missing
         columns = _table_columns(conn, "agents")
         if "cli_sync" not in columns:

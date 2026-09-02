@@ -103,6 +103,13 @@ BACKUP_ENABLED = os.getenv("BACKUP_ENABLED", "0").strip().lower() in ("1", "true
 BACKUP_INTERVAL_HOURS = int(os.getenv("BACKUP_INTERVAL_HOURS", "24"))
 MAX_BACKUPS = int(os.getenv("MAX_BACKUPS", "30"))
 
+# Dropbox sync — token.json (0600), config.json and state.db live here.
+# The app key is the OAuth client id of the user's own App-Folder Dropbox
+# app; it is not a secret. Env value only pre-fills the link dialog — the
+# key actually used is the one stored alongside the refresh token.
+DROPBOX_SYNC_DIR = _resolve(os.getenv("DROPBOX_SYNC_DIR", "data/dropbox"))
+DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY", "")
+
 # Auth
 AUTH_TIMEOUT_MINUTES = int(os.getenv("AUTH_TIMEOUT_MINUTES", "30"))
 

@@ -16,3 +16,4 @@ bcrypt>=4.0
 Pillow>=10.0
 mcp>=1.0,<2
 watchdog>=4.0
+pathspec>=0.12

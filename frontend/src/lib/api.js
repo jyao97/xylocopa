@@ -480,6 +480,25 @@ export const importBackup = (file) => {
 };
 export const downloadBackupUrl = (name) => `/api/system/backup/${name}/download`;
 
+// --- Dropbox sync ---
+export const fetchDropboxStatus = () => request("/api/dropbox/status");
+export const updateDropboxConfig = (data) =>
+  request("/api/dropbox/config", { method: "PUT", body: JSON.stringify(data) });
+export const startDropboxLink = (appKey) =>
+  request("/api/dropbox/link/start", { method: "POST", body: JSON.stringify({ app_key: appKey }) });
+export const completeDropboxLink = (code) =>
+  request("/api/dropbox/link/complete", { method: "POST", body: JSON.stringify({ code }) });
+export const unlinkDropbox = () => request("/api/dropbox/link", { method: "DELETE" });
+export const triggerDropboxSync = (project = null) =>
+  request("/api/dropbox/sync", { method: "POST", body: JSON.stringify(project ? { project } : {}) });
+export const pauseDropboxSync = () => request("/api/dropbox/pause", { method: "POST" });
+export const resumeDropboxSync = () => request("/api/dropbox/resume", { method: "POST" });
+export const startDropboxDryRun = (project, folders = undefined, ignore = undefined) =>
+  request("/api/dropbox/dry-run", { method: "POST", body: JSON.stringify({ project, folders, ignore }) });
+export const fetchDropboxDryRun = (jobId) => request(`/api/dropbox/dry-run/${e(jobId)}`);
+export const fetchDropboxFolders = (project) =>
+  request(`/api/projects/${e(project)}/dropbox/folders`);
+
 // --- Notification Settings ---
 export const fetchNotificationSettings = () => request("/api/settings/notifications");
 export const updateNotificationSettings = (data) =>

@@ -347,6 +347,9 @@ class ProjectOut(BaseModel):
     emoji: str | None = None
     resume_emoji: str | None = None
     resume_hint: str | None = None
+    dropbox_sync: bool = False
+    dropbox_folders: str | None = None
+    dropbox_ignore: str | None = None
 
     model_config = {"from_attributes": True}
 

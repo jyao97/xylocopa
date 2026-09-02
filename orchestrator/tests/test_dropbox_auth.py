@@ -327,6 +327,40 @@ class TestLinkFlow:
         # The refresh token string must never appear in logs
         assert "test-refresh-token" not in caplog.text
 
+    @pytest.mark.anyio
+    async def test_flow_expiry_after_10_minutes(self, tmp_path):
+        """LinkFlow expires 10 minutes after start(); complete() raises LinkStateError."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        http = httpx.AsyncClient(transport=_success_transport())
+
+        current_time = [1000.0]
+        flow = LinkFlow(store, http=http, now=lambda: current_time[0])
+
+        flow.start("abcdefghij1234")
+
+        # Advance time by just over 10 minutes (601 seconds)
+        current_time[0] = 1000.0 + 601
+
+        with pytest.raises(LinkStateError, match="flow expired"):
+            await flow.complete("auth-code")
+
+    @pytest.mark.anyio
+    async def test_flow_within_10_minutes_succeeds(self, tmp_path):
+        """LinkFlow within 10 minutes of start() completes successfully."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        http = httpx.AsyncClient(transport=_success_transport())
+
+        current_time = [1000.0]
+        flow = LinkFlow(store, http=http, now=lambda: current_time[0])
+
+        flow.start("abcdefghij1234")
+
+        # Advance time by just under 10 minutes (599 seconds)
+        current_time[0] = 1000.0 + 599
+
+        result = await flow.complete("auth-code")
+        assert result["account_id"] == "dbid:AAH4f99T0taONIb-OurWxbNQ6ywGRopQngc"
+
 
 # ── DropboxTokenProvider ────────────────────────────────────────────────
 

@@ -39,6 +39,19 @@ class DropboxRateLimit(DropboxError):
     """429 / too_many_requests / too_many_write_operations."""
 
 
+class DropboxIncorrectOffset(DropboxError):
+    """Raised when append/finish returns incorrect_offset."""
+
+    def __init__(self, status: int, summary: str, correct_offset: int,
+                 body: dict | None = None):
+        super().__init__(status, summary, body)
+        self.correct_offset = correct_offset
+
+
+class DropboxSessionNotFound(DropboxError):
+    """Raised when a session is not_found or lookup_failed with not_found/closed."""
+
+
 # ── Token provider protocol ────────────────────────────────────────────
 
 
@@ -79,15 +92,18 @@ def dropbox_timestamp(epoch_seconds: float) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def commit_info(path: str, mtime_ns: int) -> dict:
+def commit_info(path: str, mtime_ns: int, content_hash: str | None = None) -> dict:
     """Build a CommitInfo dict for an upload."""
-    return {
+    info: dict = {
         "path": path,
         "mode": "overwrite",
         "autorename": False,
         "mute": True,
         "client_modified": dropbox_timestamp(mtime_ns / 1e9),
     }
+    if content_hash is not None:
+        info["content_hash"] = content_hash
+    return info
 
 
 # ── Client ──────────────────────────────────────────────────────────────
@@ -300,14 +316,18 @@ class DropboxClient:
         self, session_id: str, offset: int, data: bytes, *, close: bool = False,
     ) -> None:
         """Append data to an upload session."""
-        await self.content_upload(
-            "files/upload_session/append_v2",
-            {
-                "cursor": {"session_id": session_id, "offset": offset},
-                "close": close,
-            },
-            data,
-        )
+        try:
+            await self.content_upload(
+                "files/upload_session/append_v2",
+                {
+                    "cursor": {"session_id": session_id, "offset": offset},
+                    "close": close,
+                },
+                data,
+            )
+        except DropboxError as exc:
+            self._check_session_error(exc)
+            raise
 
     async def upload_session_finish_batch(self, entries: list[dict]) -> list[dict]:
         """Finish a batch of upload sessions. Polls until complete."""
@@ -330,6 +350,12 @@ class DropboxClient:
         result = await self.rpc("files/delete_batch", {"entries": entries})
         if result.get(".tag") == "complete":
             return result["entries"]
+        if result.get(".tag") == "failed":
+            raise DropboxError(
+                status=0,
+                summary=result.get("error_summary", "delete_batch failed"),
+                body=result,
+            )
         job_id = result["async_job_id"]
         while True:
             await self._sleep(1)
@@ -339,6 +365,12 @@ class DropboxClient:
             )
             if result.get(".tag") == "complete":
                 return result["entries"]
+            if result.get(".tag") == "failed":
+                raise DropboxError(
+                    status=0,
+                    summary=result.get("error_summary", "delete_batch failed"),
+                    body=result,
+                )
 
     async def list_folder(self, path: str, *, recursive: bool = False, limit: int = 2000) -> dict:
         arg = {"path": path, "recursive": recursive, "limit": limit}
@@ -349,6 +381,69 @@ class DropboxClient:
 
     async def get_metadata(self, path: str) -> dict:
         return await self.rpc("files/get_metadata", {"path": path})
+
+    @staticmethod
+    def _check_session_error(exc: DropboxError) -> None:
+        """Re-raise as DropboxIncorrectOffset or DropboxSessionNotFound if applicable."""
+        body = exc.body
+        if body is None:
+            return
+        error = body.get("error", {})
+        if not isinstance(error, dict):
+            return
+        tag = error.get(".tag", "")
+
+        if tag == "incorrect_offset":
+            correct = error.get("correct_offset")
+            if correct is None:
+                inner = error.get("incorrect_offset", {})
+                correct = inner.get("correct_offset", 0)
+            raise DropboxIncorrectOffset(
+                status=exc.status,
+                summary=exc.summary,
+                correct_offset=int(correct),
+                body=body,
+            ) from exc
+
+        if tag in ("not_found", "closed"):
+            raise DropboxSessionNotFound(
+                status=exc.status,
+                summary=exc.summary,
+                body=body,
+            ) from exc
+
+        if tag == "lookup_failed":
+            inner_tag = ""
+            lookup = error.get("lookup_failed", error.get("not_found", {}))
+            if isinstance(lookup, dict):
+                inner_tag = lookup.get(".tag", "")
+            if inner_tag in ("not_found", "closed"):
+                raise DropboxSessionNotFound(
+                    status=exc.status,
+                    summary=exc.summary,
+                    body=body,
+                ) from exc
+
+    async def move_v2(self, from_path: str, to_path: str) -> dict:
+        """Move/rename a file or folder (files/move_v2)."""
+        return await self.rpc("files/move_v2", {
+            "from_path": from_path,
+            "to_path": to_path,
+            "autorename": False,
+        })
+
+    async def space_summary(self) -> dict:
+        """Return {"used": int, "allocated": int | None}."""
+        usage = await self.get_space_usage()
+        used = usage.get("used", 0)
+        allocation = usage.get("allocation", {})
+        tag = allocation.get(".tag", "")
+        allocated: int | None = None
+        if tag == "individual":
+            allocated = allocation.get("allocated")
+        elif tag == "team":
+            allocated = allocation.get("allocated")
+        return {"used": used, "allocated": allocated}
 
     async def revoke_token(self) -> None:
         await self.rpc("auth/token/revoke")

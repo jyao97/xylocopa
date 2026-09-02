@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS pending_sessions (
     offset INTEGER NOT NULL,
     size INTEGER NOT NULL,
     mtime_ns INTEGER NOT NULL,
-    content_hash TEXT NOT NULL,
+    content_hash TEXT,
+    created_at TEXT NOT NULL,
     PRIMARY KEY (project, rel_path)
 );
 CREATE TABLE IF NOT EXISTS runs (
@@ -139,6 +140,12 @@ class SyncState:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
+
+        # Schema upgrade: if pending_sessions exists but lacks created_at,
+        # drop and recreate (only holds resumable sessions, safe to lose).
+        if not is_new:
+            self._upgrade_pending_sessions()
+
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
@@ -154,6 +161,15 @@ class SyncState:
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+
+    def _upgrade_pending_sessions(self) -> None:
+        """Drop and recreate pending_sessions if it lacks the created_at column."""
+        cur = self._conn.execute("PRAGMA table_info(pending_sessions)")
+        columns = {row[1] for row in cur.fetchall()}
+        if columns and "created_at" not in columns:
+            log.info("Upgrading pending_sessions table (adding created_at, making content_hash nullable)")
+            self._conn.execute("DROP TABLE pending_sessions")
+            self._conn.commit()
 
     # ── files ──
 
@@ -220,21 +236,24 @@ class SyncState:
         offset: int,
         size: int,
         mtime_ns: int,
-        content_hash: str,
+        content_hash: str | None,
+        created_at: str | None = None,
     ) -> None:
+        if created_at is None:
+            created_at = _utcnow()
         with self._lock:
             self._conn.execute(
                 "INSERT OR REPLACE INTO pending_sessions "
-                "(project, rel_path, session_id, offset, size, mtime_ns, content_hash) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (project, rel_path, session_id, offset, size, mtime_ns, content_hash),
+                "(project, rel_path, session_id, offset, size, mtime_ns, content_hash, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (project, rel_path, session_id, offset, size, mtime_ns, content_hash, created_at),
             )
             self._conn.commit()
 
     def pending_get(self, project: str, rel_path: str) -> dict | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT session_id, offset, size, mtime_ns, content_hash "
+                "SELECT session_id, offset, size, mtime_ns, content_hash, created_at "
                 "FROM pending_sessions WHERE project = ? AND rel_path = ?",
                 (project, rel_path),
             ).fetchone()
@@ -246,6 +265,7 @@ class SyncState:
                 "size": row[2],
                 "mtime_ns": row[3],
                 "content_hash": row[4],
+                "created_at": row[5],
             }
 
     def pending_delete(self, project: str, rel_path: str) -> None:
@@ -259,7 +279,7 @@ class SyncState:
     def pending_all(self, project: str) -> list[dict]:
         with self._lock:
             cur = self._conn.execute(
-                "SELECT rel_path, session_id, offset, size, mtime_ns, content_hash "
+                "SELECT rel_path, session_id, offset, size, mtime_ns, content_hash, created_at "
                 "FROM pending_sessions WHERE project = ?",
                 (project,),
             )
@@ -271,9 +291,71 @@ class SyncState:
                     "size": row[3],
                     "mtime_ns": row[4],
                     "content_hash": row[5],
+                    "created_at": row[6],
                 }
                 for row in cur.fetchall()
             ]
+
+    # ── rename / batch ──
+
+    def rename_project(self, old: str, new: str) -> None:
+        """Rename a project across files, pending_sessions, project_stats and runs."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE files SET project = ? WHERE project = ?", (new, old),
+            )
+            self._conn.execute(
+                "UPDATE pending_sessions SET project = ? WHERE project = ?", (new, old),
+            )
+            # project_stats has a PK on project — delete old then insert new
+            row = self._conn.execute(
+                "SELECT files_synced, bytes_synced, last_synced_at, last_error "
+                "FROM project_stats WHERE project = ?",
+                (old,),
+            ).fetchone()
+            if row is not None:
+                self._conn.execute("DELETE FROM project_stats WHERE project = ?", (old,))
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO project_stats "
+                    "(project, files_synced, bytes_synced, last_synced_at, last_error) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (new, row[0], row[1], row[2], row[3]),
+                )
+            self._conn.execute(
+                "UPDATE runs SET project = ? WHERE project = ?", (new, old),
+            )
+            self._conn.commit()
+
+    def commit_batch_results(
+        self,
+        upserts: Iterable[FileRecord],
+        pending_deletes: Iterable[tuple[str, str]],
+    ) -> None:
+        """Atomically upsert files and delete pending sessions."""
+        upsert_rows = [
+            (r.project, r.rel_path, r.size, r.mtime_ns, r.content_hash, r.remote_rev, r.uploaded_at)
+            for r in upserts
+        ]
+        delete_rows = list(pending_deletes)
+        with self._lock:
+            self._conn.execute("SAVEPOINT commit_batch")
+            try:
+                self._conn.executemany(
+                    "INSERT OR REPLACE INTO files "
+                    "(project, rel_path, size, mtime_ns, content_hash, remote_rev, uploaded_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    upsert_rows,
+                )
+                self._conn.executemany(
+                    "DELETE FROM pending_sessions WHERE project = ? AND rel_path = ?",
+                    delete_rows,
+                )
+                self._conn.execute("RELEASE SAVEPOINT commit_batch")
+                self._conn.commit()
+            except Exception:
+                self._conn.execute("ROLLBACK TO SAVEPOINT commit_batch")
+                self._conn.execute("RELEASE SAVEPOINT commit_batch")
+                raise
 
     # ── runs ──
 

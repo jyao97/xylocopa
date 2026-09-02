@@ -1821,6 +1821,12 @@ async def rename_project(name: str, body: ProjectRename, request: Request, db: S
         from session_cache import migrate_session_dirs
         migrate_session_dirs(new_path)
 
+    try:
+        from dropbox_sync.engine import on_project_renamed
+        on_project_renamed(name, new_name)
+    except Exception:
+        logger.debug("dropbox engine rename notify failed", exc_info=True)
+
     logger.info("Project renamed: %s → %s", name, new_name)
     return new_proj
 
@@ -1948,6 +1954,12 @@ async def delete_project(name: str, request: Request, db: Session = Depends(get_
             raise HTTPException(status_code=500, detail=f"Failed to move files to trash: {e}")
     elif not proj:
         raise HTTPException(status_code=404, detail=f"Folder '{name}' not found")
+
+    try:
+        from dropbox_sync.engine import on_project_deleted
+        on_project_deleted(name)
+    except Exception:
+        logger.debug("dropbox engine delete notify failed", exc_info=True)
 
     logger.info("Project '%s' deleted (moved to .trash)", name)
     return {"detail": f"Project '{name}' deleted — files moved to .trash"}

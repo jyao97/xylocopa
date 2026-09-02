@@ -2123,6 +2123,276 @@ def webapp_list(project: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Dropbox sync (read-only, no config.py / engine / auth / client imports)
+# ---------------------------------------------------------------------------
+
+def _dropbox_sync_dir() -> str:
+    """Resolve the Dropbox sync data directory."""
+    return os.environ.get(
+        "DROPBOX_SYNC_DIR",
+        os.path.join(XYLOCOPA_ROOT, "data", "dropbox"),
+    )
+
+
+def _format_bytes(n: int) -> str:
+    """Human-readable byte size (B/KB/MB/GB/TB, one decimal above KB)."""
+    if n < 1024:
+        return f"{n} B"
+    for unit in ("KB", "MB", "GB", "TB"):
+        n /= 1024
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f} {unit}"
+    return f"{n:.1f} TB"
+
+
+@server.tool()
+def dropbox_get() -> str:
+    """Dropbox sync status: link state, schedule, last run, per-project counts.
+
+    Read-only — never uploads or modifies anything.
+    """
+    sync_dir = _dropbox_sync_dir()
+    config_path = os.path.join(sync_dir, "config.json")
+    state_path = os.path.join(sync_dir, "state.db")
+    token_path = os.path.join(sync_dir, "token.json")
+
+    # Load config.json
+    cfg: dict = {}
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if not cfg and not os.path.isfile(state_path) and not os.path.isfile(token_path):
+        return "Dropbox sync not configured."
+
+    linked = os.path.isfile(token_path)
+    paused = cfg.get("paused", False)
+    interval = cfg.get("interval_hours", 1)
+
+    parts = ["# Dropbox sync status"]
+    parts.append(f"- linked: {'yes' if linked else '**not linked**'}")
+    parts.append(f"- paused: {'yes' if paused else 'no'}")
+    parts.append(f"- interval: {interval}h")
+
+    # Read state.db (read-only)
+    if not os.path.isfile(state_path):
+        parts.append("")
+        parts.append("No sync state yet (state.db missing).")
+        return "\n".join(parts)
+
+    try:
+        sdb = sqlite3.connect(f"file:{state_path}?mode=ro", uri=True)
+        sdb.row_factory = sqlite3.Row
+    except sqlite3.OperationalError:
+        parts.append("")
+        parts.append("Could not open state.db.")
+        return "\n".join(parts)
+
+    try:
+        # Last run summary
+        row = sdb.execute(
+            "SELECT id, started_at, finished_at, status, trigger, "
+            "files_scanned, files_uploaded, bytes_uploaded, files_deleted, errors, error_sample "
+            "FROM runs WHERE status != 'running' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row:
+            parts.append("")
+            parts.append("## Last run")
+            parts.append(
+                f"- id: {row['id']} | trigger: {row['trigger']} | status: {row['status']}"
+            )
+            parts.append(f"- started: {row['started_at']}")
+            if row["finished_at"]:
+                parts.append(f"- finished: {row['finished_at']}")
+            parts.append(
+                f"- scanned: {row['files_scanned']}, uploaded: {row['files_uploaded']} "
+                f"({_format_bytes(row['bytes_uploaded'] or 0)}), "
+                f"deleted: {row['files_deleted']}, errors: {row['errors']}"
+            )
+            if row["error_sample"]:
+                parts.append(f"- error: {row['error_sample']}")
+
+        # Next run (current running)
+        cur_row = sdb.execute(
+            "SELECT id, started_at, trigger, project "
+            "FROM runs WHERE status = 'running' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if cur_row:
+            parts.append("")
+            parts.append(
+                f"## Current run (id {cur_row['id']}, trigger: {cur_row['trigger']}, "
+                f"started: {cur_row['started_at']}"
+                + (f", project: {cur_row['project']}" if cur_row["project"] else "")
+                + ")"
+            )
+
+        # Per-project table
+        prows = sdb.execute(
+            "SELECT project, files_synced, bytes_synced, last_synced_at, last_error "
+            "FROM project_stats ORDER BY project"
+        ).fetchall()
+        if prows:
+            parts.append("")
+            parts.append("## Projects")
+            parts.append("| project | files | bytes | last sync | error |")
+            parts.append("|---------|------:|------:|-----------|-------|")
+            for pr in prows:
+                err = pr["last_error"] or ""
+                parts.append(
+                    f"| {pr['project']} | {pr['files_synced'] or 0} "
+                    f"| {_format_bytes(pr['bytes_synced'] or 0)} "
+                    f"| {pr['last_synced_at'] or 'never'} | {err} |"
+                )
+
+        # Recent errors (up to 5)
+        erows = sdb.execute(
+            "SELECT at, project, path, message FROM errors ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+        if erows:
+            parts.append("")
+            parts.append("## Recent errors")
+            for er in erows:
+                proj = er["project"] or "?"
+                path = er["path"] or ""
+                parts.append(f"- [{er['at']}] {proj}: {path} — {er['message']}")
+    finally:
+        sdb.close()
+
+    return "\n".join(parts)
+
+
+@server.tool()
+def dropbox_count(project: str) -> str:
+    """Count files/bytes that would be synced per top-level folder — a dry run.
+
+    Nothing is uploaded or modified.
+
+    Args:
+        project: Project name (required).
+    """
+    import time
+
+    db = _get_db()
+    if db is None:
+        return "Xylocopa database not found. Is the orchestrator running?"
+
+    try:
+        row = db.execute(
+            "SELECT name, path, dropbox_folders, dropbox_ignore "
+            "FROM projects WHERE name = ? AND archived = 0",
+            (project,),
+        ).fetchone()
+        if row is None:
+            available = sorted(
+                r[0] for r in db.execute(
+                    "SELECT name FROM projects WHERE archived = 0"
+                ).fetchall()
+            )
+            return (
+                f"Project `{project}` not found.\n"
+                f"Available: {', '.join(available)}"
+            )
+        proj_path = row["path"]
+        folders_json = row["dropbox_folders"]
+        ignore_text = row["dropbox_ignore"]
+    finally:
+        db.close()
+
+    if not proj_path or not os.path.isdir(proj_path):
+        return f"Project path `{proj_path}` does not exist."
+
+    # Parse folders
+    folders: list[str] | None = None
+    if folders_json:
+        try:
+            folders = json.loads(folders_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Read config.json for allowlist_mode / allowlist_exts / max_file_mb
+    sync_dir = _dropbox_sync_dir()
+    config_path = os.path.join(sync_dir, "config.json")
+    cfg: dict = {}
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    allowlist_exts: set[str] | None = None
+    if cfg.get("allowlist_mode"):
+        allowlist_exts = set(cfg.get("allowlist_exts", []))
+
+    max_file_mb = cfg.get("max_file_mb", 2048)
+    max_file_bytes = max_file_mb * 1024 * 1024
+
+    # Import scanner and ignore lazily
+    from dropbox_sync.ignore import IgnoreRules
+    from dropbox_sync.scanner import dry_run
+
+    rules = IgnoreRules.build(
+        proj_path,
+        folders=folders,
+        extra_rules=ignore_text,
+        allowlist_exts=allowlist_exts,
+    )
+
+    # Timeout after 120 seconds
+    deadline = time.monotonic() + 120
+
+    def should_stop() -> bool:
+        return time.monotonic() >= deadline
+
+    result = dry_run(
+        proj_path,
+        rules,
+        max_file_bytes=max_file_bytes,
+        should_stop=should_stop,
+    )
+
+    entries = result["entries"]
+    total = result["total"]
+    stopped = result["stopped"]
+
+    parts = [f"# Dry-run scan: {project}"]
+    # Filter out entries with no files and no skipped (e.g. ignored dirs)
+    visible = {
+        name: stats for name, stats in entries.items()
+        if stats["files"] > 0 or sum(stats["skipped"].values()) > 0
+    }
+    if visible:
+        parts.append("")
+        parts.append("| entry | files | bytes | skipped |")
+        parts.append("|-------|------:|------:|--------:|")
+        for name, stats in visible.items():
+            sk = stats["skipped"]
+            skip_total = sum(sk.values())
+            parts.append(
+                f"| {name} | {stats['files']} | {_format_bytes(stats['bytes'])} | {skip_total} |"
+            )
+    else:
+        parts.append("")
+        parts.append("No entries found.")
+
+    parts.append("")
+    skip_total_all = sum(total["skipped"].values())
+    parts.append(
+        f"**Total:** {total['files']} files, {_format_bytes(total['bytes'])}, "
+        f"{skip_total_all} skipped"
+    )
+
+    if stopped:
+        parts.append("")
+        parts.append("*partial (timed out after 120 s)*")
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

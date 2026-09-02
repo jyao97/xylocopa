@@ -10,6 +10,7 @@ Run from the orchestrator directory:
 
 Exits 0 on success, 1 on first failure (with traceback + summary).
 """
+import json
 import os
 import shutil
 import sys
@@ -79,6 +80,8 @@ def main() -> int:
             "list_sessions", "read_session",
             # agent (2)
             "agent_list", "agent_get",
+            # dropbox (2)
+            "dropbox_get", "dropbox_count",
             # system (1)
             "system_health",
         }
@@ -278,6 +281,51 @@ def main() -> int:
             "description" in out_old_update,
             out_old_update,
         )
+
+        # ----- dropbox_get: not configured (no config/state/token) -----
+        out = mcp.dropbox_get()
+        _expect_in("dropbox_get: not configured", "not configured", out)
+
+        # ----- dropbox_get: with config + state (not linked) -----
+        dropbox_dir = os.path.join(temp_root, "data", "dropbox")
+        os.makedirs(dropbox_dir, exist_ok=True)
+
+        # Write a minimal config.json
+        with open(os.path.join(dropbox_dir, "config.json"), "w") as f:
+            json.dump({"interval_hours": 6, "paused": False}, f)
+
+        # Create state.db via SyncState (allowed in the test script)
+        from dropbox_sync.state import SyncState
+        _state = SyncState(os.path.join(dropbox_dir, "state.db"))
+        _state.close()
+
+        out = mcp.dropbox_get()
+        _expect_in("dropbox_get: not linked", "not linked", out)
+        _expect_in("dropbox_get: shows interval", "6h", out)
+
+        # ----- dropbox_count: scan a temp project -----
+        count_proj_path = os.path.join(temp_root, "count-proj")
+        os.makedirs(os.path.join(count_proj_path, "src"), exist_ok=True)
+        os.makedirs(os.path.join(count_proj_path, "node_modules", "pkg"), exist_ok=True)
+
+        with open(os.path.join(count_proj_path, "README.md"), "w") as f:
+            f.write("hello")
+        with open(os.path.join(count_proj_path, "src", "main.py"), "w") as f:
+            f.write("print('hi')")
+        with open(os.path.join(count_proj_path, "node_modules", "pkg", "index.js"), "w") as f:
+            f.write("module.exports = {}")
+
+        out_create = mcp.project_create(name="count-test-proj", path=count_proj_path)
+        _expect_in("dropbox_count: project created", "Created project", out_create)
+
+        out = mcp.dropbox_count(project="count-test-proj")
+        _expect_in("dropbox_count: shows src entry", "src", out)
+        _expect_in("dropbox_count: shows root entry", ".", out)
+        _expect_not_in("dropbox_count: excludes node_modules", "node_modules", out)
+        _expect_in("dropbox_count: has total", "Total:", out)
+
+        out = mcp.dropbox_count(project="nonexistent-proj")
+        _expect_in("dropbox_count: error on missing project", "not found", out)
 
     except Exception:
         traceback.print_exc()

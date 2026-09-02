@@ -36,13 +36,15 @@ Other guarantees:
   if the registry write fails.
 - **Read-only queries use a read-only sqlite connection** (`mode=ro`); they
   cannot mutate anything even by accident.
+- **Dropbox tools (`dropbox_get`, `dropbox_count`) never upload or modify
+  anything** — they only read local config, state, and the filesystem.
 - **Write tools use a separate lazy-loaded SQLAlchemy session** with the
   same WAL/foreign-key/busy-timeout pragmas as the main app, so MCP-driven
   writes are consistent with web-UI writes.
 
 ---
 
-## Tools by domain (23 canonical + 6 back-compat aliases)
+## Tools by domain (25 canonical + 6 back-compat aliases)
 
 ### project
 
@@ -120,6 +122,13 @@ rows are an append-only catalog and survive the process.
 | Tool | Verb | Effect |
 |---|---|---|
 | `system_health()` | health | DB liveness + registry parseability + project/task/agent counts. Use before queuing work. |
+
+### dropbox
+
+| Tool | Verb | Effect |
+|---|---|---|
+| `dropbox_get()` | get | Dropbox sync status: link state, schedule, last run summary, per-project file/byte counts, recent errors. |
+| `dropbox_count(project)` | count | Count files/bytes that would be synced per top-level folder — a dry run against the local filesystem. Nothing is uploaded. |
 
 ### Back-compat aliases (kept; prefer the domain-prefixed names)
 

@@ -11,7 +11,9 @@ from dropbox_sync.client import (
     DropboxAuthError,
     DropboxClient,
     DropboxError,
+    DropboxIncorrectOffset,
     DropboxRateLimit,
+    DropboxSessionNotFound,
     Throttle,
     api_arg_header,
     commit_info,
@@ -458,3 +460,159 @@ async def test_tmwo_on_finish_batch():
     assert len(sleep_log) >= 1
 
     await client.aclose()
+
+
+# ── DropboxIncorrectOffset ─────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_incorrect_offset_carries_correct_offset():
+    """Append with wrong offset raises DropboxIncorrectOffset with correct_offset."""
+    fake = FakeDropboxServer()
+    client, tp, sleep_log = make_client(fake)
+
+    data = b"chunk0"
+    session_id = await client.upload_session_start(data)
+
+    # Append with offset 0 (should be 6)
+    with pytest.raises(DropboxIncorrectOffset) as exc_info:
+        await client.upload_session_append(session_id, 0, b"more")
+
+    assert exc_info.value.correct_offset == len(data)
+    await client.aclose()
+
+
+# ── DropboxSessionNotFound ─────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_session_not_found_on_append():
+    """Append to a nonexistent session raises DropboxSessionNotFound."""
+    fake = FakeDropboxServer()
+    client, tp, sleep_log = make_client(fake)
+
+    with pytest.raises(DropboxSessionNotFound):
+        await client.upload_session_append("nonexistent-session", 0, b"data")
+
+    await client.aclose()
+
+
+# ── delete_batch failed ────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_delete_batch_failed_raises_dropbox_error():
+    """delete_batch returning .tag=failed raises DropboxError."""
+    fake = FakeDropboxServer()
+    fake.fail_next_delete_batch()
+    client, tp, sleep_log = make_client(fake)
+
+    with pytest.raises(DropboxError) as exc_info:
+        await client.delete_batch(["/proj/file.txt"])
+
+    assert "too_many_files" in exc_info.value.summary
+    await client.aclose()
+
+
+# ── move_v2 ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_move_v2_request_shape():
+    """move_v2 sends the correct RPC body and moves files in the fake."""
+    fake = FakeDropboxServer()
+    fake.files["/old/file.txt"] = {
+        "data": b"content",
+        "rev": "abc",
+        "client_modified": "",
+        "content_hash": "aaa",
+    }
+    client, tp, sleep_log = make_client(fake)
+
+    result = await client.move_v2("/old", "/new")
+    assert "metadata" in result
+
+    # Verify the request sent to the fake
+    move_reqs = [r for r in fake.requests if "move_v2" in r["url"]]
+    assert len(move_reqs) == 1
+    body = move_reqs[0]["json"]
+    assert body["from_path"] == "/old"
+    assert body["to_path"] == "/new"
+    assert body["autorename"] is False
+
+    # File should now be at /new/file.txt
+    assert "/new/file.txt" in fake.files
+    assert "/old/file.txt" not in fake.files
+
+    await client.aclose()
+
+
+# ── space_summary ──────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_space_summary_individual():
+    """space_summary returns used and allocated for individual allocation."""
+    fake = FakeDropboxServer()
+    client, tp, sleep_log = make_client(fake)
+
+    result = await client.space_summary()
+    assert result["used"] == 1024000
+    assert result["allocated"] == 2199023255552
+
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_space_summary_team():
+    """space_summary extracts allocated from team allocation."""
+    fake = FakeDropboxServer()
+    fake.set_space_usage({
+        "used": 5000000,
+        "allocation": {".tag": "team", "used": 3000000, "allocated": 10000000000},
+    })
+    client, tp, sleep_log = make_client(fake)
+
+    result = await client.space_summary()
+    assert result["used"] == 5000000
+    assert result["allocated"] == 10000000000
+
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_space_summary_missing_allocation():
+    """space_summary returns None for allocated when allocation has no recognized tag."""
+    fake = FakeDropboxServer()
+    fake.set_space_usage({
+        "used": 999,
+        "allocation": {".tag": "other"},
+    })
+    client, tp, sleep_log = make_client(fake)
+
+    result = await client.space_summary()
+    assert result["used"] == 999
+    assert result["allocated"] is None
+
+    await client.aclose()
+
+
+# ── commit_info with content_hash ──────────────────────────────────────
+
+
+class TestCommitInfoWithContentHash:
+    def test_content_hash_included_when_given(self):
+        mtime_ns = int(1436186096.0 * 1e9)
+        ci = commit_info("/proj/file.py", mtime_ns, content_hash="abc123def456")
+        assert ci["content_hash"] == "abc123def456"
+        assert ci["path"] == "/proj/file.py"
+
+    def test_content_hash_absent_when_none(self):
+        mtime_ns = int(1436186096.0 * 1e9)
+        ci = commit_info("/proj/file.py", mtime_ns)
+        assert "content_hash" not in ci
+
+    def test_content_hash_absent_when_explicit_none(self):
+        mtime_ns = int(1436186096.0 * 1e9)
+        ci = commit_info("/proj/file.py", mtime_ns, content_hash=None)
+        assert "content_hash" not in ci

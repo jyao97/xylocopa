@@ -483,6 +483,11 @@ async def lifespan(app: FastAPI):
     backup_task = asyncio.create_task(run_backup_loop())
     logger.info("Backup loop started")
 
+    # Start Dropbox sync loop
+    from dropbox_sync.engine import run_sync_loop
+    dropbox_task = asyncio.create_task(run_sync_loop())
+    logger.info("Dropbox sync loop started")
+
     # Start WebSocket stale-connection pruning loop
     ws_prune_task = None
     from websocket import ws_manager
@@ -599,7 +604,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    for task in (agent_dispatch_task, backup_task, session_cache_task, ws_prune_task, rss_watch_task, view_track_task, daily_heartbeat_task, cc_session_reconcile_task):
+    for task in (agent_dispatch_task, backup_task, dropbox_task, session_cache_task, ws_prune_task, rss_watch_task, view_track_task, daily_heartbeat_task, cc_session_reconcile_task):
         if task:
             task.cancel()
             try:
@@ -825,6 +830,7 @@ app.websocket("/ws/status")(websocket_endpoint)
 
 from routers.auth import router as auth_router
 from routers.system import router as system_router
+from routers.dropbox import router as dropbox_router
 from routers.projects import router as projects_router
 from routers.tasks import router as tasks_router
 from routers.hooks import router as hooks_router
@@ -844,6 +850,7 @@ from routers.attention import router as attention_router
 
 app.include_router(auth_router)
 app.include_router(system_router)
+app.include_router(dropbox_router)
 app.include_router(projects_router)
 app.include_router(tasks_router)
 app.include_router(hooks_router)

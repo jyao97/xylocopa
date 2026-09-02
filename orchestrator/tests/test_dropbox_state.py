@@ -350,6 +350,250 @@ def test_errors_recent_default(tmp_path):
     s.close()
 
 
+# ── nullable pending content_hash + created_at ──
+
+
+def test_pending_nullable_content_hash_round_trip(tmp_path):
+    """pending_put with content_hash=None stores NULL; pending_get returns it."""
+    s = _make_state(tmp_path)
+    ts = "2026-09-01T12:00:00Z"
+    s.pending_put("proj", "f.py", "sid1", 0, 100, 999, None, created_at=ts)
+    got = s.pending_get("proj", "f.py")
+    assert got is not None
+    assert got["content_hash"] is None
+    assert got["created_at"] == ts
+
+    # Update with a real hash
+    s.pending_put("proj", "f.py", "sid1", 100, 100, 999, "abc123", created_at=ts)
+    got = s.pending_get("proj", "f.py")
+    assert got["content_hash"] == "abc123"
+    assert got["created_at"] == ts
+    s.close()
+
+
+def test_pending_created_at_defaults_to_now(tmp_path):
+    """pending_put with created_at=None fills in current UTC time."""
+    s = _make_state(tmp_path)
+    s.pending_put("proj", "f.py", "sid1", 0, 100, 999, None)
+    got = s.pending_get("proj", "f.py")
+    assert got is not None
+    assert got["created_at"] is not None
+    assert got["created_at"].endswith("Z")
+    s.close()
+
+
+def test_pending_all_returns_created_at(tmp_path):
+    """pending_all includes created_at in returned dicts."""
+    s = _make_state(tmp_path)
+    ts = "2026-09-01T12:00:00Z"
+    s.pending_put("proj", "a.py", "sid1", 0, 50, 1, None, created_at=ts)
+    s.pending_put("proj", "b.py", "sid2", 0, 60, 2, "hash2", created_at=ts)
+    all_p = s.pending_all("proj")
+    assert len(all_p) == 2
+    for p in all_p:
+        assert "created_at" in p
+        assert p["created_at"] == ts
+    s.close()
+
+
+# ── schema upgrade ──
+
+
+def test_schema_upgrade_old_pending_sessions(tmp_path):
+    """Opening SyncState on a DB with the old pending_sessions schema drops and recreates it."""
+    import sqlite3
+
+    db_path = str(tmp_path / "state.db")
+    # Create a DB with the OLD schema (no created_at, content_hash NOT NULL)
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.executescript("""\
+CREATE TABLE IF NOT EXISTS files (
+    project TEXT NOT NULL,
+    rel_path TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    mtime_ns INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
+    remote_rev TEXT,
+    uploaded_at TEXT NOT NULL,
+    PRIMARY KEY (project, rel_path)
+);
+CREATE TABLE IF NOT EXISTS pending_sessions (
+    project TEXT NOT NULL,
+    rel_path TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    offset INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    mtime_ns INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
+    PRIMARY KEY (project, rel_path)
+);
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    project TEXT,
+    files_scanned INTEGER DEFAULT 0,
+    files_uploaded INTEGER DEFAULT 0,
+    bytes_uploaded INTEGER DEFAULT 0,
+    files_deleted INTEGER DEFAULT 0,
+    errors INTEGER DEFAULT 0,
+    error_sample TEXT
+);
+CREATE TABLE IF NOT EXISTS project_stats (
+    project TEXT PRIMARY KEY,
+    files_synced INTEGER,
+    bytes_synced INTEGER,
+    last_synced_at TEXT,
+    last_error TEXT
+);
+CREATE TABLE IF NOT EXISTS errors (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL,
+    project TEXT,
+    path TEXT,
+    message TEXT NOT NULL
+);
+""")
+    # Insert a pending session in old schema
+    conn.execute(
+        "INSERT INTO pending_sessions (project, rel_path, session_id, offset, size, mtime_ns, content_hash) "
+        "VALUES ('proj', 'f.py', 'sid1', 0, 100, 999, 'oldhash')"
+    )
+    # Also insert a file record to make sure that table survives
+    conn.execute(
+        "INSERT INTO files (project, rel_path, size, mtime_ns, content_hash, remote_rev, uploaded_at) "
+        "VALUES ('proj', 'keep.py', 50, 1, 'hash1', NULL, '2026-01-01T00:00:00Z')"
+    )
+    conn.commit()
+    conn.close()
+
+    # Now open with SyncState — should upgrade
+    s = SyncState(db_path)
+
+    # Old pending sessions should be gone (table was dropped and recreated)
+    assert s.pending_all("proj") == []
+
+    # Files table should be untouched
+    files = s.get_project_files("proj")
+    assert "keep.py" in files
+
+    # New schema should work: nullable content_hash + created_at
+    s.pending_put("proj", "new.py", "sid2", 0, 200, 555, None, created_at="2026-09-01T00:00:00Z")
+    got = s.pending_get("proj", "new.py")
+    assert got is not None
+    assert got["content_hash"] is None
+    assert got["created_at"] == "2026-09-01T00:00:00Z"
+    s.close()
+
+
+# ── rename_project ──
+
+
+def test_rename_project_moves_all_tables(tmp_path):
+    """rename_project updates files, pending_sessions, project_stats, and runs."""
+    s = _make_state(tmp_path)
+
+    # Set up data in all four tables
+    s.upsert_files([
+        FileRecord("old", "a.py", 100, 1, "h1", "rev1", "2026-01-01T00:00:00Z"),
+        FileRecord("old", "b.py", 200, 2, "h2", None, "2026-01-01T00:00:00Z"),
+    ])
+    s.pending_put("old", "c.py", "sid1", 0, 300, 3, None, created_at="2026-09-01T00:00:00Z")
+    s.project_stats_update("old", files_synced=2, bytes_synced=300)
+    rid = s.run_start("manual")
+    s.run_update(rid, project="old")
+    s.run_finish(rid, "ok")
+
+    # Rename
+    s.rename_project("old", "new")
+
+    # files: old empty, new has the records
+    assert s.get_project_files("old") == {}
+    new_files = s.get_project_files("new")
+    assert "a.py" in new_files
+    assert "b.py" in new_files
+    assert new_files["a.py"].project == "new"
+
+    # pending_sessions
+    assert s.pending_all("old") == []
+    pending = s.pending_all("new")
+    assert len(pending) == 1
+    assert pending[0]["rel_path"] == "c.py"
+
+    # project_stats
+    stats = s.project_stats_all()
+    assert "old" not in stats
+    assert "new" in stats
+    assert stats["new"]["files_synced"] == 2
+
+    # runs
+    runs = s.runs_recent()
+    assert runs[0]["project"] == "new"
+
+    s.close()
+
+
+# ── commit_batch_results ──
+
+
+def test_commit_batch_results_atomicity(tmp_path):
+    """commit_batch_results applies upserts and deletes atomically; a bad record reverts all."""
+    s = _make_state(tmp_path)
+
+    # Set up a pending session
+    s.pending_put("proj", "a.py", "sid1", 0, 100, 1, "h1")
+    s.pending_put("proj", "b.py", "sid2", 0, 200, 2, "h2")
+
+    # Good batch: should succeed
+    upserts = [
+        FileRecord("proj", "a.py", 100, 1, "h1", "rev1", "2026-01-01T00:00:00Z"),
+    ]
+    deletes = [("proj", "a.py")]
+    s.commit_batch_results(upserts, deletes)
+
+    # a.py should now be in files and gone from pending
+    assert "a.py" in s.get_project_files("proj")
+    assert s.pending_get("proj", "a.py") is None
+    # b.py still pending
+    assert s.pending_get("proj", "b.py") is not None
+
+    s.close()
+
+
+def test_commit_batch_results_bad_record_rolls_back(tmp_path):
+    """Injecting a bad FileRecord (e.g. None where NOT NULL) rolls back both upserts and deletes."""
+    s = _make_state(tmp_path)
+
+    # Set up
+    s.pending_put("proj", "x.py", "sid1", 0, 100, 1, "h1")
+    s.upsert_files([
+        FileRecord("proj", "existing.py", 50, 1, "e_hash", None, "2026-01-01T00:00:00Z"),
+    ])
+
+    # A record with None in a NOT NULL field will cause sqlite3.IntegrityError
+    bad_upserts = [
+        FileRecord("proj", "x.py", 100, 1, "h1", "rev1", "2026-01-01T00:00:00Z"),
+        FileRecord(None, "bad.py", 100, 1, "h1", None, "2026-01-01T00:00:00Z"),  # project is NOT NULL
+    ]
+    deletes = [("proj", "x.py")]
+
+    with pytest.raises(Exception):
+        s.commit_batch_results(bad_upserts, deletes)
+
+    # Nothing should have been applied: x.py still pending, no new file record
+    assert s.pending_get("proj", "x.py") is not None
+    files = s.get_project_files("proj")
+    assert "x.py" not in files
+    assert "bad.py" not in files
+    # existing.py untouched
+    assert "existing.py" in files
+
+    s.close()
+
+
 # ── thread safety ──
 
 

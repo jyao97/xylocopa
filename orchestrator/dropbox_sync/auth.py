@@ -137,12 +137,17 @@ class TokenStore:
 # ── Link flow ───────────────────────────────────────────────────────────
 
 
+LINK_FLOW_EXPIRY_SECONDS = 600  # 10 minutes
+
+
 class LinkFlow:
     """One-at-a-time PKCE authorization flow."""
 
-    def __init__(self, store: TokenStore, *, http: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, store: TokenStore, *, http: httpx.AsyncClient | None = None,
+                 now: Any = time.time) -> None:
         self._store = store
         self._http = http
+        self._now = now
         self._pending: dict[str, Any] | None = None
 
     def start(self, app_key: str) -> dict:
@@ -161,6 +166,7 @@ class LinkFlow:
             "app_key": app_key,
             "verifier": verifier,
             "state": state,
+            "started_at": self._now(),
         }
         return {"authorize_url": url, "state": state}
 
@@ -168,11 +174,16 @@ class LinkFlow:
         """Exchange the authorization code for tokens.
 
         Returns {"account_id", "name", "email"}.
-        Raises LinkStateError if no flow is pending.
+        Raises LinkStateError if no flow is pending or if flow has expired.
         Raises LinkError if Dropbox rejects the code.
         """
         if self._pending is None:
             raise LinkStateError("No pending link flow — call start() first")
+
+        elapsed = self._now() - self._pending["started_at"]
+        if elapsed > LINK_FLOW_EXPIRY_SECONDS:
+            self._pending = None
+            raise LinkStateError("flow expired")
 
         pending = self._pending
         self._pending = None

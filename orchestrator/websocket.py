@@ -24,6 +24,7 @@ _LOGGED_BROADCAST_TYPES = {
     "progress_suggestions_ready",
     "session_star_changed",
     "project_update",
+    "dropbox_update",
 }
 
 
@@ -609,3 +610,9 @@ def _tool_output_summary(tool_name: str, output: str, is_error: bool) -> str:
     if length < 50:
         return output.strip()[:50] or "done"
     return f"done ({length} chars)"
+
+
+async def emit_dropbox_update(kind: str, project: str | None = None, **extra):
+    """Broadcast a Dropbox sync status change."""
+    data = {"kind": kind, "project": project, **extra}
+    await ws_manager.broadcast("dropbox_update", data)

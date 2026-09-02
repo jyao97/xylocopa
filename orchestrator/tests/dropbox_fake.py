@@ -46,8 +46,11 @@ class FakeDropboxServer:
         self._async_jobs: dict[str, dict] = {}  # job_id → {type, result, polls}
         self._fail_queue: list[dict] = []  # [{status, retry_after, body}]
         self._tmwo_next = False  # too_many_write_operations on next finish_batch
+        self._delete_batch_fail_next = False  # make next delete_batch return .tag=failed
         self._oauth_codes: dict[str, dict] = {}  # code → token data
         self._list_folder_cursors: dict[str, dict] = {}
+        self._verify_content_hash = True  # verify content_hash in commits when present
+        self._space_usage: dict[str, Any] | None = None  # custom space usage response
         self._account = {
             "account_id": "dbid:test123",
             "name": {
@@ -84,6 +87,18 @@ class FakeDropboxServer:
     def fail_next_finish_batch_tmwo(self) -> None:
         """Make the next finish_batch return too_many_write_operations."""
         self._tmwo_next = True
+
+    def fail_next_delete_batch(self) -> None:
+        """Make the next delete_batch return .tag=failed."""
+        self._delete_batch_fail_next = True
+
+    def set_space_usage(self, usage: dict) -> None:
+        """Override the default space_usage response."""
+        self._space_usage = usage
+
+    def invalidate_session(self, session_id: str) -> None:
+        """Remove a session to simulate not_found on next use."""
+        self._sessions.pop(session_id, None)
 
     def transport(self) -> httpx.MockTransport:
         """Return an httpx.MockTransport backed by this fake."""
@@ -162,6 +177,7 @@ class FakeDropboxServer:
             "files/list_folder": self._handle_list_folder,
             "files/list_folder/continue": self._handle_list_folder_continue,
             "files/get_metadata": self._handle_get_metadata,
+            "files/move_v2": self._handle_move_v2,
             "auth/token/revoke": self._handle_revoke,
         }
         handler = handlers.get(endpoint)
@@ -204,6 +220,8 @@ class FakeDropboxServer:
 
     def _handle_get_space_usage(self, request: httpx.Request,
                                  body_bytes: bytes) -> httpx.Response:
+        if self._space_usage is not None:
+            return httpx.Response(200, json=self._space_usage)
         return httpx.Response(200, json={
             "used": 1024000,
             "allocation": {".tag": "individual", "allocated": 2199023255552},
@@ -229,7 +247,13 @@ class FakeDropboxServer:
 
         session = self._sessions.get(session_id)
         if session is None:
-            return httpx.Response(404, json={"error_summary": "not_found"})
+            return httpx.Response(409, json={
+                "error_summary": "lookup_failed/not_found/...",
+                "error": {
+                    ".tag": "lookup_failed",
+                    "lookup_failed": {".tag": "not_found"},
+                },
+            })
 
         actual_offset = len(session["data"])
         if offset != actual_offset:
@@ -315,6 +339,16 @@ class FakeDropboxServer:
             rev = uuid.uuid4().hex[:9]
             ch = _content_hash(data)
 
+            # Verify content_hash if provided in commit info
+            expected_hash = commit.get("content_hash")
+            if expected_hash is not None and self._verify_content_hash:
+                if expected_hash != ch:
+                    results.append({
+                        ".tag": "failure",
+                        "failure": {".tag": "content_hash_mismatch"},
+                    })
+                    continue
+
             self.files[path_lower] = {
                 "data": data,
                 "rev": rev,
@@ -341,6 +375,13 @@ class FakeDropboxServer:
 
     def _handle_delete_batch(self, request: httpx.Request,
                               body_bytes: bytes) -> httpx.Response:
+        if self._delete_batch_fail_next:
+            self._delete_batch_fail_next = False
+            return httpx.Response(200, json={
+                ".tag": "failed",
+                "error_summary": "too_many_files/...",
+            })
+
         arg = json.loads(body_bytes)
         entries = arg.get("entries", [])
         results = []
@@ -496,6 +537,45 @@ class FakeDropboxServer:
             "rev": info["rev"],
             "size": len(info["data"]),
             "content_hash": info["content_hash"],
+        })
+
+    # ── Move ───────────────────────────────────────────────────────
+
+    def _handle_move_v2(self, request: httpx.Request,
+                         body_bytes: bytes) -> httpx.Response:
+        arg = json.loads(body_bytes)
+        from_path = arg.get("from_path", "")
+        to_path = arg.get("to_path", "")
+        from_lower = from_path.lower()
+        to_lower = to_path.lower()
+
+        # Move all files whose path starts with from_path
+        moved = {}
+        to_remove = []
+        for plow, info in list(self.files.items()):
+            if plow == from_lower or plow.startswith(from_lower + "/"):
+                new_path = to_lower + plow[len(from_lower):]
+                moved[new_path] = info
+                to_remove.append(plow)
+
+        if not to_remove:
+            return httpx.Response(409, json={
+                "error_summary": "from_lookup/not_found/...",
+                "error": {".tag": "from_lookup", "from_lookup": {".tag": "not_found"}},
+            })
+
+        for p in to_remove:
+            del self.files[p]
+        self.files.update(moved)
+
+        return httpx.Response(200, json={
+            "metadata": {
+                ".tag": "folder",
+                "name": to_path.rsplit("/", 1)[-1],
+                "path_lower": to_lower,
+                "path_display": to_path,
+                "id": f"id:{uuid.uuid4().hex[:12]}",
+            },
         })
 
     # ── Revoke ──────────────────────────────────────────────────────

@@ -568,7 +568,7 @@ async def test_rename_hook_moves_state(tmp_path, sync_dir, fake, client_for_fake
     assert "a.txt" in state.get_project_files("old_name")
 
     # Rename
-    engine.on_project_renamed("old_name", "new_name")
+    await engine.on_project_renamed("old_name", "new_name")
 
     # State should be under the new name
     assert "a.txt" not in state.get_project_files("old_name")
@@ -699,7 +699,7 @@ async def test_on_project_deleted_forgets_state(tmp_path, sync_dir, fake, client
 
     assert "a.txt" in state.get_project_files("delproj")
 
-    engine.on_project_deleted("delproj")
+    await engine.on_project_deleted("delproj")
     assert state.get_project_files("delproj") == {}
 
 
@@ -803,3 +803,206 @@ async def test_prune_error_does_not_abort(tmp_path, sync_dir, fake, client_for_f
 
     # keep.txt should still be synced fine
     assert "/proj_prune_err/keep.txt" in fake.files
+
+
+@pytest.mark.anyio
+async def test_large_file_does_not_hold_whole_file(tmp_path, sync_dir, fake, client_for_fake):
+    """Large files > SMALL_FILE_LIMIT use content_hash_file (streaming), not _read_file."""
+    from dropbox_sync import engine
+    from dropbox_sync.client import SMALL_FILE_LIMIT
+    engine.set_client_factory(client_for_fake)
+
+    # Monkeypatch _read_file to fail if called for a file > SMALL_FILE_LIMIT
+    original_read = engine._read_file
+    large_read_attempted = False
+
+    def guarded_read(fpath):
+        nonlocal large_read_attempted
+        try:
+            size = os.path.getsize(fpath)
+        except OSError:
+            size = 0
+        if size > SMALL_FILE_LIMIT:
+            large_read_attempted = True
+            raise AssertionError(f"_read_file called for large file ({size} bytes)")
+        return original_read(fpath)
+
+    engine._read_file = guarded_read
+    try:
+        # Create a file just over SMALL_FILE_LIMIT — but we'll fake the size
+        # via a smaller file and a monkey-patched entry size to avoid writing 150MB.
+        # Instead, test the branch by verifying content_hash_file is called
+        # for files where entry.size > SMALL_FILE_LIMIT.
+
+        # For this test, create a small file but trick the scanner by reducing SMALL_FILE_LIMIT
+        from dropbox_sync import client as client_mod
+        old_limit = client_mod.SMALL_FILE_LIMIT
+        # Temporarily set to a very small value so our test file is "large"
+        client_mod.SMALL_FILE_LIMIT = 100
+        engine_module_limit = engine.SMALL_FILE_LIMIT
+        # Also patch engine's imported copy
+        engine.SMALL_FILE_LIMIT = 100
+        try:
+            big_content = b"X" * 500  # 500 bytes, now > SMALL_FILE_LIMIT of 100
+            proj_path = _make_project(tmp_path, "proj_large", {
+                "large.bin": big_content,
+            })
+
+            project = {
+                "name": "proj_large",
+                "path": proj_path,
+                "dropbox_folders": None,
+                "dropbox_ignore": None,
+            }
+
+            state = engine.get_state()
+            run_id = state.run_start("test")
+            progress = engine.RunProgress(run_id=run_id, started_at=engine._utcnow())
+            await engine.sync_project(project, progress)
+            state.run_finish(run_id, "ok")
+
+            # _read_file should NOT have been called for the large file
+            assert not large_read_attempted, "_read_file was called for a file > SMALL_FILE_LIMIT"
+            # File should still be uploaded
+            assert "/proj_large/large.bin" in fake.files
+            assert fake.files["/proj_large/large.bin"]["data"] == big_content
+        finally:
+            client_mod.SMALL_FILE_LIMIT = old_limit
+            engine.SMALL_FILE_LIMIT = engine_module_limit
+    finally:
+        engine._read_file = original_read
+
+
+@pytest.mark.anyio
+async def test_commit_batch_partial_failure_counters(tmp_path, sync_dir, fake, client_for_fake):
+    """When some entries in a commit batch fail, files_uploaded == successes,
+    errors == failures, bytes_uploaded == bytes of successes, last_error is set."""
+    from dropbox_sync import engine
+    engine.set_client_factory(client_for_fake)
+
+    # Create two files
+    content_a = b"good file"
+    content_b = b"bad file"
+    proj_path = _make_project(tmp_path, "proj_partial", {
+        "good.txt": content_a,
+        "bad.txt": content_b,
+    })
+
+    project = {
+        "name": "proj_partial",
+        "path": proj_path,
+        "dropbox_folders": None,
+        "dropbox_ignore": None,
+    }
+
+    # Make "bad.txt" fail during commit by giving it a wrong content_hash
+    # We do this by patching commit_info to return a wrong hash for bad.txt
+    from dropbox_sync import client as client_mod
+    orig_commit_info = client_mod.commit_info
+
+    def patched_commit_info(path, mtime_ns, content_hash=None):
+        ci = orig_commit_info(path, mtime_ns, content_hash)
+        if "bad.txt" in path and content_hash is not None:
+            ci["content_hash"] = "0" * 64  # wrong hash -> content_hash_mismatch
+        return ci
+
+    client_mod.commit_info = patched_commit_info
+    engine.commit_info = patched_commit_info
+    try:
+        state = engine.get_state()
+        run_id = state.run_start("test")
+        progress = engine.RunProgress(run_id=run_id, started_at=engine._utcnow())
+        await engine.sync_project(project, progress)
+        state.run_finish(run_id, "ok")
+
+        # Check the run record
+        last_run = state.run_last()
+        assert last_run is not None
+        assert last_run["files_uploaded"] == 1  # only good.txt
+        assert last_run["errors"] >= 1  # bad.txt failed
+        assert last_run["bytes_uploaded"] == len(content_a)
+
+        # Check per-project stats
+        all_stats = state.project_stats_all()
+        ps = all_stats.get("proj_partial", {})
+        assert ps.get("last_error") is not None
+        assert "error" in ps["last_error"].lower()
+    finally:
+        client_mod.commit_info = orig_commit_info
+        engine.commit_info = orig_commit_info
+
+
+@pytest.mark.anyio
+async def test_auth_error_during_commit_aborts_run(tmp_path, sync_dir, fake, client_for_fake):
+    """DropboxAuthError during _commit_batch propagates and run aborts with status 'error'.
+    Pending rows should be retained so upload can resume after re-linking."""
+    from dropbox_sync import engine
+    from dropbox_sync.client import DropboxAuthError
+    engine.set_client_factory(client_for_fake)
+
+    content = b"auth fail test"
+    proj_path = _make_project(tmp_path, "proj_auth", {
+        "file.txt": content,
+    })
+
+    project = {
+        "name": "proj_auth",
+        "path": proj_path,
+        "dropbox_folders": None,
+        "dropbox_ignore": None,
+    }
+
+    # Make the fake return 401 on finish_batch (after upload succeeds).
+    # The fake needs 2x 401 to trigger DropboxAuthError (first one causes refresh).
+    fake.fail_next_finish_batch_auth()
+
+    state = engine.get_state()
+    run_id = state.run_start("test")
+    progress = engine.RunProgress(run_id=run_id, started_at=engine._utcnow())
+
+    with pytest.raises(DropboxAuthError):
+        await engine.sync_project(project, progress)
+
+    state.run_finish(run_id, "error", "auth failed")
+
+    # Verify run ended with error status
+    last_run = state.run_last()
+    assert last_run is not None
+    assert last_run["status"] == "error"
+
+
+@pytest.mark.anyio
+async def test_next_run_at_null_when_unlinked(tmp_path, sync_dir):
+    """get_status()['next_run_at'] must be null when not linked."""
+    from dropbox_sync import engine
+
+    # Remove token to make it unlinked
+    token_path = os.path.join(sync_dir, "token.json")
+    if os.path.exists(token_path):
+        os.remove(token_path)
+
+    # Set _next_run_at to something non-null to ensure the code clears it
+    engine._next_run_at = "2026-09-02T12:00:00Z"
+
+    status = engine.get_status()
+    assert status["linked"] is False
+    assert status["next_run_at"] is None
+
+
+@pytest.mark.anyio
+async def test_next_run_at_null_when_paused(tmp_path, sync_dir):
+    """get_status()['next_run_at'] must be null when paused."""
+    from dropbox_sync import engine
+
+    # Make it linked
+    _seed_token(sync_dir)
+
+    # Set it as paused
+    engine._cfg.paused = True
+    engine._next_run_at = "2026-09-02T12:00:00Z"
+
+    status = engine.get_status()
+    assert status["linked"] is True
+    assert status["next_run_at"] is None
+
+    engine._cfg.paused = False

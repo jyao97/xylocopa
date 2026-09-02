@@ -1,5 +1,6 @@
 """Dropbox sync API routes."""
 
+import asyncio
 import json
 import logging
 import re
@@ -23,7 +24,7 @@ APP_KEY_RE = re.compile(r"^[A-Za-z0-9]{10,64}$")
 @router.get("/api/dropbox/status")
 async def get_status():
     from dropbox_sync.engine import get_status as engine_status
-    return engine_status()
+    return await asyncio.to_thread(engine_status)
 
 
 @router.get("/api/projects/{name}/dropbox/status")
@@ -40,7 +41,7 @@ async def get_project_dropbox_status(name: str, db: Session = Depends(get_db)):
         "dropbox_ignore": proj.dropbox_ignore,
         "archived": bool(proj.archived),
     }
-    return get_project_status(name, project_dict=pdict)
+    return await asyncio.to_thread(get_project_status, name, pdict)
 
 
 # ── Config ───────────────────────────────────────────────────────────
@@ -268,7 +269,7 @@ async def get_folders(name: str, db: Session = Depends(get_db)):
     selected = json.loads(folders_raw) if folders_raw else None
 
     from dropbox_sync.engine import list_folders
-    entries = list_folders(proj.path, selected)
+    entries = await asyncio.to_thread(list_folders, proj.path, selected)
 
     return {
         "project": proj.name,

@@ -47,6 +47,8 @@ class FakeDropboxServer:
         self._fail_queue: list[dict] = []  # [{status, retry_after, body}]
         self._tmwo_next = False  # too_many_write_operations on next finish_batch
         self._delete_batch_fail_next = False  # make next delete_batch return .tag=failed
+        self._finish_batch_always_pending = False  # never complete (for timeout test)
+        self._finish_batch_auth_fail_count = 0  # number of 401s to return on finish_batch
         self._oauth_codes: dict[str, dict] = {}  # code → token data
         self._list_folder_cursors: dict[str, dict] = {}
         self._verify_content_hash = True  # verify content_hash in commits when present
@@ -95,6 +97,18 @@ class FakeDropboxServer:
     def set_space_usage(self, usage: dict) -> None:
         """Override the default space_usage response."""
         self._space_usage = usage
+
+    def set_finish_batch_always_pending(self) -> None:
+        """Make finish_batch/check always return in_progress (for timeout tests)."""
+        self._finish_batch_always_pending = True
+
+    def fail_next_finish_batch_auth(self, count: int = 2) -> None:
+        """Make the next *count* finish_batch calls return 401.
+
+        The client retries once with a refreshed token, so count=2
+        triggers DropboxAuthError.
+        """
+        self._finish_batch_auth_fail_count = count
 
     def invalidate_session(self, session_id: str) -> None:
         """Remove a session to simulate not_found on next use."""
@@ -272,6 +286,14 @@ class FakeDropboxServer:
 
     def _handle_finish_batch(self, request: httpx.Request,
                               body_bytes: bytes) -> httpx.Response:
+        # Check auth error injection
+        if self._finish_batch_auth_fail_count > 0:
+            self._finish_batch_auth_fail_count -= 1
+            return httpx.Response(401, json={
+                "error_summary": "expired_access_token/...",
+                "error": {".tag": "expired_access_token"},
+            })
+
         # Check too_many_write_operations injection
         if self._tmwo_next:
             self._tmwo_next = False
@@ -308,6 +330,9 @@ class FakeDropboxServer:
         job = self._async_jobs.get(job_id)
         if job is None:
             return httpx.Response(404, json={"error_summary": "not_found"})
+
+        if self._finish_batch_always_pending:
+            return httpx.Response(200, json={".tag": "in_progress"})
 
         job["polls"] += 1
         if job["polls"] < 2:

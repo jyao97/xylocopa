@@ -32,7 +32,7 @@ from .client import (
     Throttle,
     commit_info,
 )
-from .hashing import ContentHasher
+from .hashing import ContentHasher, content_hash_file
 from .ignore import IgnoreRules
 from .scanner import dry_run as scanner_dry_run, list_top_level, scan_project
 from .state import FileRecord, SyncState, diff_entries
@@ -562,13 +562,16 @@ def get_status() -> dict:
 
     recent_errors = state.errors_recent(limit=20)
 
+    # next_run_at is null when not linked or paused
+    next_run = _next_run_at if (linked and not _cfg.paused) else None
+
     return {
         "linked": linked,
         "account": account,
         "space": space,
         "app_key": app_key or None,
         "config": get_runtime_config(),
-        "next_run_at": _next_run_at,
+        "next_run_at": next_run,
         "current_run": current_run,
         "last_run": last_run,
         "projects": projects_list,
@@ -941,43 +944,41 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
                 except Exception:
                     pass
 
-            # Read file data
-            file_data = await asyncio.to_thread(_read_file, fpath)
-            if file_data is None:
-                errors += 1
-                await asyncio.to_thread(state.error_add, name, rel, "file read error")
-                return None
+            file_size = entry.size
 
-            # Compute hash
-            hasher = ContentHasher()
-            hasher.update(file_data)
-            file_hash = hasher.hexdigest()
-
-            file_size = len(file_data)
-
-            # Fast path: hash matches known, just update mtime
-            known_rec = known.get(rel)
-            if known_rec is not None and known_rec.content_hash == file_hash and file_size <= SMALL_FILE_LIMIT:
-                rec = FileRecord(
-                    project=name, rel_path=rel, size=entry.size,
-                    mtime_ns=entry.mtime_ns, content_hash=file_hash,
-                    remote_rev=known_rec.remote_rev, uploaded_at=_utcnow(),
-                )
-                await asyncio.to_thread(state.upsert_files, [rec])
-                return None
-
-            # Re-stat before upload to detect changes during read
-            try:
-                st = await asyncio.to_thread(os.stat, fpath)
-                if st.st_size != entry.size or st.st_mtime_ns != entry.mtime_ns:
-                    logger.debug("File changed during read: %s", rel)
-                    return None
-            except OSError:
-                errors += 1
-                return None
-
-            # Small file: single session start+close
             if file_size <= SMALL_FILE_LIMIT:
+                # ── Small file: read whole, hash in memory ──
+                file_data = await asyncio.to_thread(_read_file, fpath)
+                if file_data is None:
+                    errors += 1
+                    await asyncio.to_thread(state.error_add, name, rel, "file read error")
+                    return None
+
+                hasher = ContentHasher()
+                hasher.update(file_data)
+                file_hash = hasher.hexdigest()
+
+                # Fast path: hash matches known, just update mtime
+                known_rec = known.get(rel)
+                if known_rec is not None and known_rec.content_hash == file_hash:
+                    rec = FileRecord(
+                        project=name, rel_path=rel, size=entry.size,
+                        mtime_ns=entry.mtime_ns, content_hash=file_hash,
+                        remote_rev=known_rec.remote_rev, uploaded_at=_utcnow(),
+                    )
+                    await asyncio.to_thread(state.upsert_files, [rec])
+                    return None
+
+                # Re-stat before upload to detect changes during read
+                try:
+                    st = await asyncio.to_thread(os.stat, fpath)
+                    if st.st_size != entry.size or st.st_mtime_ns != entry.mtime_ns:
+                        logger.debug("File changed during read: %s", rel)
+                        return None
+                except OSError:
+                    errors += 1
+                    return None
+
                 session_id = await client.upload_session_start(file_data, close=True)
                 return {
                     "cursor": {"session_id": session_id, "offset": file_size},
@@ -986,14 +987,42 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
                     "_hash": file_hash,
                 }
 
-            # Large file: multi-chunk upload
+            # ── Large file: stream hash, then stream upload from disk ──
+            try:
+                file_hash = await asyncio.to_thread(content_hash_file, fpath)
+            except OSError:
+                errors += 1
+                await asyncio.to_thread(state.error_add, name, rel, "file read error")
+                return None
+
+            # Fast path: hash matches known, just update mtime
+            known_rec = known.get(rel)
+            if known_rec is not None and known_rec.content_hash == file_hash:
+                rec = FileRecord(
+                    project=name, rel_path=rel, size=entry.size,
+                    mtime_ns=entry.mtime_ns, content_hash=file_hash,
+                    remote_rev=known_rec.remote_rev, uploaded_at=_utcnow(),
+                )
+                await asyncio.to_thread(state.upsert_files, [rec])
+                return None
+
+            # Re-stat before upload to detect changes during hashing
+            try:
+                st = await asyncio.to_thread(os.stat, fpath)
+                if st.st_size != entry.size or st.st_mtime_ns != entry.mtime_ns:
+                    logger.debug("File changed during hash: %s", rel)
+                    return None
+            except OSError:
+                errors += 1
+                return None
+
+            # Multi-chunk upload reading from disk
             offset = 0
             session_id = resume_sid
 
             if session_id is None:
-                # Start new session with first chunk
-                chunk = file_data[:chunk_bytes]
-                is_last = len(file_data) <= chunk_bytes
+                chunk = await asyncio.to_thread(_read_chunk, fpath, 0, chunk_bytes)
+                is_last = file_size <= chunk_bytes
                 session_id = await client.upload_session_start(chunk, close=is_last)
                 offset = len(chunk)
                 if not is_last:
@@ -1008,7 +1037,7 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
             while offset < file_size:
                 if _stop_requested:
                     return None
-                chunk = file_data[offset:offset + chunk_bytes]
+                chunk = await asyncio.to_thread(_read_chunk, fpath, offset, chunk_bytes)
                 is_last = (offset + len(chunk) >= file_size)
                 try:
                     await client.upload_session_append(
@@ -1081,15 +1110,19 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
             if len(batch_entries) >= 100:
                 if _stop_requested:
                     break
-                await _commit_batch(state, client, name, batch_entries, run_progress)
-                files_uploaded += len(batch_entries)
+                ok, commit_errs, commit_bytes = await _commit_batch(state, client, name, batch_entries, run_progress)
+                files_uploaded += ok
+                errors += commit_errs
+                bytes_uploaded += commit_bytes
                 batch_entries = []
 
     # Commit remaining
     if batch_entries and not _stop_requested:
         run_progress.phase = "commit"
-        await _commit_batch(state, client, name, batch_entries, run_progress)
-        files_uploaded += len(batch_entries)
+        ok, commit_errs, commit_bytes = await _commit_batch(state, client, name, batch_entries, run_progress)
+        files_uploaded += ok
+        errors += commit_errs
+        bytes_uploaded += commit_bytes
 
     # Prune
     if _cfg.prune and deleted and not _stop_requested:
@@ -1120,6 +1153,8 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
                             )
                 if successful_deletes:
                     await asyncio.to_thread(state.delete_files, name, successful_deletes)
+            except DropboxAuthError:
+                raise  # Propagate for proper abort
             except DropboxError as exc:
                 errors += 1
                 await asyncio.to_thread(state.error_add, name, None, f"delete_batch: {exc.summary}")
@@ -1139,12 +1174,11 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
     )
 
     # Update run counters
-    total_bytes = sum(e.size for e in entries)
     await asyncio.to_thread(
         state.run_update, run_progress.run_id,
         project=name,
         files_uploaded=files_uploaded,
-        bytes_uploaded=total_bytes,
+        bytes_uploaded=bytes_uploaded,
         files_deleted=len(deleted) if _cfg.prune else 0,
         errors=errors,
     )
@@ -1157,14 +1191,19 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
 
 async def _commit_batch(state: SyncState, client: DropboxClient,
                         project: str, batch: list[dict],
-                        progress: RunProgress) -> None:
-    """Commit a batch of upload sessions and record results."""
+                        progress: RunProgress) -> tuple[int, int, int]:
+    """Commit a batch of upload sessions and record results.
+
+    Returns (succeeded_count, failed_count, bytes_committed).
+    """
     commit_entries = [
         {"cursor": b["cursor"], "commit": b["commit"]}
         for b in batch
     ]
     try:
         results = await client.upload_session_finish_batch(commit_entries)
+    except DropboxAuthError:
+        raise  # Propagate to sync_project -> run_sync_loop for proper abort
     except DropboxError as exc:
         # Record errors for all entries
         for b in batch:
@@ -1174,10 +1213,13 @@ async def _commit_batch(state: SyncState, client: DropboxClient,
             )
             await asyncio.to_thread(state.pending_delete, project, entry.rel_path)
         progress.errors += len(batch)
-        return
+        return (0, len(batch), 0)
 
     upserts = []
     pending_deletes = []
+    ok = 0
+    errs = 0
+    committed_bytes = 0
     for i, res in enumerate(results):
         b = batch[i]
         entry = b["_entry"]
@@ -1196,6 +1238,8 @@ async def _commit_batch(state: SyncState, client: DropboxClient,
             upserts.append(rec)
             pending_deletes.append((project, entry.rel_path))
             progress.files_done += 1
+            ok += 1
+            committed_bytes += entry.size
         else:
             fail_tag = ""
             failure = res.get("failure", {})
@@ -1207,9 +1251,12 @@ async def _commit_batch(state: SyncState, client: DropboxClient,
             )
             pending_deletes.append((project, entry.rel_path))
             progress.errors += 1
+            errs += 1
 
     if upserts or pending_deletes:
         await asyncio.to_thread(state.commit_batch_results, upserts, pending_deletes)
+
+    return (ok, errs, committed_bytes)
 
 
 def _read_file(fpath: str) -> bytes | None:
@@ -1221,40 +1268,40 @@ def _read_file(fpath: str) -> bytes | None:
         return None
 
 
+def _read_chunk(fpath: str, offset: int, size: int) -> bytes:
+    """Read a chunk from disk. For use inside asyncio.to_thread."""
+    with open(fpath, "rb") as f:
+        f.seek(offset)
+        return f.read(size)
+
+
 # ── Project lifecycle hooks ──────────────────────────────────────────
 
 
-def on_project_renamed(old: str, new: str) -> None:
+async def on_project_renamed(old: str, new: str) -> None:
     """Called after a project is renamed. Updates sync state and schedules remote move."""
     try:
         state = get_state()
-        state.rename_project(old, new)
+        await asyncio.to_thread(state.rename_project, old, new)
     except Exception:
         logger.warning("Failed to rename sync state %s -> %s", old, new, exc_info=True)
 
-    async def _move_remote() -> None:
-        try:
-            client = await _get_client()
-            await client.move_v2("/" + old, "/" + new)
-        except Exception:
-            logger.warning("Remote move /%s -> /%s failed", old, new, exc_info=True)
-            try:
-                get_state().error_add(new, None, f"remote rename from {old} failed")
-            except Exception:
-                pass
-
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_move_remote())
-    except RuntimeError:
-        pass
+        client = await _get_client()
+        await client.move_v2("/" + old, "/" + new)
+    except Exception:
+        logger.warning("Remote move /%s -> /%s failed", old, new, exc_info=True)
+        try:
+            await asyncio.to_thread(get_state().error_add, new, None, f"remote rename from {old} failed")
+        except Exception:
+            pass
 
 
-def on_project_deleted(name: str) -> None:
+async def on_project_deleted(name: str) -> None:
     """Called after a project is deleted. Cleans up sync state."""
     try:
         state = get_state()
-        state.forget_project(name)
+        await asyncio.to_thread(state.forget_project, name)
     except Exception:
         logger.warning("Failed to forget sync state for %s", name, exc_info=True)
 

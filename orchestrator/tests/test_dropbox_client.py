@@ -616,3 +616,56 @@ class TestCommitInfoWithContentHash:
         mtime_ns = int(1436186096.0 * 1e9)
         ci = commit_info("/proj/file.py", mtime_ns, content_hash=None)
         assert "content_hash" not in ci
+
+
+# ── Polling timeout tests ──────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_finish_batch_timeout_raises():
+    """finish_batch polling that never completes raises DropboxError with timeout message."""
+    fake = FakeDropboxServer(async_mode=True)
+    fake.set_finish_batch_always_pending()
+    client, tp, sleep_log = make_client(fake)
+
+    data = b"timeout test"
+    session_id = await client.upload_session_start(data, close=True)
+    ci = commit_info("/proj/timeout.txt", int(1700000000.0 * 1e9))
+    entries = [{
+        "cursor": {"session_id": session_id, "offset": len(data)},
+        "commit": ci,
+    }]
+
+    with pytest.raises(DropboxError, match="timed out"):
+        await client.upload_session_finish_batch(entries, max_polls=3)
+
+    # Should have polled exactly max_polls times
+    poll_sleeps = [s for s in sleep_log if s == 1]
+    assert len(poll_sleeps) == 3
+
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_delete_batch_timeout_raises():
+    """delete_batch polling that never completes raises DropboxError with timeout message."""
+    fake = FakeDropboxServer(async_mode=True)
+    # Make the check handler always return in_progress for delete too
+    fake._finish_batch_always_pending = True
+
+    # Override delete_batch_check to also never complete
+    original_handler = fake._handle_delete_batch_check
+
+    def _always_pending(request, body_bytes):
+        return httpx.Response(200, json={".tag": "in_progress"})
+
+    fake._handle_delete_batch_check = _always_pending
+    client, tp, sleep_log = make_client(fake)
+
+    with pytest.raises(DropboxError, match="timed out"):
+        await client.delete_batch(["/proj/file.txt"], max_polls=3)
+
+    poll_sleeps = [s for s in sleep_log if s == 1]
+    assert len(poll_sleeps) == 3
+
+    await client.aclose()

@@ -386,3 +386,59 @@ async def test_unlink_when_linked(client, sync_dir):
     assert resp.status_code == 200
     assert resp.json()["detail"] == "ok"
     assert not engine.get_token_store().is_linked
+
+
+@pytest.mark.anyio
+async def test_status_next_run_at_null_when_unlinked(client, sync_dir):
+    """GET /api/dropbox/status returns null next_run_at when not linked."""
+    from dropbox_sync import engine
+    # Set a non-null _next_run_at
+    engine._next_run_at = "2026-09-02T12:00:00Z"
+
+    resp = await client.get("/api/dropbox/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["linked"] is False
+    assert data["next_run_at"] is None
+
+
+@pytest.mark.anyio
+async def test_status_next_run_at_null_when_paused(client, sync_dir):
+    """GET /api/dropbox/status returns null next_run_at when paused."""
+    _seed_token(sync_dir)
+    from dropbox_sync import engine
+    engine._cfg.paused = True
+    engine._next_run_at = "2026-09-02T12:00:00Z"
+
+    resp = await client.get("/api/dropbox/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["linked"] is True
+    assert data["next_run_at"] is None
+    engine._cfg.paused = False
+
+
+@pytest.mark.anyio
+async def test_folders_endpoint_runs_off_loop(client, sync_dir, db_session):
+    """GET /api/projects/{name}/dropbox/folders wraps list_folders in to_thread."""
+    from models import Project
+
+    proj_dir = os.path.join(str(sync_dir), "threadproj")
+    os.makedirs(os.path.join(proj_dir, "src"), exist_ok=True)
+    with open(os.path.join(proj_dir, "readme.txt"), "w") as f:
+        f.write("hello")
+
+    proj = Project(
+        name="threadproj",
+        display_name="Thread Project",
+        path=proj_dir,
+        max_concurrent=2,
+        default_model="claude-opus-4-7",
+    )
+    db_session.add(proj)
+    db_session.commit()
+
+    resp = await client.get("/api/projects/threadproj/dropbox/folders")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data["entries"], list)

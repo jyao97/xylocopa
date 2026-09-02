@@ -1823,7 +1823,7 @@ async def rename_project(name: str, body: ProjectRename, request: Request, db: S
 
     try:
         from dropbox_sync.engine import on_project_renamed
-        on_project_renamed(name, new_name)
+        await on_project_renamed(name, new_name)
     except Exception:
         logger.debug("dropbox engine rename notify failed", exc_info=True)
 
@@ -1957,7 +1957,7 @@ async def delete_project(name: str, request: Request, db: Session = Depends(get_
 
     try:
         from dropbox_sync.engine import on_project_deleted
-        on_project_deleted(name)
+        await on_project_deleted(name)
     except Exception:
         logger.debug("dropbox engine delete notify failed", exc_info=True)
 

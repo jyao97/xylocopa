@@ -329,13 +329,14 @@ class DropboxClient:
             self._check_session_error(exc)
             raise
 
-    async def upload_session_finish_batch(self, entries: list[dict]) -> list[dict]:
+    async def upload_session_finish_batch(self, entries: list[dict],
+                                         *, max_polls: int = 900) -> list[dict]:
         """Finish a batch of upload sessions. Polls until complete."""
         result = await self.rpc("files/upload_session/finish_batch", {"entries": entries})
         if result.get(".tag") == "complete":
             return result["entries"]
         job_id = result["async_job_id"]
-        while True:
+        for _ in range(max_polls):
             await self._sleep(1)
             result = await self.rpc(
                 "files/upload_session/finish_batch/check",
@@ -343,8 +344,10 @@ class DropboxClient:
             )
             if result.get(".tag") == "complete":
                 return result["entries"]
+        raise DropboxError(status=0, summary="finish_batch timed out")
 
-    async def delete_batch(self, paths: list[str]) -> list[dict]:
+    async def delete_batch(self, paths: list[str],
+                           *, max_polls: int = 900) -> list[dict]:
         """Delete a batch of paths. Polls until complete."""
         entries = [{"path": p} for p in paths]
         result = await self.rpc("files/delete_batch", {"entries": entries})
@@ -357,7 +360,7 @@ class DropboxClient:
                 body=result,
             )
         job_id = result["async_job_id"]
-        while True:
+        for _ in range(max_polls):
             await self._sleep(1)
             result = await self.rpc(
                 "files/delete_batch/check",
@@ -371,6 +374,7 @@ class DropboxClient:
                     summary=result.get("error_summary", "delete_batch failed"),
                     body=result,
                 )
+        raise DropboxError(status=0, summary="delete_batch timed out")
 
     async def list_folder(self, path: str, *, recursive: bool = False, limit: int = 2000) -> dict:
         arg = {"path": path, "recursive": recursive, "limit": limit}

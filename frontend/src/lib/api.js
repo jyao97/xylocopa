@@ -496,8 +496,12 @@ export const resumeDropboxSync = () => request("/api/dropbox/resume", { method: 
 export const startDropboxDryRun = (project, folders = undefined, ignore = undefined) =>
   request("/api/dropbox/dry-run", { method: "POST", body: JSON.stringify({ project, folders, ignore }) });
 export const fetchDropboxDryRun = (jobId) => request(`/api/dropbox/dry-run/${e(jobId)}`);
+export const stopDropboxDryRun = (jobId) =>
+  request(`/api/dropbox/dry-run/${e(jobId)}`, { method: "DELETE" });
 export const fetchDropboxFolders = (project) =>
   request(`/api/projects/${e(project)}/dropbox/folders`);
+export const fetchProjectDropboxStatus = (project) =>
+  request(`/api/projects/${e(project)}/dropbox/status`);
 
 // --- Notification Settings ---
 export const fetchNotificationSettings = () => request("/api/settings/notifications");

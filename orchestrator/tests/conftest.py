@@ -2,6 +2,7 @@
 
 import os
 import sys
+import tempfile
 
 # Ensure orchestrator package is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -10,6 +11,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ["DISABLE_AUTH"] = "1"
 # Use in-memory DB
 os.environ["DB_PATH"] = ":memory:"
+# Keep Dropbox sync state (token/config/state.db) out of the real data dir.
+os.environ["DROPBOX_SYNC_DIR"] = tempfile.mkdtemp(prefix="xylocopa-dropbox-test-")
 
 import pytest
 from sqlalchemy import create_engine, event

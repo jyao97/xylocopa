@@ -32,7 +32,7 @@ All under `DROPBOX_SYNC_DIR` (default `data/dropbox/`, gitignored with the rest 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Master switch for the scheduler. Linking sets it; "Pause" clears it. |
+| `paused` | `false` | "Pause" sets it (the current run stops after its in-flight batch); "Resume" clears it. Linking alone makes the scheduler active. |
 | `interval_hours` | `1` | Scheduler interval. |
 | `concurrency` | `4` | Concurrent uploads. |
 | `chunk_mb` | `8` | Upload-session chunk size (multiple of 4 MiB). |
@@ -76,10 +76,20 @@ Matching uses `pathspec` (`gitwildmatch`).
   namespace write and trips `too_many_write_operations`.
 - Retries: exponential backoff on 429/5xx honouring `Retry-After`; a 401
   refreshes the access token once and retries.
-- Resumable: open sessions are recorded in `state.db` (`session_id`, `offset`)
-  so a restart continues where it stopped.
+- Resumable: open sessions are recorded in `state.db` (`session_id`, `offset`,
+  `created_at`) so a restart continues where it stopped; a stale offset is
+  corrected from Dropbox's `incorrect_offset` reply, sessions older than six
+  days (Dropbox expires them after seven) are restarted from scratch.
+- A file that changes while it is being uploaded is not committed — it is
+  retried on the next run — and every commit carries the local `content_hash`
+  so Dropbox rejects a torn upload.
+- Dropbox paths are case-insensitive. When two local paths differ only by
+  case, the lexicographically first one is synced and the others are reported
+  as skipped collisions in the status.
 - Prune (opt-in): state rows whose local file is gone are deleted remotely in
   `files/delete_batch` groups.
+- Renaming a project moves its remote folder (`files/move_v2`) and its state
+  rows; deleting a project drops its state rows but leaves the remote files.
 - The engine never blocks the API: all HTTP is `httpx.AsyncClient`, file reads
   and hashing run in threads, and a semaphore bounds concurrency.
 
@@ -96,13 +106,16 @@ CREATE TABLE files (
 CREATE TABLE pending_sessions (
   project TEXT NOT NULL, rel_path TEXT NOT NULL,
   session_id TEXT NOT NULL, offset INTEGER NOT NULL,
-  size INTEGER NOT NULL, mtime_ns INTEGER NOT NULL, content_hash TEXT NOT NULL,
+  size INTEGER NOT NULL, mtime_ns INTEGER NOT NULL,
+  content_hash TEXT,                -- NULL while bytes are still being appended
+  created_at TEXT NOT NULL,
   PRIMARY KEY (project, rel_path)
 );
 CREATE TABLE runs (
   id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT,
-  status TEXT NOT NULL,             -- running | ok | error | cancelled
+  status TEXT NOT NULL,             -- running | ok | error | cancelled | interrupted
   trigger TEXT NOT NULL,            -- schedule | manual
+  project TEXT,                     -- project being processed
   files_scanned INTEGER DEFAULT 0, files_uploaded INTEGER DEFAULT 0,
   bytes_uploaded INTEGER DEFAULT 0, files_deleted INTEGER DEFAULT 0,
   errors INTEGER DEFAULT 0, error_sample TEXT
@@ -111,6 +124,9 @@ CREATE TABLE project_stats (
   project TEXT PRIMARY KEY, files_synced INTEGER, bytes_synced INTEGER,
   last_synced_at TEXT, last_error TEXT
 );
+CREATE TABLE errors (
+  id INTEGER PRIMARY KEY, at TEXT NOT NULL, project TEXT, path TEXT, message TEXT NOT NULL
+);                                  -- kept to the most recent 200 rows
 ```
 
 ## Database columns (`projects` table)
@@ -134,8 +150,11 @@ Exposed on `ProjectOut` and editable through `PATCH /api/projects/{name}/setting
 | `DELETE` | `/api/dropbox/link` | Revoke the token and delete `token.json`. Remote files are left alone. |
 | `POST` | `/api/dropbox/sync` | Body `{project?}` → start a run now (whole account or one project). |
 | `POST` | `/api/dropbox/pause` / `/resume` | Pause / resume the scheduler (a running run finishes its current file batch and stops). |
-| `POST` | `/api/dropbox/dry-run` | Body `{project, folders?, ignore?}` → per-top-level-entry `{files, bytes, skipped}` after ignore rules, without uploading. Runs the scan in a thread. |
+| `POST` | `/api/dropbox/dry-run` | Body `{project, folders?, ignore?}` → `{job_id}`. The scan runs in a thread and streams per-top-level-entry `{files, bytes, skipped}` without uploading. |
+| `GET` | `/api/dropbox/dry-run/{job_id}` | Job progress: `status` (`running`/`complete`/`error`), `entries` so far, `total` when complete. Jobs nobody polls for 30 s are stopped. |
+| `DELETE` | `/api/dropbox/dry-run/{job_id}` | Stop a running dry run. |
 | `GET` | `/api/projects/{name}/dropbox/folders` | Top-level entries of a project (`name, type, default_ignored, selected`) for the folder picker. |
+| `GET` | `/api/projects/{name}/dropbox/status` | Cheap per-project view (link state, selection, counts, last error, progress when this project is being synced) used by the project settings row. |
 
 ## OAuth flow (PKCE, no app secret)
 
@@ -152,10 +171,15 @@ Exposed on `ProjectOut` and editable through `PATCH /api/projects/{name}/setting
 4. Access tokens are refreshed with `grant_type=refresh_token` when expired.
 5. Unlink calls `/2/auth/token/revoke` then deletes `token.json`.
 
+A started link flow expires after ten minutes; start again if the code is
+pasted later than that.
+
 ## MCP tools (read-only)
 
-- `dropbox_status()` — same payload as `GET /api/dropbox/status`.
-- `dropbox_dry_run(project)` — same as `POST /api/dropbox/dry-run`.
+Names follow the verb whitelist in `docs/agent-mcp-tools.md`.
+
+- `dropbox_get()` — link state, schedule, last run, per-project counts and recent errors.
+- `dropbox_count(project)` — dry run: files and bytes that would sync per top-level folder. Nothing is uploaded.
 
 ## Web UI
 

@@ -86,7 +86,7 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-surface rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-card">
         {step === 1 && (
           <>

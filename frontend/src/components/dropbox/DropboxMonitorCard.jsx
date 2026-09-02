@@ -298,6 +298,8 @@ export default function DropboxMonitorCard() {
                   <span className="text-xs text-label">Prune deleted files</span>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={config?.prune ? "true" : "false"}
                     onClick={() => handleUpdateConfig({ prune: !config?.prune })}
                     className={`relative w-9 h-5 rounded-full transition-colors ${config?.prune ? "bg-accent" : "bg-zinc-600"}`}
                   >
@@ -309,6 +311,8 @@ export default function DropboxMonitorCard() {
                   <span className="text-xs text-label">Allowlist mode</span>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={config?.allowlist_mode ? "true" : "false"}
                     onClick={() => handleUpdateConfig({ allowlist_mode: !config?.allowlist_mode })}
                     className={`relative w-9 h-5 rounded-full transition-colors ${config?.allowlist_mode ? "bg-accent" : "bg-zinc-600"}`}
                   >
@@ -390,7 +394,7 @@ export default function DropboxMonitorCard() {
                 type="button"
                 disabled={busy}
                 onClick={handlePauseResume}
-                className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {config?.paused ? "Resume" : "Pause"}
               </button>

@@ -14,14 +14,17 @@ export function formatBytes(bytes) {
 
 export function formatRelative(iso) {
   if (!iso) return "never";
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 0) return "just now";
-  const sec = Math.floor(ms / 1000);
-  if (sec < 60) return "just now";
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} min ago`;
+  const parsed = new Date(iso).getTime();
+  if (Number.isNaN(parsed)) return "never";
+  const ms = Date.now() - parsed;
+  const absMs = Math.abs(ms);
+  const absSec = Math.floor(absMs / 1000);
+  if (absSec < 30) return "just now";
+  const future = ms < 0;
+  const min = Math.floor(absSec / 60);
+  if (min < 60) return future ? `in ${min} min` : `${min} min ago`;
   const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `${hrs} h ago`;
+  if (hrs < 24) return future ? `in ${hrs} h` : `${hrs} h ago`;
   const days = Math.floor(hrs / 24);
-  return `${days} d ago`;
+  return future ? `in ${days} d` : `${days} d ago`;
 }

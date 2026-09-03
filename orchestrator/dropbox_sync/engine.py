@@ -1387,6 +1387,14 @@ async def run_sync_loop() -> None:
     except Exception:
         logger.warning("Failed to queue never-synced projects", exc_info=True)
 
+    # Account/space info lives in memory only; without this the Monitor card
+    # shows no capacity bar between a restart and the next run.
+    try:
+        if get_token_store().is_linked:
+            await refresh_account_info()
+    except Exception:
+        logger.debug("startup account refresh failed", exc_info=True)
+
     # Mark any interrupted runs from a previous crash
     try:
         count = await asyncio.to_thread(get_state().runs_mark_interrupted)

@@ -442,3 +442,186 @@ async def test_folders_endpoint_runs_off_loop(client, sync_dir, db_session):
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data["entries"], list)
+
+
+# ── Redirect-based link flow (Amendment B) ──────────────────────────
+
+
+@pytest.mark.anyio
+async def test_link_start_redirect_mode(client, sync_dir):
+    """POST /api/dropbox/link/start in redirect mode derives redirect_uri from Origin."""
+    resp = await client.post(
+        "/api/dropbox/link/start",
+        json={"app_key": "abcdefghij1234", "mode": "redirect"},
+        headers={"Origin": "https://localhost:3000"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "redirect"
+    assert data["redirect_uri"] == "https://localhost:3000/api/dropbox/callback"
+    assert "redirect_uri=" in data["authorize_url"]
+
+
+@pytest.mark.anyio
+async def test_link_start_code_mode_no_redirect_uri(client, sync_dir):
+    """POST /api/dropbox/link/start in code mode has no redirect_uri."""
+    resp = await client.post(
+        "/api/dropbox/link/start",
+        json={"app_key": "abcdefghij1234", "mode": "code"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "code"
+    assert data["redirect_uri"] is None
+    assert "redirect_uri" not in data["authorize_url"]
+
+
+@pytest.mark.anyio
+async def test_link_start_no_configured_key(client, sync_dir, monkeypatch):
+    """POST /api/dropbox/link/start with no configured key and no body key returns 400."""
+    import config
+    monkeypatch.setattr(config, "DROPBOX_APP_KEY", "")
+    resp = await client.post(
+        "/api/dropbox/link/start",
+        json={"mode": "redirect"},
+        headers={"Origin": "https://localhost:3000"},
+    )
+    assert resp.status_code == 400
+    assert "DROPBOX_APP_KEY" in resp.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_link_start_return_to_open_redirect_guard(client, sync_dir):
+    """return_to starting with // is rejected (open-redirect guard)."""
+    resp = await client.post(
+        "/api/dropbox/link/start",
+        json={"app_key": "abcdefghij1234", "return_to": "//evil.com"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_callback_happy_path(client, sync_dir, fake):
+    """GET /api/dropbox/callback with valid code and state -> 302 with dropbox=linked."""
+    from dropbox_sync import engine
+    from dropbox_sync.auth import LinkFlow
+
+    fake.register_oauth_code("cb_code", {
+        "access_token": "sl.cb_token",
+        "token_type": "bearer",
+        "expires_in": 14400,
+        "refresh_token": "rt_cb",
+        "scope": "files.content.write account_info.read",
+    })
+
+    fake_http = httpx.AsyncClient(transport=fake.transport())
+    store = engine.get_token_store()
+    flow = LinkFlow(store, http=fake_http)
+    engine._link_flow = flow
+
+    # Start the flow to get the state
+    result = flow.start("abcdefghij1234", redirect_uri="https://localhost:3000/api/dropbox/callback",
+                        return_to="/projects/x")
+    state = result["state"]
+
+    # Simulate the callback
+    resp = await client.get(
+        f"/api/dropbox/callback?code=cb_code&state={state}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "/projects/x" in location
+    assert "dropbox=linked" in location
+
+    # Token should be saved
+    assert store.is_linked
+
+    await fake_http.aclose()
+
+
+@pytest.mark.anyio
+async def test_callback_wrong_state(client, sync_dir, fake):
+    """GET /api/dropbox/callback with wrong state -> 302 with dropbox=error."""
+    from dropbox_sync import engine
+    from dropbox_sync.auth import LinkFlow
+
+    fake_http = httpx.AsyncClient(transport=fake.transport())
+    store = engine.get_token_store()
+    flow = LinkFlow(store, http=fake_http)
+    engine._link_flow = flow
+
+    flow.start("abcdefghij1234", redirect_uri="https://localhost:3000/api/dropbox/callback",
+               return_to="/monitor")
+
+    resp = await client.get(
+        "/api/dropbox/callback?code=some_code&state=wrong-state-value",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "dropbox=error" in location
+    assert "state+mismatch" in location or "state%20mismatch" in location or "mismatch" in location
+
+    await fake_http.aclose()
+
+
+@pytest.mark.anyio
+async def test_callback_error_from_dropbox(client, sync_dir):
+    """GET /api/dropbox/callback with error param -> 302 with dropbox=error."""
+    from dropbox_sync import engine
+    from dropbox_sync.auth import LinkFlow
+
+    store = engine.get_token_store()
+    flow = LinkFlow(store)
+    engine._link_flow = flow
+    flow.start("abcdefghij1234", return_to="/monitor")
+
+    resp = await client.get(
+        "/api/dropbox/callback?error=access_denied&error_description=User+declined",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "dropbox=error" in location
+    assert "User" in location or "declined" in location.lower()
+
+
+@pytest.mark.anyio
+async def test_callback_no_pending_flow(client, sync_dir):
+    """GET /api/dropbox/callback with no pending flow -> 302 error to /monitor."""
+    from dropbox_sync import engine
+    engine._link_flow = None  # Reset to ensure a fresh flow with no pending
+
+    resp = await client.get(
+        "/api/dropbox/callback?code=abc&state=xyz",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "dropbox=error" in location
+
+
+@pytest.mark.anyio
+async def test_callback_auth_exempt(client, sync_dir):
+    """The callback endpoint does not require auth (it's in _AUTH_EXEMPT_PREFIXES)."""
+    # This test verifies the endpoint is reachable without auth.
+    # Even with no pending flow, it should return a 302, not a 401.
+    resp = await client.get(
+        "/api/dropbox/callback?error=test",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+
+@pytest.mark.anyio
+async def test_link_start_referer_derivation(client, sync_dir):
+    """Redirect URI derived from Referer when Origin is absent."""
+    resp = await client.post(
+        "/api/dropbox/link/start",
+        json={"app_key": "abcdefghij1234", "mode": "redirect"},
+        headers={"Referer": "https://myhost:3000/monitor?tab=dropbox"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["redirect_uri"] == "https://myhost:3000/api/dropbox/callback"

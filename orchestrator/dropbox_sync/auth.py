@@ -65,8 +65,14 @@ def make_pkce() -> tuple[str, str]:
     return verifier, challenge
 
 
-def build_authorize_url(app_key: str, challenge: str, state: str) -> str:
-    """Build the Dropbox OAuth2 authorization URL (no redirect_uri)."""
+def build_authorize_url(app_key: str, challenge: str, state: str,
+                        redirect_uri: str | None = None) -> str:
+    """Build the Dropbox OAuth2 authorization URL.
+
+    When *redirect_uri* is given it is appended (percent-encoded) so
+    Dropbox redirects back instead of showing a code.
+    """
+    from urllib.parse import quote
     params = (
         f"client_id={app_key}"
         f"&response_type=code"
@@ -75,6 +81,8 @@ def build_authorize_url(app_key: str, challenge: str, state: str) -> str:
         f"&token_access_type=offline"
         f"&state={state}"
     )
+    if redirect_uri is not None:
+        params += f"&redirect_uri={quote(redirect_uri, safe='')}"
     return f"{AUTHORIZE_URL}?{params}"
 
 
@@ -150,9 +158,12 @@ class LinkFlow:
         self._now = now
         self._pending: dict[str, Any] | None = None
 
-    def start(self, app_key: str) -> dict:
-        """Start a new link flow. Returns {"authorize_url", "state"}.
+    def start(self, app_key: str, *, redirect_uri: str | None = None,
+              return_to: str | None = None) -> dict:
+        """Start a new link flow.
 
+        Returns ``{"authorize_url", "state", "mode", "redirect_uri"}``.
+        *mode* is ``"redirect"`` when *redirect_uri* is given, else ``"code"``.
         Validates the app key and replaces any prior pending flow.
         """
         if not APP_KEY_RE.match(app_key):
@@ -160,25 +171,40 @@ class LinkFlow:
 
         verifier, challenge = make_pkce()
         state = secrets.token_urlsafe(32)
-        url = build_authorize_url(app_key, challenge, state)
+        url = build_authorize_url(app_key, challenge, state,
+                                  redirect_uri=redirect_uri)
+
+        mode = "redirect" if redirect_uri else "code"
 
         self._pending = {
             "app_key": app_key,
             "verifier": verifier,
             "state": state,
             "started_at": self._now(),
+            "redirect_uri": redirect_uri,
+            "return_to": return_to,
         }
-        return {"authorize_url": url, "state": state}
+        return {
+            "authorize_url": url,
+            "state": state,
+            "mode": mode,
+            "redirect_uri": redirect_uri,
+        }
 
-    async def complete(self, code: str) -> dict:
+    async def complete(self, code: str, *, state: str | None = None) -> dict:
         """Exchange the authorization code for tokens.
 
         Returns {"account_id", "name", "email"}.
-        Raises LinkStateError if no flow is pending or if flow has expired.
+        When *state* is given it must equal the pending state (CSRF guard).
+        Raises LinkStateError if no flow is pending, flow expired, or state mismatches.
         Raises LinkError if Dropbox rejects the code.
         """
         if self._pending is None:
             raise LinkStateError("No pending link flow — call start() first")
+
+        if state is not None and state != self._pending["state"]:
+            self._pending = None
+            raise LinkStateError("state mismatch")
 
         elapsed = self._now() - self._pending["started_at"]
         if elapsed > LINK_FLOW_EXPIRY_SECONDS:
@@ -192,14 +218,18 @@ class LinkFlow:
         own_http = self._http is None
         try:
             # Exchange code for tokens
+            form_data: dict[str, str] = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": pending["app_key"],
+                "code_verifier": pending["verifier"],
+            }
+            if pending.get("redirect_uri"):
+                form_data["redirect_uri"] = pending["redirect_uri"]
+
             resp = await http.post(
                 TOKEN_ENDPOINT,
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "client_id": pending["app_key"],
-                    "code_verifier": pending["verifier"],
-                },
+                data=form_data,
             )
 
             if resp.status_code == 400:
@@ -242,6 +272,12 @@ class LinkFlow:
         finally:
             if own_http:
                 await http.aclose()
+
+    def pending_return_to(self) -> str | None:
+        """Return the pending flow's ``return_to`` without clearing it."""
+        if self._pending is None:
+            return None
+        return self._pending.get("return_to")
 
 
 # ── Token provider ──────────────────────────────────────────────────────

@@ -145,8 +145,9 @@ Exposed on `ProjectOut` and editable through `PATCH /api/projects/{name}/setting
 |---|---|---|
 | `GET` | `/api/dropbox/status` | Link state, account, space usage, config, current run progress, last run, per-project stats, queue length, recent errors. |
 | `PUT` | `/api/dropbox/config` | Update global config (validated, persisted to `config.json`, wakes the scheduler). |
-| `POST` | `/api/dropbox/link/start` | Body `{app_key}` → `{authorize_url}`. Generates the PKCE verifier and keeps it in memory. |
-| `POST` | `/api/dropbox/link/complete` | Body `{code}` → exchanges the code, stores the token, returns the account. |
+| `POST` | `/api/dropbox/link/start` | Body `{mode: "redirect" \| "code", return_to?}` → `{authorize_url, redirect_uri, mode}`. Uses the configured `DROPBOX_APP_KEY`; generates the PKCE verifier and keeps it in memory. |
+| `GET` | `/api/dropbox/callback` | OAuth redirect target (`code`, `state`). Auth-exempt; completes the exchange and 302s back to `return_to` with `?dropbox=linked` or `?dropbox=error&dropbox_message=…`. |
+| `POST` | `/api/dropbox/link/complete` | Body `{code}` → exchanges a pasted code (fallback mode), stores the token, returns the account. |
 | `DELETE` | `/api/dropbox/link` | Revoke the token and delete `token.json`. Remote files are left alone. |
 | `POST` | `/api/dropbox/sync` | Body `{project?}` → start a run now (whole account or one project). |
 | `POST` | `/api/dropbox/pause` / `/resume` | Pause / resume the scheduler (a running run finishes its current file batch and stops). |
@@ -158,21 +159,59 @@ Exposed on `ProjectOut` and editable through `PATCH /api/projects/{name}/setting
 
 ## OAuth flow (PKCE, no app secret)
 
-1. The user creates a Dropbox app at <https://www.dropbox.com/developers/apps>:
-   *Scoped access → App folder*, permissions `files.metadata.read`,
-   `files.content.read`, `files.content.write`, `account_info.read`.
-   The link dialog links to this page and lists the permissions.
-2. `link/start`: the orchestrator builds
-   `https://www.dropbox.com/oauth2/authorize?client_id=…&response_type=code&code_challenge=…&code_challenge_method=S256&token_access_type=offline`
-   (no `redirect_uri` — Dropbox shows the code for copy/paste).
-3. The user pastes the code; `link/complete` posts it to
-   `https://api.dropboxapi.com/oauth2/token` with the verifier and stores the
-   refresh token.
-4. Access tokens are refreshed with `grant_type=refresh_token` when expired.
-5. Unlink calls `/2/auth/token/revoke` then deletes `token.json`.
+### One-time developer setup
 
-A started link flow expires after ten minutes; start again if the code is
-pasted later than that.
+1. Create a Dropbox app at <https://www.dropbox.com/developers/apps>:
+   *Scoped access → App folder*.
+2. Under **Permissions**, enable `files.metadata.read`, `files.content.read`,
+   `files.content.write`, `account_info.read`. Submit.
+3. Under **OAuth 2 → Redirect URIs**, add a redirect URI for every origin
+   you use to access the xylocopa UI:
+
+   ```
+   https://<host>:3000/api/dropbox/callback
+   ```
+
+   For example, `https://localhost:3000/api/dropbox/callback` for local
+   development, plus `https://myserver:3000/api/dropbox/callback` if you
+   access the UI from another machine.
+4. Copy the **App key** and set it in `.env`:
+
+   ```
+   DROPBOX_APP_KEY=<your app key>
+   ```
+
+   Then restart the orchestrator.
+
+### Redirect flow (default)
+
+1. `POST /api/dropbox/link/start` with `{"mode": "redirect"}` (default).
+   The orchestrator derives the redirect URI from the request origin
+   (`Origin` header → `Referer` origin → `Host`) and builds the Dropbox
+   authorize URL with `redirect_uri` and a PKCE challenge.
+2. The browser navigates to the authorize URL (same tab). The user signs
+   in and approves.
+3. Dropbox redirects back to `GET /api/dropbox/callback?code=…&state=…`.
+   This endpoint carries no bearer token — it is auth-exempt and relies
+   on the `state` parameter as its CSRF guard.
+4. The callback exchanges the code for tokens, stores them, and redirects
+   the browser to the `return_to` path (default `/monitor`) with a
+   `?dropbox=linked` query parameter. On error, it redirects with
+   `?dropbox=error&dropbox_message=…`.
+
+### Paste-code fallback
+
+For origins that are not registered as redirect URIs, `link/start` with
+`{"mode": "code"}` omits the `redirect_uri`. Dropbox shows a code for
+the user to copy/paste. `POST /api/dropbox/link/complete` with
+`{"code": "…"}` exchanges it.
+
+### Token lifecycle
+
+- Access tokens are refreshed with `grant_type=refresh_token` when expired.
+- Unlink calls `/2/auth/token/revoke` then deletes `token.json`.
+- A started link flow expires after ten minutes; start again if the code
+  is pasted later than that.
 
 ## MCP tools (read-only)
 

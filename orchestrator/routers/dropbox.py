@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import re
+import urllib.parse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -78,6 +80,33 @@ async def update_config(request: Request):
 # ── Link flow ────────────────────────────────────────────────────────
 
 
+def _derive_origin(request: Request) -> str:
+    """Derive the request origin for the redirect URI.
+
+    Preference: Origin header > Referer origin > scheme://Host.
+    Validates that the result is http(s).
+    """
+    origin = request.headers.get("origin")
+    if origin:
+        parsed = urllib.parse.urlparse(origin)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            # Strip any path from the Origin header (shouldn't have one, but be safe)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    referer = request.headers.get("referer")
+    if referer:
+        parsed = urllib.parse.urlparse(referer)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("host", "")
+    if proto in ("http", "https") and host:
+        return f"{proto}://{host}"
+
+    raise HTTPException(status_code=400, detail="Cannot determine request origin")
+
+
 @router.post("/api/dropbox/link/start")
 async def link_start(request: Request):
     try:
@@ -85,8 +114,18 @@ async def link_start(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    app_key = body.get("app_key", "") if isinstance(body, dict) else ""
-    if not app_key or not APP_KEY_RE.match(app_key):
+    if not isinstance(body, dict):
+        body = {}
+
+    # App key: body override (back-compat / tests), else configured value
+    import config
+    app_key = body.get("app_key", "") or getattr(config, "DROPBOX_APP_KEY", "")
+    if not app_key:
+        raise HTTPException(
+            status_code=400,
+            detail="No Dropbox app key configured — set DROPBOX_APP_KEY in .env",
+        )
+    if not APP_KEY_RE.match(app_key):
         raise HTTPException(status_code=400, detail="Invalid app_key")
 
     from dropbox_sync.engine import get_token_store, get_link_flow
@@ -94,8 +133,21 @@ async def link_start(request: Request):
     if store.is_linked:
         raise HTTPException(status_code=409, detail="Already linked")
 
+    mode = body.get("mode", "redirect")
+    return_to = body.get("return_to", "/monitor")
+
+    # Validate return_to: must be a relative path starting with "/" and not "//"
+    if return_to is not None:
+        if not isinstance(return_to, str) or not return_to.startswith("/") or return_to.startswith("//"):
+            raise HTTPException(status_code=400, detail="return_to must be a relative path starting with /")
+
+    redirect_uri = None
+    if mode == "redirect":
+        origin = _derive_origin(request)
+        redirect_uri = origin + "/api/dropbox/callback"
+
     flow = get_link_flow()
-    result = flow.start(app_key)
+    result = flow.start(app_key, redirect_uri=redirect_uri, return_to=return_to)
     return result
 
 
@@ -134,6 +186,79 @@ async def link_complete(request: Request):
         pass
 
     return {"detail": "ok", "account": account}
+
+
+def _redirect_with_params(return_to: str, params: dict) -> RedirectResponse:
+    """Build a relative RedirectResponse appending query params correctly."""
+    sep = "&" if "?" in return_to else "?"
+    qs = urllib.parse.urlencode(params)
+    return RedirectResponse(
+        url=f"{return_to}{sep}{qs}",
+        status_code=302,
+    )
+
+
+@router.get("/api/dropbox/callback")
+async def dropbox_callback(request: Request):
+    """OAuth redirect callback — browser lands here after Dropbox.
+
+    Always returns a 302 RedirectResponse (never JSON).  The callback
+    carries no bearer token; its CSRF guard is the ``state`` param
+    matched against the pending flow.
+    """
+    try:
+        params = request.query_params
+        error = params.get("error")
+        error_description = params.get("error_description")
+        code = params.get("code")
+        state = params.get("state")
+
+        from dropbox_sync.engine import get_link_flow, refresh_account_info, _emit
+        from dropbox_sync.auth import LinkStateError, LinkError
+
+        flow = get_link_flow()
+        return_to = flow.pending_return_to() or "/monitor"
+
+        if error:
+            msg = error_description or error
+            return _redirect_with_params(return_to, {
+                "dropbox": "error",
+                "dropbox_message": msg,
+            })
+
+        if not code:
+            return _redirect_with_params(return_to, {
+                "dropbox": "error",
+                "dropbox_message": "No authorization code received",
+            })
+
+        try:
+            await flow.complete(code, state=state)
+        except (LinkStateError, LinkError) as exc:
+            return _redirect_with_params(return_to, {
+                "dropbox": "error",
+                "dropbox_message": str(exc),
+            })
+
+        # Best-effort post-link actions
+        try:
+            await refresh_account_info()
+        except Exception:
+            pass
+        try:
+            await _emit("linked")
+        except Exception:
+            pass
+
+        return _redirect_with_params(return_to, {"dropbox": "linked"})
+
+    except Exception:
+        # The callback must never raise — always redirect with an error
+        logger.warning("Dropbox callback failed", exc_info=True)
+        return _redirect_with_params("/monitor", {
+            "dropbox": "error",
+            "dropbox_message": "Unexpected error during Dropbox link",
+        })
 
 
 @router.delete("/api/dropbox/link")

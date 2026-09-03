@@ -66,6 +66,11 @@ class TestBuildAuthorizeUrl:
         assert "state=STATE1" in url
         assert "redirect_uri" not in url
 
+    def test_redirect_uri_appended_and_encoded(self):
+        uri = "https://localhost:3000/api/dropbox/callback"
+        url = build_authorize_url("abc123test1", "CHAL", "S1", redirect_uri=uri)
+        assert "redirect_uri=https%3A%2F%2Flocalhost%3A3000%2Fapi%2Fdropbox%2Fcallback" in url
+
 
 # ── TokenStore ──────────────────────────────────────────────────────────
 
@@ -360,6 +365,115 @@ class TestLinkFlow:
 
         result = await flow.complete("auth-code")
         assert result["account_id"] == "dbid:AAH4f99T0taONIb-OurWxbNQ6ywGRopQngc"
+
+    def test_start_redirect_mode(self, tmp_path):
+        """start() with redirect_uri returns mode='redirect' and includes redirect_uri."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        flow = LinkFlow(store)
+        uri = "https://localhost:3000/api/dropbox/callback"
+        result = flow.start("abcdefghij1234", redirect_uri=uri, return_to="/projects/x")
+        assert result["mode"] == "redirect"
+        assert result["redirect_uri"] == uri
+        assert "redirect_uri=" in result["authorize_url"]
+        assert "localhost%3A3000" in result["authorize_url"]
+
+    def test_start_code_mode(self, tmp_path):
+        """start() without redirect_uri returns mode='code'."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        flow = LinkFlow(store)
+        result = flow.start("abcdefghij1234")
+        assert result["mode"] == "code"
+        assert result["redirect_uri"] is None
+        assert "redirect_uri" not in result["authorize_url"]
+
+    @pytest.mark.anyio
+    async def test_complete_state_mismatch(self, tmp_path):
+        """complete() with wrong state raises LinkStateError and clears pending."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        http = httpx.AsyncClient(transport=_success_transport())
+        flow = LinkFlow(store, http=http)
+        flow.start("abcdefghij1234")
+        with pytest.raises(LinkStateError, match="state mismatch"):
+            await flow.complete("code", state="wrong-state")
+        # Pending should be cleared
+        with pytest.raises(LinkStateError, match="No pending"):
+            await flow.complete("code")
+
+    @pytest.mark.anyio
+    async def test_complete_state_match(self, tmp_path):
+        """complete() with correct state succeeds."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        http = httpx.AsyncClient(transport=_success_transport())
+        flow = LinkFlow(store, http=http)
+        result = flow.start("abcdefghij1234")
+        state = result["state"]
+        account = await flow.complete("code", state=state)
+        assert account["account_id"] == "dbid:AAH4f99T0taONIb-OurWxbNQ6ywGRopQngc"
+
+    @pytest.mark.anyio
+    async def test_complete_redirect_includes_redirect_uri_in_form(self, tmp_path):
+        """In redirect mode, complete() includes redirect_uri in the token POST."""
+        captured = {}
+
+        def handler(request: httpx.Request):
+            url = str(request.url)
+            if "oauth2/token" in url:
+                captured["body"] = request.content.decode()
+                return httpx.Response(200, json=_make_token_response())
+            if "get_current_account" in url:
+                return httpx.Response(200, json=_make_account_response())
+            return httpx.Response(404)
+
+        store = TokenStore(str(tmp_path / "token.json"))
+        http = httpx.AsyncClient(transport=_mock_transport(handler))
+        flow = LinkFlow(store, http=http)
+        flow.start("abcdefghij1234", redirect_uri="https://example.com/api/dropbox/callback")
+        await flow.complete("my-code")
+
+        body = captured["body"]
+        assert "redirect_uri=" in body
+        # URL-encoded form data: "https%3A%2F%2F..." or "https://..." depending on httpx
+        assert "example.com" in body
+
+    @pytest.mark.anyio
+    async def test_complete_code_mode_omits_redirect_uri_in_form(self, tmp_path):
+        """In code mode, complete() does not include redirect_uri in the token POST."""
+        captured = {}
+
+        def handler(request: httpx.Request):
+            url = str(request.url)
+            if "oauth2/token" in url:
+                captured["body"] = request.content.decode()
+                return httpx.Response(200, json=_make_token_response())
+            if "get_current_account" in url:
+                return httpx.Response(200, json=_make_account_response())
+            return httpx.Response(404)
+
+        store = TokenStore(str(tmp_path / "token.json"))
+        http = httpx.AsyncClient(transport=_mock_transport(handler))
+        flow = LinkFlow(store, http=http)
+        flow.start("abcdefghij1234")
+        await flow.complete("my-code")
+
+        body = captured["body"]
+        assert "redirect_uri" not in body
+
+    def test_pending_return_to(self, tmp_path):
+        """pending_return_to() returns the stored return_to without clearing."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        flow = LinkFlow(store)
+        assert flow.pending_return_to() is None  # no pending
+        flow.start("abcdefghij1234", return_to="/projects/x")
+        assert flow.pending_return_to() == "/projects/x"
+        # Still available after a second read
+        assert flow.pending_return_to() == "/projects/x"
+
+    def test_pending_return_to_default_none(self, tmp_path):
+        """pending_return_to() returns None when return_to was not set."""
+        store = TokenStore(str(tmp_path / "token.json"))
+        flow = LinkFlow(store)
+        flow.start("abcdefghij1234")
+        assert flow.pending_return_to() is None
 
 
 # ── DropboxTokenProvider ────────────────────────────────────────────────

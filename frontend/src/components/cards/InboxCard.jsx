@@ -358,7 +358,7 @@ export default memo(function InboxCard({ task, selecting, selected, onToggle, on
     const uploadedPaths = [];
     for (const file of fileList) {
       try {
-        const result = await uploadFile(file);
+        const result = await uploadFile(file, task.project_name || null);
         uploadedPaths.push(result.path);
       } catch { /* skip */ }
     }

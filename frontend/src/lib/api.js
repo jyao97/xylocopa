@@ -550,9 +550,10 @@ export async function transcribeVoice(audioBlob, mimeType) {
 export const refineVoiceText = (text) =>
   request("/api/voice/refine", { method: "POST", body: JSON.stringify({ text }), keepalive: true });
 
-export async function uploadFile(file) {
+export async function uploadFile(file, project = null) {
   const formData = new FormData();
   formData.append("file", file);
+  if (project) formData.append("project", project);
   return formDataRequest("/api/upload", formData, "Upload failed");
 }
 

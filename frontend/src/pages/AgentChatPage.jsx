@@ -2180,7 +2180,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
         originalName: file.name, size: file.size, mimeType: file.type,
       }]);
 
-      uploadFile(file).then((result) => {
+      uploadFile(file, project).then((result) => {
         setAttachments((prev) => prev.map((a) =>
           a.id === id ? { ...a, uploading: false, uploadedPath: result.path } : a
         ));
@@ -2190,7 +2190,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
         ));
       });
     }
-  }, []);
+  }, [project]);
 
   const retryUpload = useCallback((attId) => {
     setAttachments((prev) => {
@@ -2201,7 +2201,7 @@ function ChatInput({ agentId, project, onSend, onSendLater, disabled, disabledRe
     // Find the attachment's file from current state
     const att = attachments.find((a) => a.id === attId);
     if (!att?.file) return;
-    uploadFile(att.file).then((result) => {
+    uploadFile(att.file, project).then((result) => {
       setAttachments((prev) => prev.map((a) =>
         a.id === attId ? { ...a, uploading: false, uploadedPath: result.path, error: null } : a
       ));
@@ -2711,7 +2711,7 @@ export default function AgentChatPage({ theme, onToggleTheme, agentId: propAgent
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : null;
       setFeedbackAttachments((prev) => [...prev, { id: fid, file, previewUrl, uploading: true, uploadedPath: null, originalName: file.name, size: file.size, mimeType: file.type }]);
-      uploadFile(file).then((result) => {
+      uploadFile(file, agent?.project).then((result) => {
         setFeedbackAttachments((prev) => prev.map((a) => a.id === fid ? { ...a, uploading: false, uploadedPath: result.path } : a));
       }).catch(() => {
         setFeedbackAttachments((prev) => prev.filter((a) => a.id !== fid));

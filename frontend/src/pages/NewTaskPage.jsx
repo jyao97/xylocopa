@@ -284,7 +284,7 @@ export default function NewTaskPage({ embedded = false, onClose, contextPath }) 
       const isImage = file.type.startsWith("image/");
       const previewUrl = isImage ? URL.createObjectURL(file) : null;
       setAttachments((prev) => [...prev, { id, file, previewUrl, uploading: true, uploadedPath: null, originalName: file.name, size: file.size, mimeType: file.type }]);
-      uploadFile(file).then((result) => {
+      uploadFile(file, project || null).then((result) => {
         setAttachments((prev) => prev.map((a) => a.id === id ? { ...a, uploading: false, uploadedPath: result.path } : a));
       }).catch((err) => {
         setAttachments((prev) => prev.filter((a) => a.id !== id));

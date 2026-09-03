@@ -176,7 +176,9 @@ export default function DropboxMonitorCard() {
     if (config.paused) {
       subtitle = `Paused · ${enabledCount} project${pluralS}`;
     } else {
-      subtitle = `Auto: every ${config.interval_hours ?? 1}h · ${enabledCount} project${pluralS}`;
+      const intervalMin = config.interval_minutes ?? 5;
+      const intervalLabel = intervalMin < 60 ? `${intervalMin} min` : `${intervalMin / 60} h`;
+      subtitle = `Auto: every ${intervalLabel} · ${enabledCount} project${pluralS}`;
       if (status?.next_run_at) {
         subtitle += ` · next ${formatRelative(status.next_run_at)}`;
       }
@@ -210,6 +212,35 @@ export default function DropboxMonitorCard() {
           {currentRun.errors > 0 && (
             <p className="text-xs text-danger"><span className="font-mono">{currentRun.errors}</span> errors</p>
           )}
+        </div>
+      );
+    }
+
+    // Up to date: last check found no changes and is more recent than the last run
+    const lastCheck = status?.last_check;
+    if (
+      lastCheck?.at &&
+      Array.isArray(lastCheck.changed) && lastCheck.changed.length === 0 &&
+      (!lastRun || new Date(lastCheck.at) >= new Date(lastRun.finished_at))
+    ) {
+      const runParts = [];
+      if (lastRun) {
+        if (lastRun.files_uploaded > 0) runParts.push(`${lastRun.files_uploaded} files`);
+        if (lastRun.bytes_uploaded > 0) runParts.push(formatBytes(lastRun.bytes_uploaded));
+      }
+      return (
+        <div className="pt-2 border-t border-divider">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-ok shrink-0" />
+            <span className="text-xs text-heading min-w-0 truncate">
+              Up to date &middot; checked {formatRelative(lastCheck.at)}
+            </span>
+            {runParts.length > 0 && (
+              <span className="text-xs text-dim font-mono shrink-0 ml-auto">
+                {runParts.join(" · ")}
+              </span>
+            )}
+          </div>
         </div>
       );
     }
@@ -340,17 +371,18 @@ export default function DropboxMonitorCard() {
               <div className="pt-2 border-t border-divider space-y-3">
                 {/* Interval */}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-label">Interval</span>
+                  <span className="text-xs text-label">Check every</span>
                   <select
-                    value={config?.interval_hours ?? 1}
-                    onChange={(e) => handleUpdateConfig({ interval_hours: parseInt(e.target.value) })}
+                    value={config?.interval_minutes ?? 5}
+                    onChange={(e) => handleUpdateConfig({ interval_minutes: parseInt(e.target.value) })}
                     className="text-xs bg-input text-heading rounded-lg px-2 py-1 border border-divider"
                   >
-                    <option value={1}>1h</option>
-                    <option value={3}>3h</option>
-                    <option value={6}>6h</option>
-                    <option value={12}>12h</option>
-                    <option value={24}>24h</option>
+                    <option value={1}>1 min</option>
+                    <option value={5}>5 min</option>
+                    <option value={15}>15 min</option>
+                    <option value={60}>1 h</option>
+                    <option value={360}>6 h</option>
+                    <option value={1440}>24 h</option>
                   </select>
                 </div>
                 {/* Concurrency */}

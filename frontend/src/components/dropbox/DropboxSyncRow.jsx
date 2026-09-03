@@ -212,8 +212,16 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
       parts.push(formatBytes(status.bytes_synced));
     }
     const lastSync = formatRelative(status.last_synced_at);
-    parts.push(`last sync ${lastSync}`);
-    return parts.join(" · ");
+    parts.push(`synced ${lastSync}`);
+    let result = parts.join(" · ");
+    if (
+      status.up_to_date &&
+      status.last_checked_at &&
+      (!status.last_synced_at || new Date(status.last_checked_at) > new Date(status.last_synced_at))
+    ) {
+      result += " · up to date";
+    }
+    return result;
   })();
 
   // Progress bar

@@ -26,7 +26,7 @@ import { fetchDropboxStatus } from "../../lib/api";
 const MOCK_STATUS = {
   linked: true,
   account: { name: "Jane Doe", email: "jane@example.com" },
-  config: { interval_hours: 6, paused: false, concurrency: 4, prune: false, allowlist_mode: false },
+  config: { interval_minutes: 360, paused: false, concurrency: 4, prune: false, allowlist_mode: false },
   space: { used: 5 * 1024 * 1024 * 1024, allocated: 10 * 1024 * 1024 * 1024 },
   next_run_at: new Date(Date.now() + 3600000).toISOString(),
   current_run: null,
@@ -94,6 +94,62 @@ describe("DropboxMonitorCard", () => {
     // The UsageBar-style detail should contain the allocated size
     const detail = await screen.findByText(/10 GB/);
     expect(detail).toBeInTheDocument();
+  });
+
+  it("shows interval_minutes in subtitle", async () => {
+    fetchDropboxStatus.mockResolvedValue(MOCK_STATUS);
+    render(<DropboxMonitorCard />);
+
+    // 360 minutes = 6 h
+    const subtitle = await screen.findByText(/Auto: every 6 h/);
+    expect(subtitle).toBeInTheDocument();
+  });
+
+  it("shows interval in minutes when < 60", async () => {
+    fetchDropboxStatus.mockResolvedValue({
+      ...MOCK_STATUS,
+      config: { ...MOCK_STATUS.config, interval_minutes: 5 },
+    });
+    render(<DropboxMonitorCard />);
+
+    const subtitle = await screen.findByText(/Auto: every 5 min/);
+    expect(subtitle).toBeInTheDocument();
+  });
+
+  it("shows 'Up to date' when last_check found no changes", async () => {
+    const checkedAt = new Date(Date.now() - 60000).toISOString();
+    const finishedAt = new Date(Date.now() - 600000).toISOString();
+    fetchDropboxStatus.mockResolvedValue({
+      ...MOCK_STATUS,
+      last_check: { at: checkedAt, changed: [] },
+      last_run: {
+        status: "ok",
+        finished_at: finishedAt,
+        files_uploaded: 42,
+        bytes_uploaded: 1024 * 1024 * 100,
+        errors: 0,
+      },
+    });
+    render(<DropboxMonitorCard />);
+
+    const statusLine = await screen.findByText(/Up to date/);
+    expect(statusLine).toBeInTheDocument();
+    expect(statusLine.textContent).toMatch(/checked/);
+  });
+
+  it("falls through to last_run when last_check has changes", async () => {
+    fetchDropboxStatus.mockResolvedValue({
+      ...MOCK_STATUS,
+      last_check: {
+        at: new Date(Date.now() - 30000).toISOString(),
+        changed: ["alpha"],
+      },
+    });
+    render(<DropboxMonitorCard />);
+
+    // Should show the lastRun "Synced" line, not "Up to date"
+    const synced = await screen.findByText(/Synced/);
+    expect(synced).toBeInTheDocument();
   });
 
   it("shows Connect button in not-linked state", async () => {

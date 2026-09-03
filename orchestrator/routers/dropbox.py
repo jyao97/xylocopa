@@ -107,6 +107,31 @@ def _derive_origin(request: Request) -> str:
     raise HTTPException(status_code=400, detail="Cannot determine request origin")
 
 
+def _resolve_link_mode(requested: str, config_mod) -> str:
+    """Resolve the effective link mode from the requested mode string.
+
+    - ``auto`` (default): ``relay`` when using the default app and a relay URL
+      is configured; ``direct`` when the user set their own ``DROPBOX_APP_KEY``
+      and no ``DROPBOX_RELAY_URL`` env override; ``relay`` when they set both.
+    - ``relay``, ``direct``, ``code``: used as-is.
+    """
+    if requested in ("relay", "direct", "code"):
+        return requested
+    if requested == "redirect":
+        return "direct"
+    # auto
+    using_default = getattr(config_mod, "DROPBOX_USING_DEFAULT_APP", True)
+    relay_url = getattr(config_mod, "DROPBOX_RELAY_URL", "")
+    if using_default and relay_url:
+        return "relay"
+    if not using_default and not relay_url:
+        return "direct"
+    if not using_default and relay_url:
+        return "relay"
+    # Default-app but no relay URL → direct
+    return "direct"
+
+
 @router.post("/api/dropbox/link/start")
 async def link_start(request: Request):
     try:
@@ -133,7 +158,8 @@ async def link_start(request: Request):
     if store.is_linked:
         raise HTTPException(status_code=409, detail="Already linked")
 
-    mode = body.get("mode", "redirect")
+    requested_mode = body.get("mode", "auto")
+    effective_mode = _resolve_link_mode(requested_mode, config)
     return_to = body.get("return_to", "/monitor")
 
     # Validate return_to: must be a relative path starting with "/" and not "//"
@@ -141,13 +167,39 @@ async def link_start(request: Request):
         if not isinstance(return_to, str) or not return_to.startswith("/") or return_to.startswith("//"):
             raise HTTPException(status_code=400, detail="return_to must be a relative path starting with /")
 
+    origin = None
     redirect_uri = None
-    if mode == "redirect":
+
+    if effective_mode == "relay":
+        relay_url = getattr(config, "DROPBOX_RELAY_URL", "")
+        if not relay_url:
+            # Fall back to direct if no relay URL
+            effective_mode = "direct"
+        else:
+            redirect_uri = relay_url
+            origin = _derive_origin(request)
+
+    if effective_mode == "direct":
         origin = _derive_origin(request)
         redirect_uri = origin + "/api/dropbox/callback"
 
+    # code mode: no redirect_uri, no origin needed
+
     flow = get_link_flow()
     result = flow.start(app_key, redirect_uri=redirect_uri, return_to=return_to)
+
+    # Override mode in the result to reflect effective mode
+    result["mode"] = effective_mode
+
+    # Build relay_start_url for relay mode
+    if effective_mode == "relay":
+        from urllib.parse import urlencode, quote
+        fragment = urlencode(
+            {"return": origin, "authorize": result["authorize_url"]},
+            quote_via=quote,
+        )
+        result["relay_start_url"] = redirect_uri + "#" + fragment
+
     return result
 
 

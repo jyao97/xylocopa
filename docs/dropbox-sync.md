@@ -159,22 +159,63 @@ Exposed on `ProjectOut` and editable through `PATCH /api/projects/{name}/setting
 
 ## OAuth flow (PKCE, no app secret)
 
-### One-time developer setup
+Three link modes are available; `POST /api/dropbox/link/start` with
+`{"mode": "auto"}` (the default) picks the right one automatically.
+
+### Relay mode (default for the project app)
+
+The project ships a fixed redirect URI page at
+`https://jyao97.github.io/xylocopa/oauth/dropbox/` (source:
+`docs/oauth/dropbox/index.html`). Any self-hosted xylocopa instance can
+link without registering its own redirect URI.
+
+1. `POST /api/dropbox/link/start` with `{"mode": "auto"}` (or `"relay"`).
+   The orchestrator generates the Dropbox authorize URL with the relay URL
+   as `redirect_uri` and returns a `relay_start_url` — the relay page URL
+   with a `#return=<origin>&authorize=<authorize_url>` fragment.
+2. The browser navigates to the relay page (same tab). The page stores the
+   instance origin (`return`) in `localStorage`, then redirects to the
+   Dropbox authorize URL.
+3. After the user signs in and approves, Dropbox redirects to the relay
+   page with `?code=…&state=…`. The page reads the stored origin and
+   sends the browser to `<origin>/api/dropbox/callback?code=…&state=…`.
+4. The callback exchanges the code (with the relay URL as `redirect_uri`
+   in the token exchange, since Dropbox requires it to match), stores
+   tokens, and redirects to the `return_to` path with `?dropbox=linked`.
+
+The relay page stores only the instance origin in the visitor's browser;
+it never redirects to an address taken from the callback URL and makes
+no network calls of its own.
+
+**What the relay page stores:** the key `xylocopa.dropbox.return` in
+`localStorage`, containing the instance origin (`https://host:port`).
+The key is cleared after the return redirect.
+
+**Self-hosting the relay page:** set `DROPBOX_RELAY_URL` in `.env` to
+point at your own copy (you will also need to register that URL as a
+redirect URI on your Dropbox app).
+
+### Direct mode (own Dropbox app)
+
+When the user sets their own `DROPBOX_APP_KEY` in `.env` (and no
+`DROPBOX_RELAY_URL` override), `auto` selects `direct` mode. The
+orchestrator uses `<origin>/api/dropbox/callback` as the redirect URI.
+
+1. Register redirect URIs on the Dropbox app for every origin:
+   `https://<host>:3000/api/dropbox/callback`.
+2. `POST /api/dropbox/link/start` derives the redirect URI from the
+   request origin and returns `{"mode": "direct", "authorize_url", …}`.
+3. Browser → Dropbox → `GET /api/dropbox/callback?code=…&state=…` →
+   token exchange → redirect to `return_to?dropbox=linked`.
+
+### One-time developer setup (own app)
 
 1. Create a Dropbox app at <https://www.dropbox.com/developers/apps>:
    *Scoped access → App folder*.
 2. Under **Permissions**, enable `files.metadata.read`, `files.content.read`,
    `files.content.write`, `account_info.read`. Submit.
-3. Under **OAuth 2 → Redirect URIs**, add a redirect URI for every origin
-   you use to access the xylocopa UI:
-
-   ```
-   https://<host>:3000/api/dropbox/callback
-   ```
-
-   For example, `https://localhost:3000/api/dropbox/callback` for local
-   development, plus `https://myserver:3000/api/dropbox/callback` if you
-   access the UI from another machine.
+3. Under **OAuth 2 → Redirect URIs**, add
+   `https://<host>:3000/api/dropbox/callback` for each origin you use.
 4. Copy the **App key** and set it in `.env`:
 
    ```
@@ -183,28 +224,12 @@ Exposed on `ProjectOut` and editable through `PATCH /api/projects/{name}/setting
 
    Then restart the orchestrator.
 
-### Redirect flow (default)
-
-1. `POST /api/dropbox/link/start` with `{"mode": "redirect"}` (default).
-   The orchestrator derives the redirect URI from the request origin
-   (`Origin` header → `Referer` origin → `Host`) and builds the Dropbox
-   authorize URL with `redirect_uri` and a PKCE challenge.
-2. The browser navigates to the authorize URL (same tab). The user signs
-   in and approves.
-3. Dropbox redirects back to `GET /api/dropbox/callback?code=…&state=…`.
-   This endpoint carries no bearer token — it is auth-exempt and relies
-   on the `state` parameter as its CSRF guard.
-4. The callback exchanges the code for tokens, stores them, and redirects
-   the browser to the `return_to` path (default `/monitor`) with a
-   `?dropbox=linked` query parameter. On error, it redirects with
-   `?dropbox=error&dropbox_message=…`.
-
 ### Paste-code fallback
 
-For origins that are not registered as redirect URIs, `link/start` with
-`{"mode": "code"}` omits the `redirect_uri`. Dropbox shows a code for
-the user to copy/paste. `POST /api/dropbox/link/complete` with
-`{"code": "…"}` exchanges it.
+`link/start` with `{"mode": "code"}` omits the `redirect_uri`. Dropbox
+shows a code for the user to copy/paste. `POST /api/dropbox/link/complete`
+with `{"code": "…"}` exchanges it. Useful when neither the relay page
+nor a registered redirect URI is available.
 
 ### Token lifecycle
 
@@ -212,6 +237,13 @@ the user to copy/paste. `POST /api/dropbox/link/complete` with
 - Unlink calls `/2/auth/token/revoke` then deletes `token.json`.
 - A started link flow expires after ten minutes; start again if the code
   is pasted later than that.
+
+### Maintainer notes
+
+- Register `https://jyao97.github.io/xylocopa/oauth/dropbox/` as a
+  redirect URI on the project Dropbox app.
+- Dropbox production status is required once the app exceeds 50 linked
+  users.
 
 ## MCP tools (read-only)
 

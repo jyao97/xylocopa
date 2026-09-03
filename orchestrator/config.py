@@ -104,11 +104,16 @@ BACKUP_INTERVAL_HOURS = int(os.getenv("BACKUP_INTERVAL_HOURS", "24"))
 MAX_BACKUPS = int(os.getenv("MAX_BACKUPS", "30"))
 
 # Dropbox sync — token.json (0600), config.json and state.db live here.
-# The app key is the OAuth client id of the user's own App-Folder Dropbox
-# app; it is not a secret. Env value only pre-fills the link dialog — the
-# key actually used is the one stored alongside the refresh token.
 DROPBOX_SYNC_DIR = _resolve(os.getenv("DROPBOX_SYNC_DIR", "data/dropbox"))
-DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY", "")
+
+# Project-registered Dropbox app (PKCE public client; the key is not a secret).
+# Filled in once the "xylocopa" app exists; empty means "not configured" until then.
+DROPBOX_DEFAULT_APP_KEY = ""
+DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY", "") or DROPBOX_DEFAULT_APP_KEY
+# Fixed return page registered on the project app. Users who bring their own app can
+# self-host a copy and point this at it, or leave it empty to use direct redirects.
+DROPBOX_RELAY_URL = os.getenv("DROPBOX_RELAY_URL", "https://jyao97.github.io/xylocopa/oauth/dropbox/")
+DROPBOX_USING_DEFAULT_APP = not os.getenv("DROPBOX_APP_KEY", "")
 
 # Auth
 AUTH_TIMEOUT_MINUTES = int(os.getenv("AUTH_TIMEOUT_MINUTES", "30"))

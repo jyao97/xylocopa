@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xylocopa &middot; Dropbox sign-in</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    padding: 2rem 1rem;
+    max-width: 28rem;
+    margin: 0 auto;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e0e0e0; background: #111; }
+    input { background: #222; color: #e0e0e0; border-color: #444; }
+    button { background: #2563eb; }
+    a { color: #60a5fa; }
+    .dim { color: #888; }
+  }
+  h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+  p { margin-bottom: 0.75rem; font-size: 0.875rem; }
+  .dim { color: #666; font-size: 0.75rem; }
+  #status { font-weight: 500; }
+  #ask-form { display: none; margin-top: 1rem; }
+  #ask-form label { display: block; font-size: 0.875rem; margin-bottom: 0.25rem; }
+  #ask-form input {
+    width: 100%; padding: 0.5rem; font-size: 0.875rem;
+    border: 1px solid #ccc; border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+  }
+  #ask-form button {
+    padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500;
+    color: #fff; background: #2563eb; border: none; border-radius: 0.375rem;
+    cursor: pointer;
+  }
+  #idle-info { display: none; }
+</style>
+</head>
+<body>
+  <h1>xylocopa</h1>
+
+  <p id="status">Dropbox sign-in return page</p>
+
+  <!-- Shown when a code/error arrived but we have no stored origin -->
+  <div id="ask-form">
+    <label for="origin-input">Where is your xylocopa?</label>
+    <input id="origin-input" type="url" value="https://localhost:3000"
+           placeholder="https://your-host:3000">
+    <button id="ask-submit" type="button">Continue</button>
+    <p class="dim">Enter the address you normally use to open xylocopa.</p>
+  </div>
+
+  <!-- Shown when someone opens the page directly -->
+  <div id="idle-info">
+    <p>This page helps xylocopa complete Dropbox sign-in.
+       It stores only your instance address in this browser's localStorage
+       so it can send you back after Dropbox approval.</p>
+    <p class="dim">
+      Source: <a href="https://github.com/jyao97/xylocopa">github.com/jyao97/xylocopa</a>
+    </p>
+  </div>
+
+  <script type="module">
+    import { STORAGE_KEY, isAllowedReturn, decide } from "./relay.js";
+
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* blocked */ }
+
+    const result = decide({
+      hash: window.location.hash,
+      search: window.location.search,
+      storage,
+    });
+
+    const statusEl = document.getElementById("status");
+
+    if (result.action === "start") {
+      let host;
+      try { host = new URL(result.origin).host; } catch { host = result.origin; }
+      statusEl.textContent = "Redirecting to Dropbox…";
+      window.location.replace(result.authorize);
+
+    } else if (result.action === "return") {
+      let host;
+      try { host = new URL(result.url).host; } catch { host = "your instance"; }
+      statusEl.textContent = "Returning to " + host + "…";
+      window.location.replace(result.url);
+
+    } else if (result.action === "ask") {
+      statusEl.textContent = "Dropbox authorized — where should we send the result?";
+      const form = document.getElementById("ask-form");
+      const input = document.getElementById("origin-input");
+      const btn = document.getElementById("ask-submit");
+      form.style.display = "block";
+
+      btn.addEventListener("click", function () {
+        const origin = input.value.replace(/\/+$/, "");
+        if (!isAllowedReturn(origin)) {
+          statusEl.textContent = "Please enter a valid https:// address (or http:// for localhost).";
+          return;
+        }
+        // Store for future use (best-effort)
+        if (storage) {
+          try { storage.setItem(STORAGE_KEY, origin); } catch { /* ignore */ }
+        }
+        const url = origin + "/api/dropbox/callback" + result.query;
+        statusEl.textContent = "Returning…";
+        window.location.replace(url);
+      });
+
+    } else {
+      // idle
+      document.getElementById("idle-info").style.display = "block";
+    }
+  </script>
+</body>
+</html>

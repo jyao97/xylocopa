@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 import httpx
 
-from config import DROPBOX_APP_KEY, DROPBOX_SYNC_DIR
+from config import DROPBOX_APP_KEY, DROPBOX_RELAY_URL, DROPBOX_SYNC_DIR, DROPBOX_USING_DEFAULT_APP
 
 from .auth import (
     DropboxTokenProvider,
@@ -494,6 +494,19 @@ def _account_from_token() -> dict | None:
 # ── Status ───────────────────────────────────────────────────────────
 
 
+def _compute_link_mode() -> str:
+    """Determine the link mode from config: ``relay``, ``direct``, or ``none``."""
+    if not DROPBOX_APP_KEY:
+        return "none"
+    if DROPBOX_USING_DEFAULT_APP and DROPBOX_RELAY_URL:
+        return "relay"
+    if not DROPBOX_USING_DEFAULT_APP and not DROPBOX_RELAY_URL:
+        return "direct"
+    if not DROPBOX_USING_DEFAULT_APP and DROPBOX_RELAY_URL:
+        return "relay"
+    return "direct"
+
+
 def get_status() -> dict:
     """Return the full sync status. Must be cheap (no network)."""
     store = get_token_store()
@@ -570,6 +583,8 @@ def get_status() -> dict:
         "account": account,
         "space": space,
         "app_key": app_key or None,
+        "link_mode": _compute_link_mode(),
+        "relay_url": DROPBOX_RELAY_URL or None,
         "config": get_runtime_config(),
         "next_run_at": next_run,
         "current_run": current_run,
@@ -629,6 +644,7 @@ def get_project_status(name: str, project_dict: dict | None = None) -> dict:
     return {
         "linked": linked,
         "app_key": app_key or None,
+        "link_mode": _compute_link_mode(),
         "account_email": account_email,
         "paused": _cfg.paused,
         "enabled": enabled,

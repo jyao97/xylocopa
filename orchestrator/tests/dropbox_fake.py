@@ -50,6 +50,7 @@ class FakeDropboxServer:
         self._finish_batch_always_pending = False  # never complete (for timeout test)
         self._finish_batch_auth_fail_count = 0  # number of 401s to return on finish_batch
         self._oauth_codes: dict[str, dict] = {}  # code → token data
+        self._last_token_form: dict[str, str] | None = None  # last POST /oauth2/token form
         self._list_folder_cursors: dict[str, dict] = {}
         self._verify_content_hash = True  # verify content_hash in commits when present
         self._space_usage: dict[str, Any] | None = None  # custom space usage response
@@ -203,6 +204,7 @@ class FakeDropboxServer:
 
     def _handle_oauth_token(self, request: httpx.Request, body_bytes: bytes) -> httpx.Response:
         params = dict(p.split("=", 1) for p in body_bytes.decode().split("&") if "=" in p)
+        self._last_token_form = params
         grant_type = params.get("grant_type")
 
         if grant_type == "authorization_code":

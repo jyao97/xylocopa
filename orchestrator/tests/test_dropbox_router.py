@@ -98,8 +98,14 @@ async def test_link_start_validation(client, sync_dir):
     resp = await client.post("/api/dropbox/link/start", json={"app_key": "short"})
     assert resp.status_code == 400
 
-    resp2 = await client.post("/api/dropbox/link/start", json={"app_key": ""})
-    assert resp2.status_code == 400
+    # An empty app_key means "use the project's shipped key" (relay mode).
+    resp2 = await client.post(
+        "/api/dropbox/link/start",
+        json={"app_key": ""},
+        headers={"Origin": "https://localhost:3000"},
+    )
+    assert resp2.status_code == 200
+    assert resp2.json()["mode"] == "relay"
 
 
 @pytest.mark.anyio

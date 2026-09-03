@@ -2,32 +2,40 @@ import { useState, useEffect, useCallback } from "react";
 import { startDropboxLink, completeDropboxLink } from "../../lib/api";
 
 /**
- * Three-step Dropbox link flow:
- *  1. Enter App key -> startDropboxLink -> authorize URL
- *  2. Open authorize URL, paste code -> completeDropboxLink -> account
- *  3. Connected confirmation -> Done
+ * Dropbox link modal with redirect-based flow (default) and paste-code fallback.
+ *
+ * Props:
+ *   open           - boolean
+ *   appKey         - string|falsy — when falsy, shows developer setup instructions
+ *   returnTo       - string — relative path for redirect after Dropbox approval
+ *   onClose()      - close handler
+ *   onLinked(account) - called after successful code-flow link
  */
-export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinked }) {
-  const [step, setStep] = useState(1);
-  const [appKey, setAppKey] = useState(initialAppKey || "");
+export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLinked }) {
+  const [mode, setMode] = useState("redirect"); // "redirect" | "code"
   const [authorizeUrl, setAuthorizeUrl] = useState("");
+  const [redirectUri, setRedirectUri] = useState("");
   const [code, setCode] = useState("");
   const [account, setAccount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [step, setStep] = useState("default"); // "default" | "code" | "connected"
+  const [copied, setCopied] = useState(false);
 
   // Reset when re-opened
   useEffect(() => {
     if (open) {
-      setStep(1);
-      setAppKey(initialAppKey || "");
+      setMode("redirect");
       setAuthorizeUrl("");
+      setRedirectUri("");
       setCode("");
       setAccount(null);
       setBusy(false);
       setError("");
+      setStep("default");
+      setCopied(false);
     }
-  }, [open, initialAppKey]);
+  }, [open]);
 
   // Escape to close
   useEffect(() => {
@@ -46,23 +54,47 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  const handleStartLink = useCallback(async () => {
-    const trimmed = appKey.trim();
-    if (!trimmed) return;
+  const computedRedirectUri = typeof window !== "undefined"
+    ? `${window.location.origin}/api/dropbox/callback`
+    : "/api/dropbox/callback";
+
+  const handleCopyUri = useCallback(() => {
+    navigator.clipboard?.writeText(computedRedirectUri);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [computedRedirectUri]);
+
+  // Redirect flow: Continue to Dropbox
+  const handleContinueRedirect = useCallback(async () => {
     setBusy(true);
     setError("");
     try {
-      const res = await startDropboxLink(trimmed);
+      const res = await startDropboxLink({ mode: "redirect", returnTo });
+      if (res.redirect_uri) setRedirectUri(res.redirect_uri);
+      window.location.assign(res.authorize_url);
+    } catch (err) {
+      setError(err.message || "Failed to start link flow");
+      setBusy(false);
+    }
+  }, [returnTo]);
+
+  // Code flow: start
+  const handleStartCode = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await startDropboxLink({ mode: "code" });
       setAuthorizeUrl(res.authorize_url);
-      setStep(2);
+      setStep("code");
     } catch (err) {
       setError(err.message || "Failed to start link flow");
     } finally {
       setBusy(false);
     }
-  }, [appKey]);
+  }, []);
 
-  const handleCompleteLink = useCallback(async () => {
+  // Code flow: submit code
+  const handleCompleteCode = useCallback(async () => {
     const trimmed = code.trim();
     if (!trimmed) return;
     setBusy(true);
@@ -70,7 +102,7 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
     try {
       const res = await completeDropboxLink(trimmed);
       setAccount(res.account);
-      setStep(3);
+      setStep("connected");
     } catch (err) {
       setError(err.message || "Authorization failed");
     } finally {
@@ -85,25 +117,60 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
 
   if (!open) return null;
 
+  // Not configured view
+  if (!appKey) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+        <div className="bg-surface rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-card">
+          <h3 className="text-lg font-bold text-heading">Dropbox app key not configured</h3>
+          <div className="text-xs text-dim space-y-2">
+            <p>One-time developer setup:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Go to <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer" className="text-accent underline">dropbox.com/developers/apps</a></li>
+              <li>Create app: Scoped access, App folder</li>
+              <li>Permissions tab: enable files.metadata.read, files.content.read, files.content.write, account_info.read</li>
+              <li>OAuth 2 Redirect URIs: add the URI below (add one per origin, e.g. laptop and phone)</li>
+              <li>Copy the App key, set <code className="text-heading font-mono">DROPBOX_APP_KEY=&lt;key&gt;</code> in <code className="text-heading font-mono">.env</code> and restart</li>
+            </ol>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={computedRedirectUri}
+              data-testid="redirect-uri"
+              className="flex-1 min-w-0 px-2 py-1 text-xs rounded bg-input text-body border border-divider font-mono truncate"
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              type="button"
+              onClick={handleCopyUri}
+              className="shrink-0 px-2 py-1 rounded text-xs font-medium accent-tint-15 text-accent hover:accent-tint-25 transition-colors"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full min-h-[44px] rounded-lg bg-input hover:bg-elevated text-body text-sm transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-surface rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-card">
-        {step === 1 && (
+        {step === "default" && (
           <>
             <h3 className="text-lg font-bold text-heading">Connect Dropbox</h3>
-            <div className="text-xs text-dim space-y-1">
-              <p>1. Go to <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer" className="text-accent underline">dropbox.com/developers/apps</a></p>
-              <p>2. Create app: Scoped access, App folder</p>
-              <p>3. Permissions: files.metadata.read, files.content.read, files.content.write, account_info.read</p>
-              <p>4. Submit, then copy the App key</p>
-            </div>
-            <input
-              type="text"
-              value={appKey}
-              onChange={(e) => setAppKey(e.target.value)}
-              placeholder="App key"
-              className="w-full px-3 py-2 text-sm rounded-lg bg-input text-heading border border-divider placeholder-hint"
-            />
+            <p className="text-sm text-body">
+              You'll be sent to Dropbox to sign in and approve access to its app folder, then brought back here.
+            </p>
             {error && <p className="text-xs text-danger">{error}</p>}
             <div className="flex gap-3">
               <button
@@ -115,21 +182,32 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
               </button>
               <button
                 type="button"
-                disabled={busy || !appKey.trim()}
-                onClick={handleStartLink}
+                disabled={busy}
+                onClick={handleContinueRedirect}
                 className="flex-1 min-h-[44px] rounded-lg bg-accent hover:opacity-90 text-accent-ink font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {busy ? "Connecting..." : "Continue"}
+                {busy ? "Redirecting..." : "Continue to Dropbox"}
               </button>
             </div>
+            <p className="text-faint text-[11px]">
+              Redirect URI: {redirectUri || computedRedirectUri}
+            </p>
+            <button
+              type="button"
+              onClick={handleStartCode}
+              disabled={busy}
+              className="text-xs text-accent hover:underline disabled:opacity-50"
+            >
+              Use a code instead
+            </button>
           </>
         )}
 
-        {step === 2 && (
+        {step === "code" && (
           <>
             <h3 className="text-lg font-bold text-heading">Authorize</h3>
             <p className="text-xs text-dim">
-              Click the button below to authorize in Dropbox, then paste the code you receive.
+              Open the Dropbox authorization page, approve access, then paste the code you receive.
             </p>
             <button
               type="button"
@@ -138,25 +216,6 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
             >
               Open Dropbox Authorization
             </button>
-            <div className="text-xs text-dim space-y-1">
-              <p>If the button didn't open a new tab, copy this URL:</p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={authorizeUrl}
-                  className="flex-1 min-w-0 px-2 py-1 text-xs rounded bg-input text-body border border-divider font-mono truncate"
-                  onFocus={(e) => e.target.select()}
-                />
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard?.writeText(authorizeUrl)}
-                  className="shrink-0 px-2 py-1 rounded text-xs font-medium accent-tint-15 text-accent hover:accent-tint-25 transition-colors"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
             <input
               type="text"
               value={code}
@@ -176,7 +235,7 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
               <button
                 type="button"
                 disabled={busy || !code.trim()}
-                onClick={handleCompleteLink}
+                onClick={handleCompleteCode}
                 className="flex-1 min-h-[44px] rounded-lg bg-accent hover:opacity-90 text-accent-ink font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {busy ? "Verifying..." : "Submit"}
@@ -185,7 +244,7 @@ export default function DropboxLinkModal({ open, initialAppKey, onClose, onLinke
           </>
         )}
 
-        {step === 3 && (
+        {step === "connected" && (
           <>
             <h3 className="text-lg font-bold text-heading">Connected</h3>
             <p className="text-sm text-body">

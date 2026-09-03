@@ -48,6 +48,37 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
     return () => { mountedRef.current = false; };
   }, [fetchStatus]);
 
+  // Handle return from Dropbox redirect (dropbox=linked|error in query params)
+  const returnHandled = useRef(false);
+  useEffect(() => {
+    if (returnHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const dbx = params.get("dropbox");
+    if (!dbx) return;
+    returnHandled.current = true;
+
+    // Capture message before stripping
+    const dbxMessage = params.get("dropbox_message") || "Dropbox authorization failed";
+
+    // Strip dropbox params from URL
+    params.delete("dropbox");
+    params.delete("dropbox_message");
+    const qs = params.toString();
+    const clean = window.location.pathname + (qs ? `?${qs}` : "");
+    window.history.replaceState(null, "", clean);
+
+    if (dbx === "linked") {
+      fetchStatus().then(() => {
+        if (mountedRef.current && !project?.dropbox_sync) {
+          setPickerSyncAfterSave(true);
+          setShowPicker(true);
+        }
+      });
+    } else if (dbx === "error") {
+      setError(dbxMessage);
+    }
+  }, [fetchStatus, project?.dropbox_sync]);
+
   // WS events: refetch on dropbox_update or project_update for this project
   useWsEvent(
     useCallback(
@@ -259,7 +290,8 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
       {/* Link modal */}
       <DropboxLinkModal
         open={showLink}
-        initialAppKey={status?.app_key || ""}
+        appKey={status?.app_key || ""}
+        returnTo={window.location.pathname}
         onClose={() => setShowLink(false)}
         onLinked={handleLinked}
       />

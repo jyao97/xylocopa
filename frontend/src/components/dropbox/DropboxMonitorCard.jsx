@@ -37,6 +37,32 @@ export default function DropboxMonitorCard() {
     loadStatus();
   }, [loadStatus]);
 
+  // Handle return from Dropbox redirect (dropbox=linked|error in query params)
+  const returnHandled = useRef(false);
+  useEffect(() => {
+    if (returnHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const dbx = params.get("dropbox");
+    if (!dbx) return;
+    returnHandled.current = true;
+
+    // Capture message before stripping
+    const dbxMessage = params.get("dropbox_message") || "Dropbox authorization failed";
+
+    // Strip dropbox params from URL
+    params.delete("dropbox");
+    params.delete("dropbox_message");
+    const qs = params.toString();
+    const clean = window.location.pathname + (qs ? `?${qs}` : "");
+    window.history.replaceState(null, "", clean);
+
+    if (dbx === "linked") {
+      loadStatus();
+    } else if (dbx === "error") {
+      setError(dbxMessage);
+    }
+  }, [loadStatus]);
+
   // Visibility-gated polling: 3s while current_run, else 30s
   useEffect(() => {
     if (!visible) {
@@ -415,7 +441,8 @@ export default function DropboxMonitorCard() {
       {linkOpen && (
         <DropboxLinkModal
           open={linkOpen}
-          initialAppKey={status?.app_key || ""}
+          appKey={status?.app_key || ""}
+          returnTo="/monitor"
           onClose={() => setLinkOpen(false)}
           onLinked={handleLinked}
         />

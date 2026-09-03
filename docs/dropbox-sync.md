@@ -33,7 +33,7 @@ All under `DROPBOX_SYNC_DIR` (default `data/dropbox/`, gitignored with the rest 
 | Key | Default | Meaning |
 |---|---|---|
 | `paused` | `false` | "Pause" sets it (the current run stops after its in-flight batch); "Resume" clears it. Linking alone makes the scheduler active. |
-| `interval_hours` | `1` | Scheduler interval. |
+| `interval_minutes` | `5` | Scheduled check interval (1--1440). Replaces the former `interval_hours` (migrated automatically on load: minutes = hours * 60). |
 | `concurrency` | `4` | Concurrent uploads. |
 | `chunk_mb` | `8` | Upload-session chunk size (multiple of 4 MiB). |
 | `max_file_mb` | `2048` | Files larger than this are skipped (reported as `too_large`). |
@@ -62,6 +62,9 @@ Matching uses `pathspec` (`gitwildmatch`).
 
 ## Upload engine
 
+- Scheduled checks run every `interval_minutes` (default 5) and upload only
+  when something changed; a run row is recorded only when there was work.
+  The first check runs 15 s after startup.
 - Scan runs in a worker thread (`asyncio.to_thread`) with `os.scandir`, never
   following symlinks.
 - Diff against `state.db`: unchanged `(size, mtime_ns)` → skip without reading;

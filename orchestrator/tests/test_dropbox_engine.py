@@ -729,8 +729,8 @@ async def test_config_update_validation(tmp_path, sync_dir):
     from dropbox_sync import engine
 
     # Valid update
-    result = engine.update_runtime_config(interval_hours=2, concurrency=2)
-    assert result["interval_hours"] == 2
+    result = engine.update_runtime_config(interval_minutes=15, concurrency=2)
+    assert result["interval_minutes"] == 15
     assert result["concurrency"] == 2
 
     # Invalid chunk_mb (not multiple of 4)
@@ -741,9 +741,13 @@ async def test_config_update_validation(tmp_path, sync_dir):
     with pytest.raises(ValueError, match="chunk_mb"):
         engine.update_runtime_config(chunk_mb=148)
 
-    # interval_hours < 1
-    with pytest.raises(ValueError, match="interval_hours"):
-        engine.update_runtime_config(interval_hours=0)
+    # interval_minutes < 1
+    with pytest.raises(ValueError, match="interval_minutes"):
+        engine.update_runtime_config(interval_minutes=0)
+
+    # interval_minutes > 1440
+    with pytest.raises(ValueError, match="interval_minutes"):
+        engine.update_runtime_config(interval_minutes=1441)
 
 
 @pytest.mark.anyio
@@ -1029,3 +1033,215 @@ def test_enqueue_never_synced_queues_only_unsynced_enabled_projects(monkeypatch,
     # Idempotent
     engine._enqueue_never_synced()
     assert engine._queue == ["b"]
+
+
+# ── Config migration ──────────────────────────────────────────────────
+
+
+def test_config_migration_hours_to_minutes(tmp_path):
+    """Loading config.json with interval_hours but no interval_minutes migrates correctly."""
+    from dropbox_sync import engine
+
+    sd = str(tmp_path / "dbx_mig")
+    os.makedirs(sd, mode=0o700, exist_ok=True)
+
+    engine.reset_for_tests(sd)
+
+    config_path = os.path.join(sd, "config.json")
+    with open(config_path, "w") as f:
+        json.dump({"interval_hours": 2, "concurrency": 4}, f)
+
+    cfg = engine._load_config()
+    assert cfg.interval_minutes == 120
+
+
+def test_config_interval_minutes_takes_precedence(tmp_path):
+    """When both interval_minutes and interval_hours are present, minutes wins."""
+    from dropbox_sync import engine
+
+    sd = str(tmp_path / "dbx_mig2")
+    os.makedirs(sd, mode=0o700, exist_ok=True)
+
+    engine.reset_for_tests(sd)
+
+    config_path = os.path.join(sd, "config.json")
+    with open(config_path, "w") as f:
+        json.dump({"interval_minutes": 30, "interval_hours": 2, "concurrency": 4}, f)
+
+    cfg = engine._load_config()
+    assert cfg.interval_minutes == 30
+
+
+# ── interval_hours compat in update_runtime_config ────────────────────
+
+
+@pytest.mark.anyio
+async def test_update_config_interval_hours_compat(tmp_path, sync_dir):
+    """update_runtime_config converts interval_hours to interval_minutes."""
+    from dropbox_sync import engine
+
+    result = engine.update_runtime_config(interval_hours=2)
+    assert result["interval_minutes"] == 120
+    assert "interval_hours" not in result
+
+
+# ── run_scheduled_check ───────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_run_scheduled_check_one_changed(tmp_path, sync_dir, fake, client_for_fake):
+    """run_scheduled_check with two projects where only one has a new file."""
+    from dropbox_sync import engine
+    engine.set_client_factory(client_for_fake)
+
+    # Create two project dirs
+    proj_a = _make_project(tmp_path, "proj_check_a", {"a.txt": "hello"})
+    proj_b = _make_project(tmp_path, "proj_check_b", {"b.txt": "world"})
+
+    # First: do an initial sync of both so they have a baseline
+    state = engine.get_state()
+    for proj_info in [
+        {"name": "proj_check_a", "path": proj_a, "dropbox_folders": None, "dropbox_ignore": None},
+        {"name": "proj_check_b", "path": proj_b, "dropbox_folders": None, "dropbox_ignore": None},
+    ]:
+        run_id = state.run_start("test")
+        progress = engine.RunProgress(run_id=run_id, started_at=engine._utcnow())
+        await engine.sync_project(proj_info, progress)
+        state.run_finish(run_id, "ok")
+
+    initial_runs = state.runs_recent(100)
+    initial_run_count = len(initial_runs)
+
+    # Add a new file only to proj_check_a
+    with open(os.path.join(proj_a, "new.txt"), "w") as f:
+        f.write("new content")
+
+    # Mock _active_projects_from_db to return our two projects
+    import unittest.mock as mock
+    active = [
+        {"name": "proj_check_a", "path": proj_a, "dropbox_folders": None, "dropbox_ignore": None},
+        {"name": "proj_check_b", "path": proj_b, "dropbox_folders": None, "dropbox_ignore": None},
+    ]
+    with mock.patch.object(engine, "_active_projects_from_db", return_value=active):
+        changed = await engine.run_scheduled_check()
+
+    assert changed == ["proj_check_a"]
+
+    # Should have created exactly one new run row
+    all_runs = state.runs_recent(100)
+    assert len(all_runs) == initial_run_count + 1
+
+    # last_check should reflect the result
+    assert engine._last_check is not None
+    assert engine._last_check["changed"] == ["proj_check_a"]
+    assert engine._last_check["at"] is not None
+
+    # Both projects should have last_checked timestamps
+    assert "proj_check_a" in engine._last_checked
+    assert "proj_check_b" in engine._last_checked
+
+
+@pytest.mark.anyio
+async def test_run_scheduled_check_no_changes(tmp_path, sync_dir, fake, client_for_fake):
+    """run_scheduled_check with no changes returns [] and creates no run row."""
+    from dropbox_sync import engine
+    engine.set_client_factory(client_for_fake)
+
+    proj_path = _make_project(tmp_path, "proj_nochg", {"x.txt": "unchanged"})
+
+    # Initial sync
+    state = engine.get_state()
+    proj_info = {"name": "proj_nochg", "path": proj_path, "dropbox_folders": None, "dropbox_ignore": None}
+    run_id = state.run_start("test")
+    progress = engine.RunProgress(run_id=run_id, started_at=engine._utcnow())
+    await engine.sync_project(proj_info, progress)
+    state.run_finish(run_id, "ok")
+
+    initial_runs = state.runs_recent(100)
+    initial_run_count = len(initial_runs)
+
+    # Run scheduled check (nothing changed)
+    import unittest.mock as mock
+    active = [{"name": "proj_nochg", "path": proj_path, "dropbox_folders": None, "dropbox_ignore": None}]
+    with mock.patch.object(engine, "_active_projects_from_db", return_value=active):
+        changed = await engine.run_scheduled_check()
+
+    assert changed == []
+
+    # No new run row
+    all_runs = state.runs_recent(100)
+    assert len(all_runs) == initial_run_count
+
+    # last_check advances
+    assert engine._last_check is not None
+    assert engine._last_check["changed"] == []
+    assert engine._last_check["at"] is not None
+
+
+@pytest.mark.anyio
+async def test_manual_sync_always_records_run(tmp_path, sync_dir, fake, client_for_fake):
+    """request_sync (manual) always records a run even with 0 uploads."""
+    from dropbox_sync import engine
+    engine.set_client_factory(client_for_fake)
+
+    proj_path = _make_project(tmp_path, "proj_manual", {"m.txt": "hello"})
+
+    # Initial sync to establish baseline
+    state = engine.get_state()
+    proj_info = {"name": "proj_manual", "path": proj_path, "dropbox_folders": None, "dropbox_ignore": None}
+    run_id = state.run_start("test")
+    progress = engine.RunProgress(run_id=run_id, started_at=engine._utcnow())
+    await engine.sync_project(proj_info, progress)
+    state.run_finish(run_id, "ok")
+
+    initial_run_count = len(state.runs_recent(100))
+
+    # Manually sync again (nothing changed) via _run_projects
+    await engine._run_projects([proj_info], "manual")
+
+    all_runs = state.runs_recent(100)
+    assert len(all_runs) == initial_run_count + 1
+
+
+# ── Status shape tests ───────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_status_includes_last_check(tmp_path, sync_dir):
+    """get_status() includes last_check with correct shape."""
+    from dropbox_sync import engine
+
+    # Before any check, last_check should have at=None
+    status = engine.get_status()
+    assert "last_check" in status
+    assert status["last_check"]["at"] is None
+    assert status["last_check"]["changed"] == []
+
+    # Simulate a check
+    engine._last_check = {"at": "2026-09-03T12:00:00Z", "changed": ["proj1"]}
+    status = engine.get_status()
+    assert status["last_check"]["at"] == "2026-09-03T12:00:00Z"
+    assert status["last_check"]["changed"] == ["proj1"]
+
+
+@pytest.mark.anyio
+async def test_project_status_up_to_date(tmp_path, sync_dir):
+    """get_project_status includes last_checked_at and up_to_date."""
+    from dropbox_sync import engine
+
+    # Before any check: up_to_date is False
+    status = engine.get_project_status("someprojx")
+    assert status["last_checked_at"] is None
+    assert status["up_to_date"] is False
+
+    # After a clean check
+    engine._last_checked["someprojx"] = "2026-09-03T12:00:00Z"
+    engine._last_check = {"at": "2026-09-03T12:00:00Z", "changed": []}
+    status = engine.get_project_status("someprojx")
+    assert status["last_checked_at"] == "2026-09-03T12:00:00Z"
+    assert status["up_to_date"] is True
+
+    # After a check that found changes
+    engine._last_check = {"at": "2026-09-03T12:00:00Z", "changed": ["someprojx"]}
+    status = engine.get_project_status("someprojx")
+    assert status["up_to_date"] is False

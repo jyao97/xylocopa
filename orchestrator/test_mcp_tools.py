@@ -292,7 +292,7 @@ def main() -> int:
 
         # Write a minimal config.json
         with open(os.path.join(dropbox_dir, "config.json"), "w") as f:
-            json.dump({"interval_hours": 6, "paused": False}, f)
+            json.dump({"interval_minutes": 15, "paused": False}, f)
 
         # Create state.db via SyncState (allowed in the test script)
         from dropbox_sync.state import SyncState
@@ -301,7 +301,7 @@ def main() -> int:
 
         out = mcp.dropbox_get()
         _expect_in("dropbox_get: not linked", "not linked", out)
-        _expect_in("dropbox_get: shows interval", "6h", out)
+        _expect_in("dropbox_get: shows interval", "15 min", out)
 
         # ----- dropbox_count: scan a temp project -----
         count_proj_path = os.path.join(temp_root, "count-proj")

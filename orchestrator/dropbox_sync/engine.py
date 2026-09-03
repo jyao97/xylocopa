@@ -49,7 +49,7 @@ _PENDING_MAX_AGE_S = 6 * 86400
 
 @dataclass
 class SyncConfig:
-    interval_hours: int = 1
+    interval_minutes: int = 5
     concurrency: int = 4
     chunk_mb: int = 8
     max_file_mb: int = 2048
@@ -77,10 +77,15 @@ def _load_config() -> SyncConfig:
         try:
             with open(p) as f:
                 data = json.load(f)
-            for k in ("interval_hours", "concurrency", "chunk_mb", "max_file_mb",
+            for k in ("concurrency", "chunk_mb", "max_file_mb",
                        "max_files_per_project", "bandwidth_kbps"):
                 if k in data:
                     setattr(cfg, k, int(data[k]))
+            # interval_minutes: migrate from interval_hours if needed
+            if "interval_minutes" in data:
+                cfg.interval_minutes = max(1, min(1440, int(data["interval_minutes"])))
+            elif "interval_hours" in data:
+                cfg.interval_minutes = max(1, min(1440, int(data["interval_hours"]) * 60))
             for k in ("allowlist_mode", "prune", "paused"):
                 if k in data:
                     setattr(cfg, k, bool(data[k]))
@@ -94,7 +99,7 @@ def _load_config() -> SyncConfig:
 def _save_config(cfg: SyncConfig) -> None:
     os.makedirs(DROPBOX_SYNC_DIR, mode=0o700, exist_ok=True)
     data = {
-        "interval_hours": cfg.interval_hours,
+        "interval_minutes": cfg.interval_minutes,
         "concurrency": cfg.concurrency,
         "chunk_mb": cfg.chunk_mb,
         "max_file_mb": cfg.max_file_mb,
@@ -173,6 +178,13 @@ _dry_run_cache: dict[str, dict] = {}  # project -> last complete result
 # Next scheduled run time (for status display)
 _next_run_at: str | None = None
 
+# Delay before the first scheduled check after startup (seconds)
+FIRST_CHECK_DELAY_SECONDS = 15
+
+# Last scheduled check result (for status display)
+_last_check: dict | None = None  # {"at": iso, "changed": [names]}
+_last_checked: dict[str, str] = {}  # project_name -> iso timestamp
+
 
 def get_state() -> SyncState:
     global _state
@@ -232,6 +244,7 @@ def reset_for_tests(sync_dir: str) -> None:
     global _state, _token_store, _http_client, _dbx_client, _throttle, _link_flow
     global _cfg, _current, _queue, _stop_requested, _space_cache, _space_cache_at
     global _account_cache, _dry_run_jobs, _dry_run_cache, _next_run_at, _client_factory
+    global _last_check, _last_checked
 
     if _state is not None:
         try:
@@ -255,6 +268,8 @@ def reset_for_tests(sync_dir: str) -> None:
     _dry_run_jobs = {}
     _dry_run_cache = {}
     _next_run_at = None
+    _last_check = None
+    _last_checked = {}
 
     # Patch DROPBOX_SYNC_DIR at module level in config
     import config
@@ -271,7 +286,7 @@ def reset_for_tests(sync_dir: str) -> None:
 
 def get_runtime_config() -> dict:
     return {
-        "interval_hours": _cfg.interval_hours,
+        "interval_minutes": _cfg.interval_minutes,
         "concurrency": _cfg.concurrency,
         "chunk_mb": _cfg.chunk_mb,
         "max_file_mb": _cfg.max_file_mb,
@@ -286,7 +301,20 @@ def get_runtime_config() -> dict:
 
 def update_runtime_config(**fields: Any) -> dict:
     """Validate and apply config changes. Returns the full config dict."""
-    for k in ("interval_hours", "concurrency", "max_file_mb", "max_files_per_project"):
+    # interval_hours (compat) → convert to minutes
+    if "interval_hours" in fields:
+        v = int(fields.pop("interval_hours"))
+        if v < 1:
+            raise ValueError("interval_hours must be >= 1")
+        fields.setdefault("interval_minutes", v * 60)
+
+    if "interval_minutes" in fields:
+        v = int(fields["interval_minutes"])
+        if v < 1 or v > 1440:
+            raise ValueError("interval_minutes must be between 1 and 1440")
+        _cfg.interval_minutes = v
+
+    for k in ("concurrency", "max_file_mb", "max_files_per_project"):
         if k in fields:
             v = int(fields[k])
             if v < 1:
@@ -584,6 +612,8 @@ def get_status() -> dict:
     # next_run_at is null when not linked or paused
     next_run = _next_run_at if (linked and not _cfg.paused) else None
 
+    last_check = _last_check if _last_check is not None else {"at": None, "changed": []}
+
     return {
         "linked": linked,
         "account": account,
@@ -595,6 +625,7 @@ def get_status() -> dict:
         "next_run_at": next_run,
         "current_run": current_run,
         "last_run": last_run,
+        "last_check": last_check,
         "projects": projects_list,
         "queue": list(_queue),
         "recent_errors": recent_errors,
@@ -647,6 +678,14 @@ def get_project_status(name: str, project_dict: dict | None = None) -> dict:
             "bytes_done": _current.bytes_done,
         }
 
+    last_checked_at = _last_checked.get(name)
+    last_check_changed = (_last_check or {}).get("changed", [])
+    up_to_date = (
+        last_checked_at is not None
+        and name not in last_check_changed
+        and not (run_active and _current is not None and _current.project == name)
+    )
+
     return {
         "linked": linked,
         "app_key": app_key or None,
@@ -665,6 +704,8 @@ def get_project_status(name: str, project_dict: dict | None = None) -> dict:
         "queued": queued,
         "run_active": run_active,
         "current": current,
+        "last_checked_at": last_checked_at,
+        "up_to_date": up_to_date,
     }
 
 
@@ -1348,6 +1389,133 @@ async def on_project_deleted(name: str) -> None:
         logger.warning("Failed to forget sync state for %s", name, exc_info=True)
 
 
+# ── Scheduled check & run helpers ───────────────────────────────────
+
+
+async def _run_projects(projects: list[dict], trigger: str) -> int:
+    """Run sync over *projects*, recording a run row.  Returns the run_id."""
+    global _current
+
+    state = get_state()
+    run_id = await asyncio.to_thread(state.run_start, trigger)
+
+    _current = RunProgress(
+        run_id=run_id,
+        trigger=trigger,
+        started_at=_utcnow(),
+        projects_total=len(projects),
+    )
+
+    await _emit("run_started")
+
+    error_sample = None
+    run_status = "ok"
+
+    try:
+        for proj in projects:
+            if _stop_requested:
+                run_status = "cancelled"
+                break
+            try:
+                await sync_project(proj, _current)
+            except DropboxAuthError as exc:
+                run_status = "error"
+                error_sample = f"Dropbox rejected the request: {exc.summary}"[:500]
+                _current.errors += 1
+                try:
+                    await asyncio.to_thread(
+                        state.project_stats_update, proj["name"], last_error=error_sample,
+                    )
+                    await asyncio.to_thread(state.error_add, proj["name"], None, error_sample)
+                except Exception:
+                    logger.debug("failed to record auth error", exc_info=True)
+                break
+            except Exception as exc:
+                logger.exception("sync_project %s failed", proj["name"])
+                error_sample = str(exc)[:200]
+                _current.errors += 1
+    finally:
+        await asyncio.to_thread(state.run_finish, run_id, run_status, error_sample)
+        _current = None
+        await _emit("run_finished")
+
+    return run_id
+
+
+async def run_scheduled_check() -> list[str]:
+    """Check every enabled project for changes; upload only those that changed.
+
+    Returns a list of project names that had work (and were synced).
+    """
+    global _last_check, _last_checked
+
+    projects = await asyncio.to_thread(_active_projects_from_db)
+    if not projects:
+        _last_check = {"at": _utcnow(), "changed": []}
+        await _emit("checked")
+        return []
+
+    state = get_state()
+    changed_projects: list[dict] = []
+    changed_names: list[str] = []
+    now_iso = _utcnow()
+
+    for proj in projects:
+        name = proj["name"]
+        path = proj["path"]
+
+        if not os.path.isdir(path):
+            _last_checked[name] = now_iso
+            continue
+
+        folders_raw = proj.get("dropbox_folders")
+        folders = json.loads(folders_raw) if folders_raw else None
+        ignore_text = proj.get("dropbox_ignore")
+
+        allowlist_exts = set(_cfg.allowlist_exts) if _cfg.allowlist_mode else None
+        rules = IgnoreRules.build(
+            path, folders=folders, extra_rules=ignore_text,
+            allowlist_exts=allowlist_exts,
+        )
+
+        entries, _, _ = await asyncio.to_thread(
+            scan_project, path, rules,
+            max_file_bytes=_cfg.max_file_mb * MiB,
+        )
+
+        known = await asyncio.to_thread(state.get_project_files, name)
+        changed, deleted, _ = diff_entries(known, entries)
+
+        pending = await asyncio.to_thread(state.pending_all, name)
+
+        has_work = (
+            bool(changed)
+            or (_cfg.prune and bool(deleted))
+            or bool(pending)
+        )
+
+        _last_checked[name] = now_iso
+
+        if has_work:
+            changed_projects.append(proj)
+            changed_names.append(name)
+
+    _last_check = {"at": now_iso, "changed": list(changed_names)}
+
+    if not changed_projects:
+        await _emit("checked")
+        return []
+
+    # Refresh account info before the run
+    try:
+        await refresh_account_info()
+    except Exception:
+        logger.debug("Pre-run account refresh failed", exc_info=True)
+
+    await _run_projects(changed_projects, "schedule")
+    return changed_names
+
+
 # ── Main sync loop ──────────────────────────────────────────────────
 
 
@@ -1403,9 +1571,12 @@ async def run_sync_loop() -> None:
     except Exception:
         logger.warning("Failed to mark interrupted runs", exc_info=True)
 
+    first_tick = True
+
     while True:
         try:
-            interval = _cfg.interval_hours * 3600
+            interval = FIRST_CHECK_DELAY_SECONDS if first_tick else _cfg.interval_minutes * 60
+            first_tick = False
 
             # Compute next run time for status
             _next_run_at = (
@@ -1437,9 +1608,8 @@ async def run_sync_loop() -> None:
 
             _stop_requested = False
 
-            # Determine projects to sync
-            trigger = "schedule"
             if _queue:
+                # ── Manual / queued path: always records a run ──
                 trigger = _queue_trigger
                 if "__all__" in _queue:
                     projects = await asyncio.to_thread(_active_projects_from_db)
@@ -1449,61 +1619,20 @@ async def run_sync_loop() -> None:
                     active_map = {p["name"]: p for p in all_active}
                     projects = [active_map[n] for n in queued_names if n in active_map]
                 _queue.clear()
+
+                if not projects:
+                    continue
+
+                # Refresh space usage at run start
+                try:
+                    await refresh_account_info()
+                except Exception:
+                    logger.debug("Pre-run account refresh failed", exc_info=True)
+
+                await _run_projects(projects, trigger)
             else:
-                projects = await asyncio.to_thread(_active_projects_from_db)
-
-            if not projects:
-                continue
-
-            # Refresh space usage at run start
-            try:
-                await refresh_account_info()
-            except Exception:
-                logger.debug("Pre-run account refresh failed", exc_info=True)
-
-            # Start a new run
-            state = get_state()
-            run_id = await asyncio.to_thread(state.run_start, trigger)
-
-            _current = RunProgress(
-                run_id=run_id,
-                trigger=trigger,
-                started_at=_utcnow(),
-                projects_total=len(projects),
-            )
-
-            await _emit("run_started")
-
-            error_sample = None
-            run_status = "ok"
-
-            try:
-                for proj in projects:
-                    if _stop_requested:
-                        run_status = "cancelled"
-                        break
-                    try:
-                        await sync_project(proj, _current)
-                    except DropboxAuthError as exc:
-                        run_status = "error"
-                        error_sample = f"Dropbox rejected the request: {exc.summary}"[:500]
-                        _current.errors += 1
-                        try:
-                            await asyncio.to_thread(
-                                state.project_stats_update, proj["name"], last_error=error_sample,
-                            )
-                            await asyncio.to_thread(state.error_add, proj["name"], None, error_sample)
-                        except Exception:
-                            logger.debug("failed to record auth error", exc_info=True)
-                        break
-                    except Exception as exc:
-                        logger.exception("sync_project %s failed", proj["name"])
-                        error_sample = str(exc)[:200]
-                        _current.errors += 1
-            finally:
-                await asyncio.to_thread(state.run_finish, run_id, run_status, error_sample)
-                _current = None
-                await _emit("run_finished")
+                # ── Scheduled tick: cheap change check, upload only when needed ──
+                await run_scheduled_check()
 
         except asyncio.CancelledError:
             # Shutdown

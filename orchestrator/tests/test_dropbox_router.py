@@ -181,8 +181,8 @@ async def test_config_put_validation(client, sync_dir):
     assert resp3.status_code == 200
     assert resp3.json()["chunk_mb"] == 8
 
-    # interval_hours < 1
-    resp4 = await client.put("/api/dropbox/config", json={"interval_hours": 0})
+    # interval_minutes < 1
+    resp4 = await client.put("/api/dropbox/config", json={"interval_minutes": 0})
     assert resp4.status_code == 400
 
 
@@ -863,3 +863,73 @@ async def test_callback_starts_sync_only_when_a_project_is_enabled(client, sync_
     resp = await client.get(f"/api/dropbox/callback?code=cb_code2&state={state}", follow_redirects=False)
     assert resp.status_code == 302 and "dropbox=linked" in resp.headers["location"]
     assert calls == ([(None, "manual")] if any_enabled else [])
+
+
+# ── Amendment E — interval_minutes config and status ─────────────────
+
+
+@pytest.mark.anyio
+async def test_config_put_interval_hours_compat(client, sync_dir):
+    """PUT /api/dropbox/config with interval_hours converts to interval_minutes."""
+    resp = await client.put("/api/dropbox/config", json={"interval_hours": 2})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["interval_minutes"] == 120
+    assert "interval_hours" not in data
+
+
+@pytest.mark.anyio
+async def test_config_put_interval_minutes(client, sync_dir):
+    """PUT /api/dropbox/config with interval_minutes."""
+    resp = await client.put("/api/dropbox/config", json={"interval_minutes": 15})
+    assert resp.status_code == 200
+    assert resp.json()["interval_minutes"] == 15
+
+
+@pytest.mark.anyio
+async def test_config_put_interval_minutes_bounds(client, sync_dir):
+    """PUT /api/dropbox/config validates interval_minutes bounds."""
+    resp = await client.put("/api/dropbox/config", json={"interval_minutes": 0})
+    assert resp.status_code == 400
+
+    resp2 = await client.put("/api/dropbox/config", json={"interval_minutes": 1441})
+    assert resp2.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_status_includes_last_check(client, sync_dir):
+    """GET /api/dropbox/status includes last_check field."""
+    resp = await client.get("/api/dropbox/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "last_check" in data
+    assert "at" in data["last_check"]
+    assert "changed" in data["last_check"]
+
+
+@pytest.mark.anyio
+async def test_project_status_includes_up_to_date(client, sync_dir, db_session):
+    """GET /api/projects/{name}/dropbox/status includes up_to_date and last_checked_at."""
+    _seed_token(sync_dir)
+
+    from models import Project
+
+    proj_dir = os.path.join(str(sync_dir), "utdproj")
+    os.makedirs(proj_dir, exist_ok=True)
+
+    proj = Project(
+        name="utdproj",
+        display_name="UTD Project",
+        path=proj_dir,
+        max_concurrent=2,
+        default_model="claude-opus-4-7",
+        dropbox_sync=True,
+    )
+    db_session.add(proj)
+    db_session.commit()
+
+    resp = await client.get("/api/projects/utdproj/dropbox/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "up_to_date" in data
+    assert "last_checked_at" in data

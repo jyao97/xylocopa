@@ -2170,12 +2170,17 @@ def dropbox_get() -> str:
 
     linked = os.path.isfile(token_path)
     paused = cfg.get("paused", False)
-    interval = cfg.get("interval_hours", 1)
+    if "interval_minutes" in cfg:
+        interval_min = cfg["interval_minutes"]
+    elif "interval_hours" in cfg:
+        interval_min = cfg["interval_hours"] * 60
+    else:
+        interval_min = 5
 
     parts = ["# Dropbox sync status"]
     parts.append(f"- linked: {'yes' if linked else '**not linked**'}")
     parts.append(f"- paused: {'yes' if paused else 'no'}")
-    parts.append(f"- interval: {interval}h")
+    parts.append(f"- check interval: {interval_min} min")
 
     # Read state.db (read-only)
     if not os.path.isfile(state_path):

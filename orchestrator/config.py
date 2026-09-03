@@ -108,7 +108,7 @@ DROPBOX_SYNC_DIR = _resolve(os.getenv("DROPBOX_SYNC_DIR", "data/dropbox"))
 
 # Project-registered Dropbox app (PKCE public client; the key is not a secret).
 # Filled in once the "xylocopa" app exists; empty means "not configured" until then.
-DROPBOX_DEFAULT_APP_KEY = ""
+DROPBOX_DEFAULT_APP_KEY = "zw5krsh35r7bxpr"
 DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY", "") or DROPBOX_DEFAULT_APP_KEY
 # Fixed return page registered on the project app. Users who bring their own app can
 # self-host a copy and point this at it, or leave it empty to use direct redirects.

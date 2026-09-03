@@ -837,3 +837,29 @@ async def test_project_status_includes_link_mode(client, sync_dir, db_session, m
     assert resp.status_code == 200
     data = resp.json()
     assert data["link_mode"] == "relay"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("any_enabled", [True, False])
+async def test_callback_starts_sync_only_when_a_project_is_enabled(client, sync_dir, fake, monkeypatch, any_enabled):
+    """Linking must kick off a run for already-enabled projects (and not otherwise)."""
+    from dropbox_sync import engine
+    from dropbox_sync.auth import LinkFlow
+
+    fake.register_oauth_code("cb_code2", {
+        "access_token": "sl.cb_token2", "token_type": "bearer", "expires_in": 14400,
+        "refresh_token": "rt_cb2", "scope": "files.content.write account_info.read",
+    })
+    fake_http = httpx.AsyncClient(transport=fake.transport())
+    flow = LinkFlow(engine.get_token_store(), http=fake_http)
+    engine._link_flow = flow
+    state = flow.start("abcdefghij1234", redirect_uri="https://localhost:3000/api/dropbox/callback",
+                       return_to="/projects/x")["state"]
+
+    calls = []
+    monkeypatch.setattr(engine, "request_sync", lambda project=None, trigger="manual": calls.append((project, trigger)))
+    monkeypatch.setattr(engine, "get_status", lambda: {"projects": [{"name": "p", "enabled": any_enabled}]})
+
+    resp = await client.get(f"/api/dropbox/callback?code=cb_code2&state={state}", follow_redirects=False)
+    assert resp.status_code == 302 and "dropbox=linked" in resp.headers["location"]
+    assert calls == ([(None, "manual")] if any_enabled else [])

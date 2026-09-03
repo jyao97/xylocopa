@@ -225,19 +225,29 @@ async def link_complete(request: Request):
     except LinkError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Refresh account/space info
-    try:
-        await refresh_account_info()
-    except Exception:
-        pass
-
-    from dropbox_sync.engine import _emit
-    try:
-        await _emit("linked")
-    except Exception:
-        pass
-
+    await _after_link()
     return {"detail": "ok", "account": account}
+
+
+async def _after_link() -> None:
+    """Best-effort follow-ups once a token is stored: refresh account info,
+    notify the UI, and start syncing projects that are already enabled —
+    otherwise their first upload would wait for the next scheduled run."""
+    from dropbox_sync import engine
+    try:
+        await engine.refresh_account_info()
+    except Exception:
+        pass
+    try:
+        await engine._emit("linked")
+    except Exception:
+        pass
+    try:
+        status = await asyncio.to_thread(engine.get_status)
+        if any(p.get("enabled") for p in status.get("projects", [])):
+            engine.request_sync(None, trigger="manual")
+    except Exception:
+        logger.debug("post-link sync request failed", exc_info=True)
 
 
 def _redirect_with_params(return_to: str, params: dict) -> RedirectResponse:
@@ -292,16 +302,7 @@ async def dropbox_callback(request: Request):
                 "dropbox_message": str(exc),
             })
 
-        # Best-effort post-link actions
-        try:
-            await refresh_account_info()
-        except Exception:
-            pass
-        try:
-            await _emit("linked")
-        except Exception:
-            pass
-
+        await _after_link()
         return _redirect_with_params(return_to, {"dropbox": "linked"})
 
     except Exception:

@@ -450,6 +450,15 @@ async def upload_file(request: Request, db: Session = Depends(get_db)):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, lambda: _write_bytes(dest, content))
 
+    # An attachment in a synced project should reach Dropbox promptly rather
+    # than on the next scheduled check.
+    if storage == "project" and getattr(proj, "dropbox_sync", False):
+        try:
+            from dropbox_sync.engine import request_check
+            request_check()
+        except Exception:
+            logger.debug("dropbox check request failed", exc_info=True)
+
     return {
         "filename": unique_name,
         "original_name": original_name,

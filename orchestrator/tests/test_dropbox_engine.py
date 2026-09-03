@@ -1245,3 +1245,22 @@ async def test_project_status_up_to_date(tmp_path, sync_dir):
     engine._last_check = {"at": "2026-09-03T12:00:00Z", "changed": ["someprojx"]}
     status = engine.get_project_status("someprojx")
     assert status["up_to_date"] is False
+
+
+def test_request_check_coalesces_to_the_earliest_deadline(monkeypatch, tmp_path):
+    """Bursts of requests share one check; the earliest deadline wins."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    assert engine._check_due is None
+    now = [1000.0]
+    monkeypatch.setattr(engine.time, "monotonic", lambda: now[0])
+    engine._wake_event.clear()
+
+    engine.request_check(30)
+    assert engine._check_due == 1030.0
+    assert engine._wake_event.is_set()
+    engine.request_check(5)
+    assert engine._check_due == 1005.0
+    engine.request_check(60)  # later deadline must not push it back
+    assert engine._check_due == 1005.0

@@ -264,3 +264,34 @@ async def test_tree_hides_xylocopa_dir(client, db_engine, tmp_path):
     names = [item["name"] for item in tree]
     assert ".xylocopa" not in names
     assert "src" in names
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sync_enabled", [True, False])
+async def test_upload_requests_a_dropbox_check_only_for_synced_projects(client, db_engine, tmp_path, monkeypatch, sync_enabled):
+    """An attachment in a synced project asks the Dropbox loop to check soon."""
+    from dropbox_sync import engine
+
+    Session = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    db = Session()
+    db.add(Project(
+        name="upload-sync-proj",
+        display_name="Upload Sync Project",
+        path=str(tmp_path),
+        max_concurrent=2,
+        default_model="claude-opus-4-7",
+        dropbox_sync=sync_enabled,
+    ))
+    db.commit()
+    db.close()
+
+    calls = []
+    monkeypatch.setattr(engine, "request_check", lambda delay_seconds=5.0: calls.append(delay_seconds))
+
+    resp = await client.post(
+        "/api/upload",
+        files={"file": ("note.txt", b"x", "text/plain")},
+        data={"project": "upload-sync-proj"},
+    )
+    assert resp.status_code == 200 and resp.json()["storage"] == "project"
+    assert (len(calls) == 1) is sync_enabled

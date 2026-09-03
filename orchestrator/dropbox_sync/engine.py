@@ -185,6 +185,9 @@ FIRST_CHECK_DELAY_SECONDS = 15
 _last_check: dict | None = None  # {"at": iso, "changed": [names]}
 _last_checked: dict[str, str] = {}  # project_name -> iso timestamp
 
+# monotonic() deadline for an on-demand change check (see request_check)
+_check_due: float | None = None
+
 
 def get_state() -> SyncState:
     global _state
@@ -244,7 +247,8 @@ def reset_for_tests(sync_dir: str) -> None:
     global _state, _token_store, _http_client, _dbx_client, _throttle, _link_flow
     global _cfg, _current, _queue, _stop_requested, _space_cache, _space_cache_at
     global _account_cache, _dry_run_jobs, _dry_run_cache, _next_run_at, _client_factory
-    global _last_check, _last_checked
+    global _last_check, _last_checked, _check_due
+    _check_due = None
 
     if _state is not None:
         try:
@@ -363,6 +367,19 @@ def request_sync(project: str | None = None, trigger: str = "manual") -> None:
         _queue.clear()
         _queue.append("__all__")
     _queue_trigger = trigger
+    _wake_event.set()
+
+
+def request_check(delay_seconds: float = 5.0) -> None:
+    """Ask the loop to run a change check soon.
+
+    Coalesced: several requests in a row (e.g. a burst of uploads) share one
+    check, and the earliest deadline wins.
+    """
+    global _check_due
+    due = time.monotonic() + max(0.0, delay_seconds)
+    if _check_due is None or due < _check_due:
+        _check_due = due
     _wake_event.set()
 
 
@@ -1544,7 +1561,7 @@ def _enqueue_never_synced() -> list[str]:
 
 async def run_sync_loop() -> None:
     """Main sync loop — started from lifespan, cancelled at shutdown."""
-    global _current, _stop_requested, _next_run_at
+    global _current, _stop_requested, _next_run_at, _check_due
 
     logger.info("Dropbox sync loop started")
 
@@ -1571,18 +1588,22 @@ async def run_sync_loop() -> None:
     except Exception:
         logger.warning("Failed to mark interrupted runs", exc_info=True)
 
-    first_tick = True
+    # First check shortly after startup — as a deadline rather than a
+    # one-off wait, so a manual run arriving first cannot swallow it.
+    request_check(FIRST_CHECK_DELAY_SECONDS)
 
     while True:
         try:
-            interval = FIRST_CHECK_DELAY_SECONDS if first_tick else _cfg.interval_minutes * 60
-            first_tick = False
+            interval = _cfg.interval_minutes * 60
+            wait_s = float(interval)
+            if _check_due is not None:
+                wait_s = max(0.0, min(wait_s, _check_due - time.monotonic()))
 
             # Compute next run time for status
             _next_run_at = (
                 datetime.now(timezone.utc)
                 .replace(microsecond=0)
-                .__add__(__import__("datetime").timedelta(seconds=interval))
+                .__add__(__import__("datetime").timedelta(seconds=int(wait_s)))
                 .strftime("%Y-%m-%dT%H:%M:%SZ")
             )
 
@@ -1591,9 +1612,13 @@ async def run_sync_loop() -> None:
             if not _queue:
                 _wake_event.clear()
                 try:
-                    await asyncio.wait_for(_wake_event.wait(), timeout=interval)
+                    await asyncio.wait_for(_wake_event.wait(), timeout=wait_s)
                 except asyncio.TimeoutError:
                     pass
+                # Woken early by request_check(): go round again so the wait
+                # shrinks to the remaining delay (this coalesces bursts).
+                if not _queue and _check_due is not None and time.monotonic() < _check_due:
+                    continue
 
             # Check if linked and not paused (drop queued requests so the
             # loop cannot spin on them)
@@ -1632,6 +1657,7 @@ async def run_sync_loop() -> None:
                 await _run_projects(projects, trigger)
             else:
                 # ── Scheduled tick: cheap change check, upload only when needed ──
+                _check_due = None
                 await run_scheduled_check()
 
         except asyncio.CancelledError:

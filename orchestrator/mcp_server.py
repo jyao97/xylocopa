@@ -2180,7 +2180,10 @@ def dropbox_get() -> str:
     parts = ["# Dropbox sync status"]
     parts.append(f"- linked: {'yes' if linked else '**not linked**'}")
     parts.append(f"- paused: {'yes' if paused else 'no'}")
-    parts.append(f"- check interval: {interval_min} min")
+    if interval_min == 0:
+        parts.append("- check interval: on change (no periodic check)")
+    else:
+        parts.append(f"- check interval: {interval_min} min")
 
     # Read state.db (read-only)
     if not os.path.isfile(state_path):

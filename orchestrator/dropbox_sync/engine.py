@@ -49,7 +49,7 @@ _PENDING_MAX_AGE_S = 6 * 86400
 
 @dataclass
 class SyncConfig:
-    interval_minutes: int = 5
+    interval_minutes: int = 0
     concurrency: int = 4
     chunk_mb: int = 8
     max_file_mb: int = 2048
@@ -83,7 +83,7 @@ def _load_config() -> SyncConfig:
                     setattr(cfg, k, int(data[k]))
             # interval_minutes: migrate from interval_hours if needed
             if "interval_minutes" in data:
-                cfg.interval_minutes = max(1, min(1440, int(data["interval_minutes"])))
+                cfg.interval_minutes = max(0, min(1440, int(data["interval_minutes"])))
             elif "interval_hours" in data:
                 cfg.interval_minutes = max(1, min(1440, int(data["interval_hours"]) * 60))
             for k in ("allowlist_mode", "prune", "paused"):
@@ -188,6 +188,22 @@ _last_checked: dict[str, str] = {}  # project_name -> iso timestamp
 # monotonic() deadline for an on-demand change check (see request_check)
 _check_due: float | None = None
 
+# Targeted check: accumulates project names (or "__all__") between requests
+_check_targets: set[str] = set()
+
+# ── Activity-driven sync ────────────────────────────────────────────
+
+ACTIVITY_DEBOUNCE_SECONDS = 90
+LARGE_PROJECT_DEBOUNCE_SECONDS = 300  # files_synced > 100_000
+STOP_DEBOUNCE_SECONDS = 20
+UPLOAD_DEBOUNCE_SECONDS = 5
+
+# project name -> files_synced; refreshed cheaply from state.project_stats_all
+_enabled_cache: dict[str, int] = {}
+
+# agent_id -> project name (process-lifetime, never evicted)
+_agent_project_cache: dict[str, str] = {}
+
 
 def get_state() -> SyncState:
     global _state
@@ -247,8 +263,12 @@ def reset_for_tests(sync_dir: str) -> None:
     global _state, _token_store, _http_client, _dbx_client, _throttle, _link_flow
     global _cfg, _current, _queue, _stop_requested, _space_cache, _space_cache_at
     global _account_cache, _dry_run_jobs, _dry_run_cache, _next_run_at, _client_factory
-    global _last_check, _last_checked, _check_due
+    global _last_check, _last_checked, _check_due, _check_targets
+    global _enabled_cache, _agent_project_cache
     _check_due = None
+    _check_targets = set()
+    _enabled_cache = {}
+    _agent_project_cache = {}
 
     if _state is not None:
         try:
@@ -314,8 +334,8 @@ def update_runtime_config(**fields: Any) -> dict:
 
     if "interval_minutes" in fields:
         v = int(fields["interval_minutes"])
-        if v < 1 or v > 1440:
-            raise ValueError("interval_minutes must be between 1 and 1440")
+        if v < 0 or v > 1440:
+            raise ValueError("interval_minutes must be between 0 and 1440")
         _cfg.interval_minutes = v
 
     for k in ("concurrency", "max_file_mb", "max_files_per_project"):
@@ -355,6 +375,7 @@ def update_runtime_config(**fields: Any) -> dict:
 def on_project_settings_changed(name: str) -> None:
     """Called when a project's dropbox_sync/dropbox_folders/dropbox_ignore changes."""
     logger.info("Project settings changed: %s", name)
+    _refresh_enabled_cache()
 
 
 def request_sync(project: str | None = None, trigger: str = "manual") -> None:
@@ -370,16 +391,20 @@ def request_sync(project: str | None = None, trigger: str = "manual") -> None:
     _wake_event.set()
 
 
-def request_check(delay_seconds: float = 5.0) -> None:
+def request_check(delay_seconds: float = 5.0, project: str | None = None) -> None:
     """Ask the loop to run a change check soon.
 
     Coalesced: several requests in a row (e.g. a burst of uploads) share one
     check, and the earliest deadline wins.
+
+    *project* narrows the check to a single project; None means all enabled
+    projects (recorded as ``"__all__"``).
     """
     global _check_due
     due = time.monotonic() + max(0.0, delay_seconds)
     if _check_due is None or due < _check_due:
         _check_due = due
+    _check_targets.add(project if project is not None else "__all__")
     _wake_event.set()
 
 
@@ -408,6 +433,70 @@ def _utcnow() -> str:
 
 def remote_path(project_name: str, rel_path: str) -> str:
     return "/" + project_name + "/" + rel_path
+
+
+def _refresh_enabled_cache() -> None:
+    """Rebuild _enabled_cache from state.project_stats_all + active projects.
+
+    Thread-safe (reads only; dict replacement is atomic in CPython).
+    """
+    global _enabled_cache
+    try:
+        active = {p["name"] for p in _active_projects_from_db()}
+        stats = get_state().project_stats_all()
+        _enabled_cache = {
+            name: (stats.get(name, {}).get("files_synced") or 0)
+            for name in active
+        }
+    except Exception:
+        logger.debug("_refresh_enabled_cache failed", exc_info=True)
+
+
+def note_project_activity(project: str, reason: str = "write") -> bool:
+    """O(1) check+request for a project that may need syncing.
+
+    Returns False (no-op) when the project is not in _enabled_cache.
+    """
+    files_synced = _enabled_cache.get(project)
+    if files_synced is None:
+        return False
+
+    if reason == "stop":
+        delay = STOP_DEBOUNCE_SECONDS
+    elif reason == "upload":
+        delay = UPLOAD_DEBOUNCE_SECONDS
+    elif files_synced > 100_000:
+        delay = LARGE_PROJECT_DEBOUNCE_SECONDS
+    else:
+        delay = ACTIVITY_DEBOUNCE_SECONDS
+
+    request_check(delay, project=project)
+    return True
+
+
+async def note_agent_activity(agent_id: str, reason: str = "write") -> bool:
+    """Map agent -> project, then note_project_activity.  Never raises."""
+    try:
+        project = _agent_project_cache.get(agent_id)
+        if project is None:
+            # One DB lookup per agent for the process lifetime
+            def _lookup():
+                from database import SessionLocal
+                from models import Agent
+                db = SessionLocal()
+                try:
+                    ag = db.get(Agent, agent_id)
+                    return ag.project if ag else None
+                finally:
+                    db.close()
+            project = await asyncio.to_thread(_lookup)
+            if project is None:
+                return False
+            _agent_project_cache[agent_id] = project
+        return note_project_activity(project, reason)
+    except Exception:
+        logger.debug("note_agent_activity failed for %s", agent_id[:8], exc_info=True)
+        return False
 
 
 def _active_projects_from_db() -> list[dict]:
@@ -631,6 +720,8 @@ def get_status() -> dict:
 
     last_check = _last_check if _last_check is not None else {"at": None, "changed": []}
 
+    mode = "event" if _cfg.interval_minutes == 0 else "event+fallback"
+
     return {
         "linked": linked,
         "account": account,
@@ -639,6 +730,7 @@ def get_status() -> dict:
         "link_mode": _compute_link_mode(),
         "relay_url": DROPBOX_RELAY_URL or None,
         "config": get_runtime_config(),
+        "mode": mode,
         "next_run_at": next_run,
         "current_run": current_run,
         "last_run": last_run,
@@ -1459,14 +1551,20 @@ async def _run_projects(projects: list[dict], trigger: str) -> int:
     return run_id
 
 
-async def run_scheduled_check() -> list[str]:
-    """Check every enabled project for changes; upload only those that changed.
+async def run_scheduled_check(only: set[str] | None = None) -> list[str]:
+    """Check enabled projects for changes; upload only those that changed.
+
+    When *only* is given and does not contain ``"__all__"``, only the named
+    enabled projects are scanned (unknown / disabled names are silently
+    ignored).
 
     Returns a list of project names that had work (and were synced).
     """
     global _last_check, _last_checked
 
     projects = await asyncio.to_thread(_active_projects_from_db)
+    if only is not None and "__all__" not in only:
+        projects = [p for p in projects if p["name"] in only]
     if not projects:
         _last_check = {"at": _utcnow(), "changed": []}
         await _emit("checked")
@@ -1565,6 +1663,8 @@ async def run_sync_loop() -> None:
 
     logger.info("Dropbox sync loop started")
 
+    _refresh_enabled_cache()
+
     try:
         queued = await asyncio.to_thread(_enqueue_never_synced)
         if queued:
@@ -1594,18 +1694,29 @@ async def run_sync_loop() -> None:
 
     while True:
         try:
+            _refresh_enabled_cache()
+
             interval = _cfg.interval_minutes * 60
-            wait_s = float(interval)
-            if _check_due is not None:
+            if interval > 0:
+                wait_s = float(interval)
+            elif _check_due is not None:
+                wait_s = max(0.0, _check_due - time.monotonic())
+            else:
+                wait_s = None  # wait indefinitely for wake events
+
+            if _check_due is not None and wait_s is not None:
                 wait_s = max(0.0, min(wait_s, _check_due - time.monotonic()))
 
             # Compute next run time for status
-            _next_run_at = (
-                datetime.now(timezone.utc)
-                .replace(microsecond=0)
-                .__add__(__import__("datetime").timedelta(seconds=int(wait_s)))
-                .strftime("%Y-%m-%dT%H:%M:%SZ")
-            )
+            if wait_s is not None:
+                _next_run_at = (
+                    datetime.now(timezone.utc)
+                    .replace(microsecond=0)
+                    .__add__(__import__("datetime").timedelta(seconds=int(wait_s)))
+                    .strftime("%Y-%m-%dT%H:%M:%SZ")
+                )
+            else:
+                _next_run_at = None
 
             # Requests that arrived while a run was in progress are already in
             # _queue — serve them now instead of sleeping until the next tick.
@@ -1656,9 +1767,13 @@ async def run_sync_loop() -> None:
 
                 await _run_projects(projects, trigger)
             else:
-                # ── Scheduled tick: cheap change check, upload only when needed ──
+                # ── Scheduled / event-driven tick ──
+                targets = set(_check_targets) if _check_targets else None
+                _check_targets.clear()
                 _check_due = None
-                await run_scheduled_check()
+                await run_scheduled_check(only=targets)
+
+            _refresh_enabled_cache()
 
         except asyncio.CancelledError:
             # Shutdown

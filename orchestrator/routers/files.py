@@ -454,8 +454,8 @@ async def upload_file(request: Request, db: Session = Depends(get_db)):
     # than on the next scheduled check.
     if storage == "project" and getattr(proj, "dropbox_sync", False):
         try:
-            from dropbox_sync.engine import request_check
-            request_check()
+            from dropbox_sync.engine import request_check, UPLOAD_DEBOUNCE_SECONDS
+            request_check(UPLOAD_DEBOUNCE_SECONDS, project=proj.name)
         except Exception:
             logger.debug("dropbox check request failed", exc_info=True)
 

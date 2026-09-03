@@ -181,8 +181,8 @@ async def test_config_put_validation(client, sync_dir):
     assert resp3.status_code == 200
     assert resp3.json()["chunk_mb"] == 8
 
-    # interval_minutes < 1
-    resp4 = await client.put("/api/dropbox/config", json={"interval_minutes": 0})
+    # interval_minutes < 0
+    resp4 = await client.put("/api/dropbox/config", json={"interval_minutes": -1})
     assert resp4.status_code == 400
 
 
@@ -889,8 +889,13 @@ async def test_config_put_interval_minutes(client, sync_dir):
 @pytest.mark.anyio
 async def test_config_put_interval_minutes_bounds(client, sync_dir):
     """PUT /api/dropbox/config validates interval_minutes bounds."""
+    # 0 is now valid (event-only mode)
     resp = await client.put("/api/dropbox/config", json={"interval_minutes": 0})
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+
+    # -1 is invalid
+    resp1b = await client.put("/api/dropbox/config", json={"interval_minutes": -1})
+    assert resp1b.status_code == 400
 
     resp2 = await client.put("/api/dropbox/config", json={"interval_minutes": 1441})
     assert resp2.status_code == 400

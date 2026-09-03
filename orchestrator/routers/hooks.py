@@ -117,6 +117,19 @@ def _reset_compact_abandoned(ad, agent_id: str, reason: str):
     ad.wake_sync(agent_id)
 
 
+async def _note_dropbox_activity(agent_id: str, reason: str) -> None:
+    """Fire-and-forget helper: notify dropbox sync engine of agent activity.
+
+    Imports lazily and swallows every exception so it never affects hook
+    latency or correctness.
+    """
+    try:
+        from dropbox_sync.engine import note_agent_activity
+        await note_agent_activity(agent_id, reason)
+    except Exception:
+        pass
+
+
 async def _await_jsonl_flush(
     ad, agent_id: str, *,
     wait_for: bytes | None = None,
@@ -504,6 +517,9 @@ async def hook_agent_stop(request: Request):
                     hook_sid[:12], agent_id[:8])
         return {}
 
+    # Notify dropbox sync of agent turn end
+    asyncio.ensure_future(_note_dropbox_activity(agent_id, "stop"))
+
     # All stop-hook operations (_stop_generating, unread, notify, dispatch
     # pending, slash-command completion) are handled by the sync engine when
     # it imports the stop_hook_summary entry from JSONL.  This handler only
@@ -760,6 +776,11 @@ async def hook_agent_tool_activity(request: Request):
         output_summary = _tool_output_summary(tool_name, tool_output, is_error) if tool_output else ""
         await emit_tool_activity(agent_id, tool_name, phase, tool_input=tool_input,
                                   tool_output=tool_output, is_error=is_error)
+        # Notify dropbox sync of write-like tool completions
+        if (hook_event == "PostToolUse"
+                and not is_error
+                and tool_name in ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash")):
+            asyncio.ensure_future(_note_dropbox_activity(agent_id, "write"))
         # Backfill interactive card answers from PostToolUse
         if tool_name in ("AskUserQuestion", "ExitPlanMode") and tool_output:
             tool_use_id = body.get("tool_use_id", "")

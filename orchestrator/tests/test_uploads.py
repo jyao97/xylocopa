@@ -286,7 +286,7 @@ async def test_upload_requests_a_dropbox_check_only_for_synced_projects(client, 
     db.close()
 
     calls = []
-    monkeypatch.setattr(engine, "request_check", lambda delay_seconds=5.0: calls.append(delay_seconds))
+    monkeypatch.setattr(engine, "request_check", lambda delay_seconds=5.0, project=None: calls.append((delay_seconds, project)))
 
     resp = await client.post(
         "/api/upload",

@@ -33,7 +33,7 @@ All under `DROPBOX_SYNC_DIR` (default `data/dropbox/`, gitignored with the rest 
 | Key | Default | Meaning |
 |---|---|---|
 | `paused` | `false` | "Pause" sets it (the current run stops after its in-flight batch); "Resume" clears it. Linking alone makes the scheduler active. |
-| `interval_minutes` | `5` | Scheduled check interval (1--1440). Replaces the former `interval_hours` (migrated automatically on load: minutes = hours * 60). |
+| `interval_minutes` | `0` | Fallback periodic check interval (0--1440). `0` disables the timer; syncing is purely event-driven. Replaces the former `interval_hours` (migrated automatically on load: minutes = hours * 60). |
 | `concurrency` | `4` | Concurrent uploads. |
 | `chunk_mb` | `8` | Upload-session chunk size (multiple of 4 MiB). |
 | `max_file_mb` | `2048` | Files larger than this are skipped (reported as `too_large`). |
@@ -62,9 +62,14 @@ Matching uses `pathspec` (`gitwildmatch`).
 
 ## Upload engine
 
-- Scheduled checks run every `interval_minutes` (default 5) and upload only
-  when something changed; a run row is recorded only when there was work.
-  The first check runs 15 s after startup.
+- Syncing is event-driven: an agent Write/Edit/Bash triggers a check 90 s
+  later (5 min for projects over 100k files); an agent turn ending triggers
+  a check after 20 s; an attachment upload triggers a check after 5 s;
+  enabling a project, linking, or startup triggers an immediate check.
+  `interval_minutes` is an optional fallback timer (default 0 = off) for
+  changes made outside xylocopa (editor, git pull) -- otherwise those are
+  picked up at the next event or "Sync now". A run row is recorded only when
+  there was work.
 - Scan runs in a worker thread (`asyncio.to_thread`) with `os.scandir`, never
   following symlinks.
 - Diff against `state.db`: unchanged `(size, mtime_ns)` → skip without reading;

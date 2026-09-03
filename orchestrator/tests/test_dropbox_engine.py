@@ -741,9 +741,9 @@ async def test_config_update_validation(tmp_path, sync_dir):
     with pytest.raises(ValueError, match="chunk_mb"):
         engine.update_runtime_config(chunk_mb=148)
 
-    # interval_minutes < 1
+    # interval_minutes < 0
     with pytest.raises(ValueError, match="interval_minutes"):
-        engine.update_runtime_config(interval_minutes=0)
+        engine.update_runtime_config(interval_minutes=-1)
 
     # interval_minutes > 1440
     with pytest.raises(ValueError, match="interval_minutes"):
@@ -1264,3 +1264,199 @@ def test_request_check_coalesces_to_the_earliest_deadline(monkeypatch, tmp_path)
     assert engine._check_due == 1005.0
     engine.request_check(60)  # later deadline must not push it back
     assert engine._check_due == 1005.0
+
+
+# ── interval 0 / event mode ─────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_interval_zero_accepted_and_status_mode_event(tmp_path, sync_dir):
+    """interval_minutes=0 is accepted; status.mode == 'event' and next_run_at is None."""
+    from dropbox_sync import engine
+
+    result = engine.update_runtime_config(interval_minutes=0)
+    assert result["interval_minutes"] == 0
+
+    engine._next_run_at = None
+    status = engine.get_status()
+    assert status["mode"] == "event"
+    assert status["next_run_at"] is None
+
+
+@pytest.mark.anyio
+async def test_status_mode_event_plus_fallback(tmp_path, sync_dir):
+    """When interval_minutes > 0, status.mode == 'event+fallback'."""
+    from dropbox_sync import engine
+
+    engine.update_runtime_config(interval_minutes=15)
+    status = engine.get_status()
+    assert status["mode"] == "event+fallback"
+
+
+# ── targeted request_check / run_scheduled_check ────────────────────
+
+
+def test_request_check_accumulates_targets(monkeypatch, tmp_path):
+    """request_check(project=...) accumulates names in _check_targets."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    engine.request_check(5, project="alpha")
+    assert "alpha" in engine._check_targets
+    engine.request_check(5, project="beta")
+    assert "beta" in engine._check_targets
+    # No project means __all__
+    engine.request_check(5)
+    assert "__all__" in engine._check_targets
+
+
+@pytest.mark.anyio
+async def test_run_scheduled_check_only_scans_targeted(tmp_path, sync_dir, fake, client_for_fake):
+    """run_scheduled_check(only={name}) scans only the targeted project."""
+    from dropbox_sync import engine
+    engine.set_client_factory(client_for_fake)
+
+    proj_a = _make_project(tmp_path, "target_a", {"a.txt": "hello"})
+    proj_b = _make_project(tmp_path, "target_b", {"b.txt": "world"})
+
+    # Initial sync both
+    state = engine.get_state()
+    for pi in [
+        {"name": "target_a", "path": proj_a, "dropbox_folders": None, "dropbox_ignore": None},
+        {"name": "target_b", "path": proj_b, "dropbox_folders": None, "dropbox_ignore": None},
+    ]:
+        rid = state.run_start("test")
+        prog = engine.RunProgress(run_id=rid, started_at=engine._utcnow())
+        await engine.sync_project(pi, prog)
+        state.run_finish(rid, "ok")
+
+    # Modify both projects
+    with open(os.path.join(proj_a, "new_a.txt"), "w") as f:
+        f.write("new a")
+    with open(os.path.join(proj_b, "new_b.txt"), "w") as f:
+        f.write("new b")
+
+    initial_run_count = len(state.runs_recent(100))
+
+    import unittest.mock as mock
+    active = [
+        {"name": "target_a", "path": proj_a, "dropbox_folders": None, "dropbox_ignore": None},
+        {"name": "target_b", "path": proj_b, "dropbox_folders": None, "dropbox_ignore": None},
+    ]
+    with mock.patch.object(engine, "_active_projects_from_db", return_value=active):
+        # Only target "target_a"
+        changed = await engine.run_scheduled_check(only={"target_a"})
+
+    # Only target_a should have been synced
+    assert changed == ["target_a"]
+
+    # target_b should NOT have been checked (only target_a was in the 'only' set)
+    assert "target_b" not in engine._last_checked
+
+
+# ── note_project_activity ────────────────────────────────────────────
+
+
+def test_note_project_activity_disabled_project(tmp_path):
+    """Disabled project -> False and no deadline set."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    engine._enabled_cache = {"alpha": 50}
+    engine._check_due = None
+
+    # not in cache -> False
+    assert engine.note_project_activity("unknown_proj") is False
+    assert engine._check_due is None
+
+
+def test_note_project_activity_enabled_small(monkeypatch, tmp_path):
+    """Enabled small project -> True, delay = ACTIVITY_DEBOUNCE_SECONDS."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    now = [1000.0]
+    monkeypatch.setattr(engine.time, "monotonic", lambda: now[0])
+    engine._enabled_cache = {"myproj": 500}
+
+    assert engine.note_project_activity("myproj") is True
+    assert engine._check_due == 1000.0 + engine.ACTIVITY_DEBOUNCE_SECONDS
+    assert "myproj" in engine._check_targets
+
+
+def test_note_project_activity_large_project(monkeypatch, tmp_path):
+    """Project with > 100k files_synced -> LARGE_PROJECT_DEBOUNCE_SECONDS."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    now = [1000.0]
+    monkeypatch.setattr(engine.time, "monotonic", lambda: now[0])
+    engine._enabled_cache = {"bigproj": 200_000}
+
+    assert engine.note_project_activity("bigproj") is True
+    assert engine._check_due == 1000.0 + engine.LARGE_PROJECT_DEBOUNCE_SECONDS
+
+
+def test_note_project_activity_stop_reason(monkeypatch, tmp_path):
+    """reason='stop' -> STOP_DEBOUNCE_SECONDS."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    now = [1000.0]
+    monkeypatch.setattr(engine.time, "monotonic", lambda: now[0])
+    engine._enabled_cache = {"proj": 100}
+
+    assert engine.note_project_activity("proj", reason="stop") is True
+    assert engine._check_due == 1000.0 + engine.STOP_DEBOUNCE_SECONDS
+
+
+# ── note_agent_activity ──────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_note_agent_activity_resolves_project_once(monkeypatch, tmp_path):
+    """note_agent_activity resolves project once; second call must not hit DB."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    engine._enabled_cache = {"resolved_proj": 50}
+
+    lookup_count = [0]
+
+    def _mock_lookup():
+        lookup_count[0] += 1
+
+        class _FakeAgent:
+            project = "resolved_proj"
+        return _FakeAgent()
+
+    # Monkeypatch the DB lookup path
+    import database
+    original_sl = database.SessionLocal
+
+    class MockSession:
+        def get(self, model, id):
+            lookup_count[0] += 1
+
+            class _FakeAgent:
+                project = "resolved_proj"
+            return _FakeAgent()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(database, "SessionLocal", MockSession)
+
+    now = [2000.0]
+    monkeypatch.setattr(engine.time, "monotonic", lambda: now[0])
+
+    # First call: should hit DB
+    result1 = await engine.note_agent_activity("agent-abc-123", "write")
+    assert result1 is True
+    assert lookup_count[0] == 1
+
+    # Second call: should NOT hit DB (cached)
+    now[0] = 2001.0
+    result2 = await engine.note_agent_activity("agent-abc-123", "write")
+    assert result2 is True
+    assert lookup_count[0] == 1  # still 1, not 2

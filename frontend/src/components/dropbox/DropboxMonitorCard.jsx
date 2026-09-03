@@ -442,6 +442,7 @@ export default function DropboxMonitorCard() {
         <DropboxLinkModal
           open={linkOpen}
           appKey={status?.app_key || ""}
+          linkMode={status?.link_mode}
           returnTo="/monitor"
           onClose={() => setLinkOpen(false)}
           onLinked={handleLinked}

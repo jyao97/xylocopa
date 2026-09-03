@@ -169,6 +169,10 @@ export default defineConfig({
     }),
   ],
   server: {
+    fs: {
+      // Allow importing docs/oauth/dropbox/relay.js from tests
+      allow: ['..'],
+    },
     https: httpsConfig,
     host: '0.0.0.0',
     port: 3000,

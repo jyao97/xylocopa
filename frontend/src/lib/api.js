@@ -485,7 +485,7 @@ export const fetchDropboxStatus = () => request("/api/dropbox/status");
 export const updateDropboxConfig = (data) =>
   request("/api/dropbox/config", { method: "PUT", body: JSON.stringify(data) });
 export const startDropboxLink = (opts = {}) =>
-  request("/api/dropbox/link/start", { method: "POST", body: JSON.stringify({ mode: opts.mode || "redirect", return_to: opts.returnTo }) });
+  request("/api/dropbox/link/start", { method: "POST", body: JSON.stringify({ mode: opts.mode || "auto", return_to: opts.returnTo }) });
 export const completeDropboxLink = (code) =>
   request("/api/dropbox/link/complete", { method: "POST", body: JSON.stringify({ code }) });
 export const unlinkDropbox = () => request("/api/dropbox/link", { method: "DELETE" });

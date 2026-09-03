@@ -2,17 +2,18 @@ import { useState, useEffect, useCallback } from "react";
 import { startDropboxLink, completeDropboxLink } from "../../lib/api";
 
 /**
- * Dropbox link modal with redirect-based flow (default) and paste-code fallback.
+ * Dropbox link modal with relay-based flow (default), direct redirect, and
+ * paste-code fallback.
  *
  * Props:
  *   open           - boolean
  *   appKey         - string|falsy — when falsy, shows developer setup instructions
+ *   linkMode       - "relay"|"direct"|"none" — from status.link_mode
  *   returnTo       - string — relative path for redirect after Dropbox approval
  *   onClose()      - close handler
  *   onLinked(account) - called after successful code-flow link
  */
-export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLinked }) {
-  const [mode, setMode] = useState("redirect"); // "redirect" | "code"
+export default function DropboxLinkModal({ open, appKey, linkMode, returnTo, onClose, onLinked }) {
   const [authorizeUrl, setAuthorizeUrl] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
   const [code, setCode] = useState("");
@@ -21,11 +22,11 @@ export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLi
   const [error, setError] = useState("");
   const [step, setStep] = useState("default"); // "default" | "code" | "connected"
   const [copied, setCopied] = useState(false);
+  const [startedMode, setStartedMode] = useState(null); // mode returned by start
 
   // Reset when re-opened
   useEffect(() => {
     if (open) {
-      setMode("redirect");
       setAuthorizeUrl("");
       setRedirectUri("");
       setCode("");
@@ -34,6 +35,7 @@ export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLi
       setError("");
       setStep("default");
       setCopied(false);
+      setStartedMode(null);
     }
   }, [open]);
 
@@ -64,14 +66,16 @@ export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLi
     setTimeout(() => setCopied(false), 1500);
   }, [computedRedirectUri]);
 
-  // Redirect flow: Continue to Dropbox
+  // Default flow: Continue to Dropbox (auto mode — relay or direct)
   const handleContinueRedirect = useCallback(async () => {
     setBusy(true);
     setError("");
     try {
-      const res = await startDropboxLink({ mode: "redirect", returnTo });
+      const res = await startDropboxLink({ mode: "auto", returnTo });
       if (res.redirect_uri) setRedirectUri(res.redirect_uri);
-      window.location.assign(res.authorize_url);
+      setStartedMode(res.mode || null);
+      // Prefer relay_start_url when present (relay mode); fall back to authorize_url (direct)
+      window.location.assign(res.relay_start_url || res.authorize_url);
     } catch (err) {
       setError(err.message || "Failed to start link flow");
       setBusy(false);
@@ -117,14 +121,14 @@ export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLi
 
   if (!open) return null;
 
-  // Not configured view
-  if (!appKey) {
+  // Not configured view (link_mode === "none")
+  if (linkMode === "none" || (!linkMode && !appKey)) {
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
         <div className="bg-surface rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-card">
           <h3 className="text-lg font-bold text-heading">Dropbox app key not configured</h3>
           <div className="text-xs text-dim space-y-2">
-            <p>One-time developer setup:</p>
+            <p>This build has no Dropbox app key. Set <code className="text-heading font-mono">DROPBOX_APP_KEY</code> in <code className="text-heading font-mono">.env</code> (your own app):</p>
             <ol className="list-decimal list-inside space-y-1">
               <li>Go to <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer" className="text-accent underline">dropbox.com/developers/apps</a></li>
               <li>Create app: Scoped access, App folder</li>
@@ -162,6 +166,14 @@ export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLi
     );
   }
 
+  // Relay host label (shown after start in relay mode)
+  let relayCaption = null;
+  if (startedMode === "relay" && redirectUri) {
+    let relayHost;
+    try { relayHost = new URL(redirectUri).host; } catch { relayHost = redirectUri; }
+    relayCaption = `Returns through ${relayHost}`;
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-surface rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-card">
@@ -189,9 +201,9 @@ export default function DropboxLinkModal({ open, appKey, returnTo, onClose, onLi
                 {busy ? "Redirecting..." : "Continue to Dropbox"}
               </button>
             </div>
-            <p className="text-faint text-[11px]">
-              Redirect URI: {redirectUri || computedRedirectUri}
-            </p>
+            {relayCaption && (
+              <p className="text-faint text-[11px]">{relayCaption}</p>
+            )}
             <button
               type="button"
               onClick={handleStartCode}

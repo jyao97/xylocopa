@@ -291,6 +291,7 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
       <DropboxLinkModal
         open={showLink}
         appKey={status?.app_key || ""}
+        linkMode={status?.link_mode}
         returnTo={window.location.pathname}
         onClose={() => setShowLink(false)}
         onLinked={handleLinked}

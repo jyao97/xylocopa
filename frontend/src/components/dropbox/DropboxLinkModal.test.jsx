@@ -41,6 +41,7 @@ function setup(props = {}) {
   const defaultProps = {
     open: true,
     appKey: "testkey1234",
+    linkMode: "relay",
     returnTo: "/projects/test",
     onClose: vi.fn(),
     onLinked: vi.fn(),
@@ -50,8 +51,8 @@ function setup(props = {}) {
 }
 
 describe("DropboxLinkModal", () => {
-  it("shows not-configured view with redirect URI when appKey is falsy", () => {
-    setup({ appKey: "" });
+  it("shows not-configured view when linkMode is 'none'", () => {
+    setup({ linkMode: "none", appKey: "" });
 
     expect(screen.getByText("Dropbox app key not configured")).toBeInTheDocument();
 
@@ -64,12 +65,19 @@ describe("DropboxLinkModal", () => {
     expect(screen.queryByText("Continue to Dropbox")).not.toBeInTheDocument();
   });
 
-  it("Continue to Dropbox calls startDropboxLink with redirect mode and assigns URL", async () => {
+  it("shows not-configured view when appKey is falsy and linkMode absent", () => {
+    setup({ appKey: "", linkMode: undefined });
+
+    expect(screen.getByText("Dropbox app key not configured")).toBeInTheDocument();
+  });
+
+  it("Continue to Dropbox calls startDropboxLink with auto mode and prefers relay_start_url", async () => {
     startDropboxLink.mockResolvedValue({
       authorize_url: "https://www.dropbox.com/oauth2/authorize?client_id=testkey1234&response_type=code",
       state: "abc123",
-      mode: "redirect",
-      redirect_uri: "https://localhost:3000/api/dropbox/callback",
+      mode: "relay",
+      redirect_uri: "https://jyao97.github.io/xylocopa/oauth/dropbox/",
+      relay_start_url: "https://jyao97.github.io/xylocopa/oauth/dropbox/#return=https%3A%2F%2Flocalhost%3A3000&authorize=https%3A%2F%2Fwww.dropbox.com%2Foauth2%2Fauthorize%3Fclient_id%3Dtestkey1234",
     });
 
     setup({ returnTo: "/projects/test" });
@@ -81,23 +89,37 @@ describe("DropboxLinkModal", () => {
 
     await waitFor(() => {
       expect(startDropboxLink).toHaveBeenCalledWith({
-        mode: "redirect",
+        mode: "auto",
         returnTo: "/projects/test",
       });
     });
 
+    // Should assign the relay_start_url, not authorize_url
     await waitFor(() => {
       expect(assignMock).toHaveBeenCalledWith(
-        "https://www.dropbox.com/oauth2/authorize?client_id=testkey1234&response_type=code",
+        "https://jyao97.github.io/xylocopa/oauth/dropbox/#return=https%3A%2F%2Flocalhost%3A3000&authorize=https%3A%2F%2Fwww.dropbox.com%2Foauth2%2Fauthorize%3Fclient_id%3Dtestkey1234",
       );
     });
   });
 
-  it("shows redirect URI line in the default view", () => {
-    setup();
+  it("falls back to authorize_url when relay_start_url is absent (direct mode)", async () => {
+    startDropboxLink.mockResolvedValue({
+      authorize_url: "https://www.dropbox.com/oauth2/authorize?client_id=testkey1234&response_type=code&redirect_uri=https%3A%2F%2Flocalhost%3A3000%2Fapi%2Fdropbox%2Fcallback",
+      state: "abc123",
+      mode: "direct",
+      redirect_uri: "https://localhost:3000/api/dropbox/callback",
+    });
 
-    expect(screen.getByText(/Redirect URI:/)).toBeInTheDocument();
-    expect(screen.getByText(/\/api\/dropbox\/callback/)).toBeInTheDocument();
+    setup({ linkMode: "direct", returnTo: "/projects/test" });
+
+    const continueBtn = screen.getByText("Continue to Dropbox");
+    fireEvent.click(continueBtn);
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        "https://www.dropbox.com/oauth2/authorize?client_id=testkey1234&response_type=code&redirect_uri=https%3A%2F%2Flocalhost%3A3000%2Fapi%2Fdropbox%2Fcallback",
+      );
+    });
   });
 
   it("'Use a code instead' reveals code input and Submit calls completeDropboxLink", async () => {

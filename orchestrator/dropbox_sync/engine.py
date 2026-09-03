@@ -1337,11 +1337,41 @@ async def on_project_deleted(name: str) -> None:
 # ── Main sync loop ──────────────────────────────────────────────────
 
 
+def _enqueue_never_synced() -> list[str]:
+    """Queue enabled projects that have no completed sync yet.
+
+    A project enabled just before a restart (the queue is in memory) or
+    before the account was linked would otherwise wait for the next
+    scheduled tick. Returns the names queued.
+    """
+    global _queue_trigger
+    if not get_token_store().is_linked:
+        return []
+    stats = get_state().project_stats_all()
+    names = [
+        p["name"] for p in _active_projects_from_db()
+        if not (stats.get(p["name"]) or {}).get("last_synced_at")
+    ]
+    for n in names:
+        if n not in _queue:
+            _queue.append(n)
+    if names:
+        _queue_trigger = "manual"
+    return names
+
+
 async def run_sync_loop() -> None:
     """Main sync loop — started from lifespan, cancelled at shutdown."""
     global _current, _stop_requested, _next_run_at
 
     logger.info("Dropbox sync loop started")
+
+    try:
+        queued = await asyncio.to_thread(_enqueue_never_synced)
+        if queued:
+            logger.info("Queued first sync for %s", ", ".join(queued))
+    except Exception:
+        logger.warning("Failed to queue never-synced projects", exc_info=True)
 
     # Mark any interrupted runs from a previous crash
     try:
@@ -1353,7 +1383,6 @@ async def run_sync_loop() -> None:
 
     while True:
         try:
-            _wake_event.clear()
             interval = _cfg.interval_hours * 3600
 
             # Compute next run time for status
@@ -1364,16 +1393,23 @@ async def run_sync_loop() -> None:
                 .strftime("%Y-%m-%dT%H:%M:%SZ")
             )
 
-            try:
-                await asyncio.wait_for(_wake_event.wait(), timeout=interval)
-            except asyncio.TimeoutError:
-                pass
+            # Requests that arrived while a run was in progress are already in
+            # _queue — serve them now instead of sleeping until the next tick.
+            if not _queue:
+                _wake_event.clear()
+                try:
+                    await asyncio.wait_for(_wake_event.wait(), timeout=interval)
+                except asyncio.TimeoutError:
+                    pass
 
-            # Check if linked and not paused
+            # Check if linked and not paused (drop queued requests so the
+            # loop cannot spin on them)
             store = get_token_store()
             if not store.is_linked:
+                _queue.clear()
                 continue
             if _cfg.paused:
+                _queue.clear()
                 await _emit("paused")
                 continue
 

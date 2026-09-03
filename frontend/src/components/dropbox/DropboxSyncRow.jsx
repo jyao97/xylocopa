@@ -28,16 +28,21 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
   const mountedRef = useRef(true);
 
   const name = project?.name;
-  const isOn = !!project?.dropbox_sync;
+  // The folders payload behind `project` carries no dropbox_sync field, so the
+  // status endpoint is the source of truth once it has loaded; `override`
+  // holds the optimistic state while a toggle-off request is in flight.
+  const [override, setOverride] = useState(null);
+  const isOn = override ?? (status ? !!status.enabled : !!project?.dropbox_sync);
 
   // Fetch status
   const fetchStatus = useCallback(async () => {
-    if (!name) return;
+    if (!name) return null;
     try {
       const s = await fetchProjectDropboxStatus(name);
       if (mountedRef.current) setStatus(s);
+      return s;
     } catch {
-      // silent
+      return null;
     }
   }, [name]);
 
@@ -68,8 +73,8 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
     window.history.replaceState(null, "", clean);
 
     if (dbx === "linked") {
-      fetchStatus().then(() => {
-        if (mountedRef.current && !project?.dropbox_sync) {
+      fetchStatus().then((s) => {
+        if (mountedRef.current && s && !s.enabled) {
           setPickerSyncAfterSave(true);
           setShowPicker(true);
         }
@@ -77,7 +82,7 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
     } else if (dbx === "error") {
       setError(dbxMessage);
     }
-  }, [fetchStatus, project?.dropbox_sync]);
+  }, [fetchStatus]);
 
   // WS events: refetch on dropbox_update or project_update for this project
   useWsEvent(
@@ -120,15 +125,16 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
 
     if (isOn) {
       // On -> Off: optimistic, revert on failure
-      onProjectChange({ dropbox_sync: false });
+      setOverride(false);
       setBusy(true);
       try {
         const updated = await updateProjectSettings(name, { dropbox_sync: false });
         onProjectChange(updated);
+        await fetchStatus();
       } catch (err) {
-        onProjectChange({ dropbox_sync: true }); // revert
         setError(err.message || "Failed to disable sync");
       } finally {
+        setOverride(null);
         setBusy(false);
       }
     } else {
@@ -140,7 +146,7 @@ export default function DropboxSyncRow({ project, onProjectChange }) {
         setShowPicker(true);
       }
     }
-  }, [busy, isOn, name, status?.linked, onProjectChange]);
+  }, [busy, isOn, name, status?.linked, onProjectChange, fetchStatus]);
 
   // After linking, open the picker
   const handleLinked = useCallback(() => {

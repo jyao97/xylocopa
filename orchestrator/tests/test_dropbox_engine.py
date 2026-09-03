@@ -1006,3 +1006,26 @@ async def test_next_run_at_null_when_paused(tmp_path, sync_dir):
     assert status["next_run_at"] is None
 
     engine._cfg.paused = False
+
+
+def test_enqueue_never_synced_queues_only_unsynced_enabled_projects(monkeypatch, tmp_path):
+    """After a restart, enabled projects without a completed run get queued."""
+    from dropbox_sync import engine
+
+    engine.reset_for_tests(str(tmp_path / "dbx"))
+    monkeypatch.setattr(engine, "_active_projects_from_db", lambda: [{"name": "a"}, {"name": "b"}])
+
+    # Not linked → nothing is queued
+    assert engine._enqueue_never_synced() == []
+    assert engine._queue == []
+
+    engine.get_token_store().save({
+        "app_key": "k", "refresh_token": "r", "access_token": "a", "expires_at": 9e9,
+    })
+    engine.get_state().project_stats_update("a", last_synced_at="2026-01-01T00:00:00Z")
+
+    assert engine._enqueue_never_synced() == ["b"]
+    assert engine._queue == ["b"]
+    # Idempotent
+    engine._enqueue_never_synced()
+    assert engine._queue == ["b"]

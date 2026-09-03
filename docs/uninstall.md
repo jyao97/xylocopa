@@ -5,7 +5,7 @@
 - SQLite DB: `data/orchestrator.db` in the install directory (tasks, projects, agent metadata, configs)
 - Agent sessions: `~/.claude/projects/<encoded-path>/*.jsonl` — Claude Code's native files, not duplicated
 - Per-project memory: `<project>/PROGRESS.md` inside each project's repo
-- Backups: `backups/`; uploads: `~/.xylocopa/uploads/`
+- Backups: `backups/`; uploads: `~/.xylocopa/uploads/` (global) and `<project>/.xylocopa/uploads/` (per-project)
 
 A full snapshot is the install directory plus `~/.claude/projects/`.
 
@@ -14,7 +14,7 @@ A full snapshot is the install directory plus `~/.claude/projects/`.
 ```bash
 pm2 delete xylocopa-backend xylocopa-frontend && pm2 save
 rm -rf ~/xylocopa-main          # or wherever you cloned it
-rm -rf ~/.xylocopa              # uploaded files
+rm -rf ~/.xylocopa              # global uploaded files (per-project uploads live in <project>/.xylocopa/)
 rm -rf ~/xylocopa-projects      # optional: your project directories
 ```
 

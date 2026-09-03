@@ -397,13 +397,18 @@ async def serve_thumbnail(project: str, path: str, request: Request, db: Session
 
 
 @router.post("/api/upload")
-async def upload_file(request: Request):
-    """Upload a file (multipart form data). Returns filename, original_name, path, size."""
+async def upload_file(request: Request, db: Session = Depends(get_db)):
+    """Upload a file (multipart form data). Returns filename, original_name, path, size.
+
+    Accepts an optional ``project`` multipart field.  When a known project
+    is given and its directory exists, the file is stored inside
+    ``<project>/.xylocopa/uploads/`` so it travels with the project.
+    Otherwise falls back to the global ``UPLOADS_DIR``.
+    """
     from uuid import uuid4
-    from fastapi import UploadFile, File
 
     form = await request.form()
-    file: UploadFile = form.get("file")
+    file = form.get("file")
     if not file:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -414,8 +419,33 @@ async def upload_file(request: Request):
     original_name = re.sub(r'[^\w.\- ]', '_', original_name)
     unique_name = f"{uuid4().hex[:12]}_{original_name}"
 
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-    dest = os.path.join(UPLOADS_DIR, unique_name)
+    # Resolve destination: per-project or global
+    project_name = form.get("project")
+    storage = "global"
+    resolved_project = None
+
+    if project_name:
+        proj = db.query(Project).filter(Project.name == str(project_name)).first()
+        if proj and os.path.isdir(proj.path):
+            dest_dir = os.path.join(proj.path, ".xylocopa", "uploads")
+            os.makedirs(dest_dir, exist_ok=True)
+            storage = "project"
+            resolved_project = proj.name
+
+            # Best-effort git exclude (non-blocking)
+            proj_path = proj.path
+            async def _exclude():
+                from uploads import ensure_git_exclude
+                await asyncio.to_thread(ensure_git_exclude, proj_path)
+            asyncio.ensure_future(_exclude())
+        else:
+            logger.debug("upload: project %r not found or path gone, using global dir", project_name)
+
+    if storage == "global":
+        dest_dir = UPLOADS_DIR
+        os.makedirs(dest_dir, exist_ok=True)
+
+    dest = os.path.join(dest_dir, unique_name)
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, lambda: _write_bytes(dest, content))
@@ -425,6 +455,8 @@ async def upload_file(request: Request):
         "original_name": original_name,
         "path": dest,
         "size": len(content),
+        "project": resolved_project,
+        "storage": storage,
     }
 
 

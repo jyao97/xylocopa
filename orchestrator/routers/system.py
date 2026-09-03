@@ -742,6 +742,19 @@ async def system_storage():
         categories.append({"name": "Tmp Output", "size_bytes": tmp_total, "file_count": tmp_count, "color": "gray"})
 
         sz, cnt = _walk_size(UPLOADS_DIR)
+        # Include per-project upload dirs (<project>/.xylocopa/uploads)
+        try:
+            _pdb = SessionLocal()
+            try:
+                for _proj in _pdb.query(Project).filter(Project.archived == False).all():
+                    proj_uploads = os.path.join(_proj.path, ".xylocopa", "uploads")
+                    _psz, _pcnt = _walk_size(proj_uploads)
+                    sz += _psz
+                    cnt += _pcnt
+            finally:
+                _pdb.close()
+        except Exception:
+            pass
         categories.append({"name": "Uploads", "size_bytes": sz, "file_count": cnt, "color": "rose"})
 
         total_bytes = sum(c["size_bytes"] for c in categories)

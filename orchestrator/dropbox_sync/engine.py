@@ -1118,19 +1118,31 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
             return await _upload_file(entry)
 
     tasks = [asyncio.create_task(_bounded_upload(e)) for e in changed]
-    for coro in asyncio.as_completed(tasks):
-        result = await coro
-        if result is not None:
-            batch_entries.append(result)
-            # Commit in batches of 100
-            if len(batch_entries) >= 100:
-                if _stop_requested:
-                    break
-                ok, commit_errs, commit_bytes = await _commit_batch(state, client, name, batch_entries, run_progress)
-                files_uploaded += ok
-                errors += commit_errs
-                bytes_uploaded += commit_bytes
-                batch_entries = []
+    try:
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+            if result is not None:
+                batch_entries.append(result)
+                # Commit in batches of 100
+                if len(batch_entries) >= 100:
+                    if _stop_requested:
+                        break
+                    ok, commit_errs, commit_bytes = await _commit_batch(state, client, name, batch_entries, run_progress)
+                    files_uploaded += ok
+                    errors += commit_errs
+                    bytes_uploaded += commit_bytes
+                    batch_entries = []
+    finally:
+        # On an early exit (auth error, pause) stop the in-flight uploads and
+        # collect their results so no task exception is left unretrieved.
+        pending_tasks = [t for t in tasks if not t.done()]
+        for t in pending_tasks:
+            t.cancel()
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks, return_exceptions=True)
+        for t in tasks:
+            if t.done() and not t.cancelled():
+                t.exception()
 
     # Commit remaining
     if batch_entries and not _stop_requested:
@@ -1414,9 +1426,17 @@ async def run_sync_loop() -> None:
                         break
                     try:
                         await sync_project(proj, _current)
-                    except DropboxAuthError:
+                    except DropboxAuthError as exc:
                         run_status = "error"
-                        error_sample = "auth failed / not linked"
+                        error_sample = f"Dropbox rejected the request: {exc.summary}"[:500]
+                        _current.errors += 1
+                        try:
+                            await asyncio.to_thread(
+                                state.project_stats_update, proj["name"], last_error=error_sample,
+                            )
+                            await asyncio.to_thread(state.error_add, proj["name"], None, error_sample)
+                        except Exception:
+                            logger.debug("failed to record auth error", exc_info=True)
                         break
                     except Exception as exc:
                         logger.exception("sync_project %s failed", proj["name"])

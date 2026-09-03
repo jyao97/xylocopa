@@ -109,6 +109,20 @@ def commit_info(path: str, mtime_ns: int, content_hash: str | None = None) -> di
 # ── Client ──────────────────────────────────────────────────────────────
 
 
+def _error_text(body: dict | None, default: str) -> str:
+    """Best human-readable text for a Dropbox error body.
+
+    Dropbox puts the actionable explanation (e.g. a missing scope) in
+    ``user_message.text``; ``error_summary`` is often just ``other/...``.
+    """
+    if not body:
+        return default
+    msg = body.get("user_message")
+    if isinstance(msg, dict) and msg.get("text"):
+        return str(msg["text"])[:500]
+    return body.get("error_summary", default)
+
+
 def _is_retryable_error(status: int, body: dict | None) -> bool:
     """Return True when the response should be retried."""
     if status == 429:
@@ -194,12 +208,14 @@ class DropboxClient:
                         content=b"null",
                     )
             except httpx.TransportError as exc:
+                # str(exc) is often empty for timeouts/resets — keep the class name.
+                detail = f"{type(exc).__name__}: {exc}".rstrip(": ")
                 if attempt >= self._max_retries:
                     raise DropboxError(
-                        status=0, summary=f"transport error: {exc}",
+                        status=0, summary=f"transport error ({detail})",
                     ) from exc
                 delay = min(60, 1 * (2 ** attempt)) + random.random()
-                logger.warning("Transport error (attempt %d): %s", attempt, exc)
+                logger.warning("Transport error (attempt %d): %s", attempt, detail)
                 await self._sleep(delay)
                 attempt += 1
                 continue
@@ -213,7 +229,7 @@ class DropboxClient:
                 body = self._try_json(resp)
                 raise DropboxAuthError(
                     status=401,
-                    summary=body.get("error_summary", "unauthorized") if body else "unauthorized",
+                    summary=_error_text(body, "unauthorized"),
                     body=body,
                 )
 
@@ -252,7 +268,7 @@ class DropboxClient:
             if resp.status_code >= 400:
                 raise DropboxError(
                     status=resp.status_code,
-                    summary=body.get("error_summary", f"error {resp.status_code}") if body else f"error {resp.status_code}",
+                    summary=_error_text(body, f"error {resp.status_code}"),
                     body=body,
                 )
 

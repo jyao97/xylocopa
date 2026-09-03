@@ -669,3 +669,50 @@ async def test_delete_batch_timeout_raises():
     assert len(poll_sleeps) == 3
 
     await client.aclose()
+
+
+# ── Error text surfacing ────────────────────────────────────────────────
+
+
+def _client_with_handler(handler, *, max_retries: int = 1):
+    tp = FakeTokenProvider()
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return DropboxClient(tp, http=http, max_retries=max_retries, sleep=fake_sleep), tp, sleeps
+
+
+@pytest.mark.anyio
+async def test_401_with_user_message_surfaces_the_explanation():
+    """A missing-scope 401 must report Dropbox's user_message, not 'other/...'."""
+    body = {
+        "error": {".tag": "other"},
+        "error_summary": "other/...",
+        "user_message": {"locale": "en", "text": "Your app is not permitted: missing scope 'files.content.write'."},
+    }
+
+    def handler(request):
+        return httpx.Response(401, json=body)
+
+    client, tp, _ = _client_with_handler(handler)
+    with pytest.raises(DropboxAuthError) as ei:
+        await client.get_current_account()
+    assert "files.content.write" in ei.value.summary
+    assert tp.refresh_calls.count(True) == 1  # one forced refresh, then give up
+
+
+@pytest.mark.anyio
+async def test_transport_error_summary_names_the_exception():
+    """str(httpx.ConnectError('')) is empty — the class name must survive."""
+
+    def handler(request):
+        raise httpx.ConnectError("")
+
+    client, _, sleeps = _client_with_handler(handler, max_retries=2)
+    with pytest.raises(DropboxError) as ei:
+        await client.get_current_account()
+    assert "ConnectError" in ei.value.summary
+    assert len(sleeps) == 2

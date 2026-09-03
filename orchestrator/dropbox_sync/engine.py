@@ -137,6 +137,12 @@ class RunProgress:
     started_at: str = ""
     projects_total: int = 0
     projects_done: int = 0
+    # Cumulative over every project of the run (files_* above are per project)
+    run_files_scanned: int = 0
+    run_files_uploaded: int = 0
+    run_bytes_uploaded: int = 0
+    run_files_deleted: int = 0
+    run_errors: int = 0
 
 
 _current: RunProgress | None = None
@@ -864,6 +870,9 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
         return
 
     run_progress.files_total = len(entries)
+    run_progress.files_done = 0
+    run_progress.bytes_done = 0
+    run_progress.run_files_scanned += len(entries)
     run_progress.phase = "hash"
 
     # Diff against known state
@@ -873,7 +882,7 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
     # Update run counters
     await asyncio.to_thread(
         state.run_update, run_progress.run_id,
-        project=name, files_scanned=len(entries),
+        project=name, files_scanned=run_progress.run_files_scanned,
     )
 
     client = await _get_client()
@@ -1201,14 +1210,19 @@ async def sync_project(project: dict, run_progress: RunProgress) -> None:
         last_error=None if errors == 0 else f"{errors} error(s)",
     )
 
-    # Update run counters
+    # Update run counters — cumulative across the projects of this run
+    run_progress.run_files_uploaded += files_uploaded
+    run_progress.run_bytes_uploaded += bytes_uploaded
+    run_progress.run_files_deleted += len(deleted) if _cfg.prune else 0
+    run_progress.run_errors += errors
     await asyncio.to_thread(
         state.run_update, run_progress.run_id,
         project=name,
-        files_uploaded=files_uploaded,
-        bytes_uploaded=bytes_uploaded,
-        files_deleted=len(deleted) if _cfg.prune else 0,
-        errors=errors,
+        files_scanned=run_progress.run_files_scanned,
+        files_uploaded=run_progress.run_files_uploaded,
+        bytes_uploaded=run_progress.run_bytes_uploaded,
+        files_deleted=run_progress.run_files_deleted,
+        errors=run_progress.run_errors,
     )
 
     run_progress.files_done = len(entries)

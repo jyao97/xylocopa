@@ -176,11 +176,15 @@ export default function DropboxMonitorCard() {
     if (config.paused) {
       subtitle = `Paused · ${enabledCount} project${pluralS}`;
     } else {
-      const intervalMin = config.interval_minutes ?? 5;
-      const intervalLabel = intervalMin < 60 ? `${intervalMin} min` : `${intervalMin / 60} h`;
-      subtitle = `Auto: every ${intervalLabel} · ${enabledCount} project${pluralS}`;
-      if (status?.next_run_at) {
-        subtitle += ` · next ${formatRelative(status.next_run_at)}`;
+      const intervalMin = config.interval_minutes ?? 0;
+      if (intervalMin > 0) {
+        const intervalLabel = intervalMin < 60 ? `${intervalMin} min` : `${intervalMin / 60} h`;
+        subtitle = `Auto: on change · fallback every ${intervalLabel} · ${enabledCount} project${pluralS}`;
+        if (status?.next_run_at) {
+          subtitle += ` · next ${formatRelative(status.next_run_at)}`;
+        }
+      } else {
+        subtitle = `Auto: on change · ${enabledCount} project${pluralS}`;
       }
     }
   }
@@ -369,16 +373,15 @@ export default function DropboxMonitorCard() {
             {/* Config panel (collapsible) */}
             {configOpen && (
               <div className="pt-2 border-t border-divider space-y-3">
-                {/* Interval */}
+                {/* Fallback check interval */}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-label">Check every</span>
+                  <span className="text-xs text-label">Fallback check</span>
                   <select
-                    value={config?.interval_minutes ?? 5}
+                    value={config?.interval_minutes ?? 0}
                     onChange={(e) => handleUpdateConfig({ interval_minutes: parseInt(e.target.value) })}
                     className="text-xs bg-input text-heading rounded-lg px-2 py-1 border border-divider"
                   >
-                    <option value={1}>1 min</option>
-                    <option value={5}>5 min</option>
+                    <option value={0}>Off</option>
                     <option value={15}>15 min</option>
                     <option value={60}>1 h</option>
                     <option value={360}>6 h</option>

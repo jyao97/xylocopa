@@ -96,24 +96,58 @@ describe("DropboxMonitorCard", () => {
     expect(detail).toBeInTheDocument();
   });
 
-  it("shows interval_minutes in subtitle", async () => {
+  it("shows fallback interval in subtitle when interval > 0", async () => {
     fetchDropboxStatus.mockResolvedValue(MOCK_STATUS);
     render(<DropboxMonitorCard />);
 
     // 360 minutes = 6 h
-    const subtitle = await screen.findByText(/Auto: every 6 h/);
+    const subtitle = await screen.findByText(/Auto: on change · fallback every 6 h/);
     expect(subtitle).toBeInTheDocument();
   });
 
-  it("shows interval in minutes when < 60", async () => {
+  it("shows fallback interval in minutes when < 60", async () => {
     fetchDropboxStatus.mockResolvedValue({
       ...MOCK_STATUS,
-      config: { ...MOCK_STATUS.config, interval_minutes: 5 },
+      config: { ...MOCK_STATUS.config, interval_minutes: 15 },
     });
     render(<DropboxMonitorCard />);
 
-    const subtitle = await screen.findByText(/Auto: every 5 min/);
+    const subtitle = await screen.findByText(/Auto: on change · fallback every 15 min/);
     expect(subtitle).toBeInTheDocument();
+  });
+
+  it("shows 'on change' subtitle when interval_minutes is 0", async () => {
+    fetchDropboxStatus.mockResolvedValue({
+      ...MOCK_STATUS,
+      config: { ...MOCK_STATUS.config, interval_minutes: 0 },
+      next_run_at: null,
+    });
+    render(<DropboxMonitorCard />);
+
+    const subtitle = await screen.findByText(/Auto: on change · 2 projects/);
+    expect(subtitle).toBeInTheDocument();
+    // Should NOT contain "fallback"
+    expect(subtitle.textContent).not.toMatch(/fallback/);
+  });
+
+  it("config select defaults to Off when interval_minutes is 0", async () => {
+    fetchDropboxStatus.mockResolvedValue({
+      ...MOCK_STATUS,
+      config: { ...MOCK_STATUS.config, interval_minutes: 0 },
+    });
+    render(<DropboxMonitorCard />);
+
+    // Open config panel
+    const settingsBtn = await screen.findByTitle("Settings");
+    settingsBtn.click();
+
+    // Find the Fallback check label
+    const label = await screen.findByText("Fallback check");
+    expect(label).toBeInTheDocument();
+
+    // The select sibling should have value "0" (Off)
+    const select = label.closest("div").querySelector("select");
+    expect(select.value).toBe("0");
   });
 
   it("shows 'Up to date' when last_check found no changes", async () => {

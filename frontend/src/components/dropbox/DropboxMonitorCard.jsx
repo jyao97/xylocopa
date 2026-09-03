@@ -150,6 +150,121 @@ export default function DropboxMonitorCard() {
   const space = status?.space;
   const account = status?.account;
 
+  const enabledProjects = projects.filter((p) => p.enabled);
+  const disabledCount = projects.length - enabledProjects.length;
+
+  // Sort enabled projects: last_synced_at desc, never-synced last
+  const sortedProjects = [...enabledProjects].sort((a, b) => {
+    if (!a.last_synced_at && !b.last_synced_at) return 0;
+    if (!a.last_synced_at) return 1;
+    if (!b.last_synced_at) return -1;
+    return new Date(b.last_synced_at) - new Date(a.last_synced_at);
+  });
+
+  const enabledCount = enabledProjects.length;
+  const pluralS = enabledCount === 1 ? "" : "s";
+
+  // Space usage percent
+  const spacePct = space && space.allocated > 0
+    ? Math.min(100, Math.round((space.used / space.allocated) * 100))
+    : 0;
+  const spaceBarColor = spacePct >= 90 ? "bg-danger" : spacePct >= 70 ? "bg-attn" : "bg-accent";
+
+  // Build subtitle text
+  let subtitle = "";
+  if (linked && config) {
+    if (config.paused) {
+      subtitle = `Paused · ${enabledCount} project${pluralS}`;
+    } else {
+      subtitle = `Auto: every ${config.interval_hours ?? 1}h · ${enabledCount} project${pluralS}`;
+      if (status?.next_run_at) {
+        subtitle += ` · next ${formatRelative(status.next_run_at)}`;
+      }
+    }
+  }
+
+  // Status line helpers
+  const renderStatusLine = () => {
+    if (currentRun) {
+      const pct = currentRun.files_total > 0
+        ? Math.min(100, Math.round((currentRun.files_done / currentRun.files_total) * 100))
+        : 0;
+      const progressBarColor = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-attn" : "bg-accent";
+      return (
+        <div className="pt-2 border-t border-divider space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent animate-pulse shrink-0" />
+            <span className="text-xs text-heading min-w-0 truncate">
+              Syncing {currentRun.project ? currentRun.project : ""}
+              {" "}<span className="font-mono">{currentRun.files_done}/{currentRun.files_total}</span> files
+            </span>
+          </div>
+          {currentRun.files_total > 0 && (
+            <div className="h-2 rounded-full bg-elevated overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${progressBarColor}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          )}
+          {currentRun.errors > 0 && (
+            <p className="text-xs text-danger"><span className="font-mono">{currentRun.errors}</span> errors</p>
+          )}
+        </div>
+      );
+    }
+
+    if (lastRun) {
+      const statusWord = (lastRun.status || "").charAt(0).toUpperCase() + (lastRun.status || "").slice(1);
+      if (lastRun.status === "ok") {
+        const parts = [];
+        if (lastRun.files_uploaded > 0) parts.push(`${lastRun.files_uploaded} files`);
+        if (lastRun.bytes_uploaded > 0) parts.push(formatBytes(lastRun.bytes_uploaded));
+        return (
+          <div className="pt-2 border-t border-divider">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-ok shrink-0" />
+              <span className="text-xs text-heading min-w-0 truncate">
+                Synced {lastRun.finished_at ? formatRelative(lastRun.finished_at) : ""}
+              </span>
+              {parts.length > 0 && (
+                <span className="text-xs text-dim font-mono shrink-0 ml-auto">
+                  {parts.join(" · ")}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
+      // error/cancelled/interrupted
+      const dotColor = (lastRun.status === "cancelled" || lastRun.status === "interrupted") ? "bg-attn" : "bg-danger";
+      return (
+        <div className="pt-2 border-t border-divider">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotColor} shrink-0`} />
+            <span className="text-xs text-heading min-w-0 truncate">
+              {statusWord} {lastRun.finished_at ? formatRelative(lastRun.finished_at) : ""}
+            </span>
+          </div>
+          {lastRun.error_sample && (
+            <p className="text-[10px] text-danger truncate ml-[18px]" title={lastRun.error_sample}>
+              {lastRun.error_sample}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="pt-2 border-t border-divider">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-elevated shrink-0" />
+          <span className="text-xs text-heading">Not synced yet</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section>
       <h2 className="text-xs font-semibold text-dim uppercase tracking-wider mb-2">Dropbox</h2>
@@ -162,30 +277,28 @@ export default function DropboxMonitorCard() {
           /* Not linked state */
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-body">Not linked</p>
-              <p className="text-xs text-dim">Enable Dropbox Sync in a project's settings to connect.</p>
+              <p className="text-sm text-heading font-medium">Not linked</p>
+              <p className="text-xs text-dim mt-0.5">Enable Dropbox Sync in a project's settings to connect.</p>
             </div>
             <button
               type="button"
               onClick={() => setLinkOpen(true)}
-              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors accent-tint-15 text-accent hover:accent-tint-25"
+              className="shrink-0 px-2 py-0.5 rounded text-[11px] font-medium accent-tint-20 text-accent hover:accent-tint-25 transition-colors"
             >
               Connect
             </button>
           </div>
         ) : (
           <>
-            {/* Account line */}
+            {/* Header row: account + subtitle */}
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-sm text-heading font-medium">
                   {account?.name}
-                  <span className="text-dim font-normal"> · {account?.email}</span>
+                  <span className="text-dim font-normal"> &middot; {account?.email}</span>
                 </p>
-                {status?.next_run_at && (
-                  <p className="text-xs text-dim mt-0.5">
-                    Next sync: {formatRelative(status.next_run_at)}
-                  </p>
+                {subtitle && (
+                  <p className="text-xs text-dim mt-0.5">{subtitle}</p>
                 )}
               </div>
               <div className="flex items-center gap-1.5">
@@ -203,61 +316,24 @@ export default function DropboxMonitorCard() {
               </div>
             </div>
 
-            {/* Space usage bar */}
+            {/* Space usage bar (UsageBar idiom) */}
             {space && space.allocated > 0 && (
               <div>
-                <div className="flex items-center justify-between text-[10px] text-dim mb-1">
-                  <span>{formatBytes(space.used)} used</span>
-                  <span>{formatBytes(space.allocated)} total</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-label">Dropbox space</span>
+                  <span className="text-xs text-dim font-mono">{formatBytes(space.used)} / {formatBytes(space.allocated)}</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-elevated">
+                <div className="h-2 rounded-full bg-elevated overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-accent"
-                    style={{ width: `${Math.min(100, (space.used / space.allocated) * 100)}%` }}
+                    className={`h-full rounded-full transition-all ${spaceBarColor}`}
+                    style={{ width: `${spacePct}%` }}
                   />
                 </div>
               </div>
             )}
 
-            {/* Current run progress or last run summary */}
-            {currentRun ? (
-              <div className="pt-2 border-t border-divider">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-body">
-                    Syncing{currentRun.project ? ` ${currentRun.project}` : ""}
-                    {currentRun.phase ? ` (${currentRun.phase})` : ""}
-                  </p>
-                  <span className="text-[10px] text-dim">
-                    {currentRun.files_done}/{currentRun.files_total} files
-                  </span>
-                </div>
-                {currentRun.files_total > 0 && (
-                  <div className="h-1.5 rounded-full bg-elevated mt-1">
-                    <div
-                      className="h-full rounded-full bg-accent transition-all"
-                      style={{ width: `${Math.min(100, (currentRun.files_done / currentRun.files_total) * 100)}%` }}
-                    />
-                  </div>
-                )}
-                {currentRun.errors > 0 && (
-                  <p className="text-[10px] text-danger mt-0.5">{currentRun.errors} errors</p>
-                )}
-              </div>
-            ) : lastRun ? (
-              <div className="pt-2 border-t border-divider">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-body">
-                    Last run: {lastRun.status}
-                    {lastRun.files_uploaded > 0 && ` · ${lastRun.files_uploaded} files`}
-                    {lastRun.bytes_uploaded > 0 && ` · ${formatBytes(lastRun.bytes_uploaded)}`}
-                    {lastRun.errors > 0 && ` · ${lastRun.errors} errors`}
-                  </p>
-                  <span className="text-[10px] text-dim">
-                    {lastRun.finished_at ? formatRelative(lastRun.finished_at) : ""}
-                  </span>
-                </div>
-              </div>
-            ) : null}
+            {/* Status line (HealthCard-style dot + text) */}
+            {renderStatusLine()}
 
             {/* Config panel (collapsible) */}
             {configOpen && (
@@ -348,38 +424,65 @@ export default function DropboxMonitorCard() {
               </div>
             )}
 
-            {/* Per-project table */}
-            {projects.length > 0 && (
-              <div className="pt-2 border-t border-divider">
+            {/* Per-project list (enabled only, sorted) */}
+            <div className="pt-2 border-t border-divider">
+              {sortedProjects.length > 0 ? (
                 <div className="space-y-1 max-h-60 overflow-y-auto">
-                  {projects.map((p) => (
-                    <div key={p.name} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-elevated/50 text-xs">
-                      <span
-                        className={`shrink-0 w-2 h-2 rounded-full ${p.enabled ? "text-ok bg-current" : "text-dim bg-current"}`}
-                        title={p.enabled ? "Enabled" : "Disabled"}
-                      />
-                      <span className="text-heading font-medium truncate min-w-0 flex-1" title={p.name}>
-                        {p.display_name || p.name}
-                      </span>
-                      <span className="text-dim shrink-0">
-                        {p.files_synced != null ? `${p.files_synced} files` : ""}
-                      </span>
-                      <span className="text-dim shrink-0">
-                        {p.bytes_synced != null && p.bytes_synced > 0 ? formatBytes(p.bytes_synced) : ""}
-                      </span>
-                      <span className="text-dim shrink-0">
-                        {p.last_synced_at ? formatRelative(p.last_synced_at) : "never"}
-                      </span>
-                      {p.last_error && (
-                        <span className="text-danger shrink-0 truncate max-w-[120px]" title={p.last_error}>
-                          {p.last_error}
+                  {sortedProjects.map((p) => {
+                    const isSyncing = currentRun?.project === p.name;
+                    const dotColor = isSyncing
+                      ? "bg-accent animate-pulse"
+                      : p.last_error
+                        ? "bg-danger"
+                        : p.last_synced_at
+                          ? "bg-ok"
+                          : "bg-elevated";
+                    const hasStats = p.files_synced != null;
+                    const rightParts = [];
+                    if (hasStats) {
+                      rightParts.push(`${p.files_synced} files`);
+                      if (p.bytes_synced > 0) rightParts.push(formatBytes(p.bytes_synced));
+                    }
+                    const rightText = rightParts.length > 0 ? rightParts.join(" · ") : "—";
+                    return (
+                      <div key={p.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-elevated/50">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`shrink-0 w-2 h-2 rounded-full ${dotColor}`} />
+                          <div className="min-w-0">
+                            <p className="text-xs text-heading font-medium truncate" title={p.name}>
+                              {p.display_name || p.name}
+                            </p>
+                            {p.last_error ? (
+                              <p className="text-[10px] text-danger truncate" title={p.last_error}>
+                                {p.last_error}
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-faint">
+                                {p.last_synced_at ? formatRelative(p.last_synced_at) : "never"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-xs text-dim font-mono shrink-0 ml-2">
+                          {rightText}
                         </span>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-[10px] text-faint">
+                  {disabledCount > 0
+                    ? `${disabledCount} project${disabledCount === 1 ? "" : "s"} not syncing — enable Dropbox Sync in a project’s settings`
+                    : "No projects configured"}
+                </p>
+              )}
+              {sortedProjects.length > 0 && disabledCount > 0 && (
+                <p className="text-[10px] text-faint mt-1.5">
+                  {disabledCount} project{disabledCount === 1 ? "" : "s"} not syncing &mdash; enable Dropbox Sync in a project&rsquo;s settings
+                </p>
+              )}
+            </div>
 
             {/* Recent errors (collapsible) */}
             {recentErrors.length > 0 && (
@@ -394,8 +497,8 @@ export default function DropboxMonitorCard() {
                 {errorsOpen && (
                   <div className="mt-1.5 space-y-1 max-h-40 overflow-y-auto">
                     {recentErrors.map((err, i) => (
-                      <div key={i} className="text-[10px] text-dim py-0.5">
-                        <span className="text-faint">{err.at ? formatRelative(err.at) : ""}</span>
+                      <div key={i} className="text-[10px] py-0.5">
+                        <span className="font-mono text-faint">{err.at ? formatRelative(err.at) : ""}</span>
                         {err.project && <span className="text-label"> {err.project}</span>}
                         {err.path && <span className="text-faint"> {err.path}</span>}
                         {" "}<span className="text-danger">{err.message}</span>

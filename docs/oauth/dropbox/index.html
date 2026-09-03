@@ -7,62 +7,130 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     line-height: 1.5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
     padding: 2rem 1rem;
+    background: #f6f7f8;
+    color: #374151;
+  }
+  .card {
+    width: 100%;
     max-width: 28rem;
-    margin: 0 auto;
-    color: #1a1a1a;
-    background: #fafafa;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
   }
-  @media (prefers-color-scheme: dark) {
-    body { color: #e0e0e0; background: #111; }
-    input { background: #222; color: #e0e0e0; border-color: #444; }
-    button { background: #2563eb; }
-    a { color: #60a5fa; }
-    .dim { color: #888; }
+  .wordmark {
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-size: .75rem;
+    font-weight: 600;
+    color: #586069;
+    margin-bottom: 0.25rem;
   }
-  h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+  h1 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
   p { margin-bottom: 0.75rem; font-size: 0.875rem; }
-  .dim { color: #666; font-size: 0.75rem; }
-  #status { font-weight: 500; }
+  .dim { color: #586069; font-size: 0.75rem; }
+  #status {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9ca3af;
+    flex-shrink: 0;
+  }
+  .status-dot.active {
+    background: #06b6d4;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
   #ask-form { display: none; margin-top: 1rem; }
   #ask-form label { display: block; font-size: 0.875rem; margin-bottom: 0.25rem; }
   #ask-form input {
-    width: 100%; padding: 0.5rem; font-size: 0.875rem;
-    border: 1px solid #ccc; border-radius: 0.375rem;
-    margin-bottom: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    background: #fff;
+    color: #374151;
   }
   #ask-form button {
-    padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500;
-    color: #fff; background: #2563eb; border: none; border-radius: 0.375rem;
+    width: 100%;
+    height: 44px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    background: #06b6d4;
+    border: none;
+    border-radius: 0.5rem;
     cursor: pointer;
   }
   #idle-info { display: none; }
+  a { color: #0891b2; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #030712; color: #d1d5db; }
+    .card { background: #111827; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+    .wordmark { color: #6b7280; }
+    .dim { color: #6b7280; }
+    #ask-form input {
+      background: #1f2937;
+      color: #f3f4f6;
+      border-color: #374151;
+    }
+    #ask-form button {
+      background: #22d3ee;
+      color: #030712;
+    }
+    a { color: #22d3ee; }
+  }
 </style>
 </head>
 <body>
-  <h1>xylocopa</h1>
+  <div class="card">
+    <div class="wordmark">xylocopa</div>
+    <h1>Dropbox sign-in</h1>
 
-  <p id="status">Dropbox sign-in return page</p>
+    <p id="status"><span class="status-dot"></span> Dropbox sign-in return page</p>
 
-  <!-- Shown when a code/error arrived but we have no stored origin -->
-  <div id="ask-form">
-    <label for="origin-input">Where is your xylocopa?</label>
-    <input id="origin-input" type="url" value="https://localhost:3000"
-           placeholder="https://your-host:3000">
-    <button id="ask-submit" type="button">Continue</button>
-    <p class="dim">Enter the address you normally use to open xylocopa.</p>
-  </div>
+    <!-- Shown when a code/error arrived but we have no stored origin -->
+    <div id="ask-form">
+      <label for="origin-input">Where is your xylocopa?</label>
+      <input id="origin-input" type="url" value="https://localhost:3000"
+             placeholder="https://your-host:3000">
+      <button id="ask-submit" type="button">Continue</button>
+      <p class="dim">Enter the address you normally use to open xylocopa.</p>
+    </div>
 
-  <!-- Shown when someone opens the page directly -->
-  <div id="idle-info">
-    <p>This page helps xylocopa complete Dropbox sign-in.
-       It stores only your instance address in this browser's localStorage
-       so it can send you back after Dropbox approval.</p>
-    <p class="dim">
-      Source: <a href="https://github.com/jyao97/xylocopa">github.com/jyao97/xylocopa</a>
-    </p>
+    <!-- Shown when someone opens the page directly -->
+    <div id="idle-info">
+      <p>This page helps xylocopa complete Dropbox sign-in.
+         It stores only your instance address in this browser's localStorage
+         so it can send you back after Dropbox approval.</p>
+      <p class="dim">
+        Source: <a href="https://github.com/jyao97/xylocopa">github.com/jyao97/xylocopa</a>
+      </p>
+    </div>
   </div>
 
   <script type="module">
@@ -78,21 +146,24 @@
     });
 
     const statusEl = document.getElementById("status");
+    const dot = statusEl.querySelector(".status-dot");
 
     if (result.action === "start") {
       let host;
       try { host = new URL(result.origin).host; } catch { host = result.origin; }
-      statusEl.textContent = "Redirecting to Dropbox…";
+      dot.classList.add("active");
+      statusEl.lastChild.textContent = " Redirecting to Dropbox…";
       window.location.replace(result.authorize);
 
     } else if (result.action === "return") {
       let host;
       try { host = new URL(result.url).host; } catch { host = "your instance"; }
-      statusEl.textContent = "Returning to " + host + "…";
+      dot.classList.add("active");
+      statusEl.lastChild.textContent = " Returning to " + host + "…";
       window.location.replace(result.url);
 
     } else if (result.action === "ask") {
-      statusEl.textContent = "Dropbox authorized — where should we send the result?";
+      statusEl.lastChild.textContent = " Dropbox authorized — where should we send the result?";
       const form = document.getElementById("ask-form");
       const input = document.getElementById("origin-input");
       const btn = document.getElementById("ask-submit");
@@ -101,7 +172,7 @@
       btn.addEventListener("click", function () {
         const origin = input.value.replace(/\/+$/, "");
         if (!isAllowedReturn(origin)) {
-          statusEl.textContent = "Please enter a valid https:// address (or http:// for localhost).";
+          statusEl.lastChild.textContent = " Please enter a valid https:// address (or http:// for localhost).";
           return;
         }
         // Store for future use (best-effort)
@@ -109,7 +180,8 @@
           try { storage.setItem(STORAGE_KEY, origin); } catch { /* ignore */ }
         }
         const url = origin + "/api/dropbox/callback" + result.query;
-        statusEl.textContent = "Returning…";
+        dot.classList.add("active");
+        statusEl.lastChild.textContent = " Returning…";
         window.location.replace(url);
       });
 

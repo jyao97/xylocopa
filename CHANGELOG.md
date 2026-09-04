@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-04
+
+Dropbox backup release. Registered projects can be backed up to the user's Dropbox through the HTTP API v2 — no desktop client, no changes to project folders — with per-project folder selection, gitignore-style rules and event-driven uploads. Linking is one click for every install through a project-registered Dropbox app and a static return page. Attachments uploaded from the web UI now live inside the project. Also: `ultracode` as a task effort level and Opus 5 as the default for summary/insight jobs.
+
+### Added
+
+- **Dropbox sync, per project, off by default.** A "Dropbox Sync" row in each project's Settings card. Turning it on links the account (first time only) and opens a folder picker over the project's top-level entries: select all / deselect all, per-folder file counts and sizes streamed from a dry-run scan, "ignored" badges for `.git`/`node_modules`/symlinks, and an extra gitignore-style rules box. The engine scans incrementally (mtime+size, then Dropbox `content_hash`), uploads through upload sessions committed with `finish_batch`, resumes pending sessions after a restart (including `incorrect_offset` recovery and the 7-day session expiry), skips case-insensitive path collisions with a report, refuses torn uploads by sending `content_hash` with each commit, honours `Retry-After`, and supports an opt-in prune, a bandwidth throttle, and budgets (max file size, files per project, extension allowlist). State lives in `data/dropbox/state.db` (0600); the remote layout is `Apps/xylocopa/<project>/…`. Read-only MCP tools `dropbox_get` and `dropbox_count`. Design and API reference in `docs/dropbox-sync.md`. (05d20ada, 05e6ff2e, cc7de3a2, 579ec139, f5af50b6, 08ff4c9f, 38bfecc0, 63b6cebf, dc651ca5, 13318e08, c4f085c5, 6c166741)
+- **One-click linking for every install.** OAuth 2 + PKCE with a Dropbox app key shipped in the code (a public client id — no app secret exists), and a dependency-free static return page served from this repo via GitHub Pages (`docs/oauth/dropbox/`) that remembers the instance address in the visitor's own browser, so the flow is "Continue → Allow → back in xylocopa" from any origin (localhost, LAN, Tailscale) with nothing to configure. `DROPBOX_APP_KEY` / `DROPBOX_RELAY_URL` support a bring-your-own-app setup; the paste-a-code flow stays as a fallback. Linking a project that is already enabled starts its first sync immediately. (a2f6adad, 8251ff8d, 83a099fb, 6e26bb6b, 3b0ec34f, 468c3b1a)
+- **Event-driven uploads.** Nothing polls by default: an agent's Write/Edit/MultiEdit/NotebookEdit/Bash (PostToolUse hook) schedules a check 90 s later (5 min for projects over 100k files), an agent's turn ending 20 s later, an attachment upload 5 s later; enabling a project, linking and startup check immediately. Checks scan only the project involved and record a run only when something was uploaded. `interval_minutes` is an optional fallback timer (default 0 = off). Status exposes `mode`, `last_check`, `last_checked_at` and `up_to_date`. (1d9e6470, 152dfeda, a08ebb31, 5537710d, cf5bf2e2)
+- **Attachments stored in the project.** Files uploaded from chat, an inbox card or the new-task page go to `<project>/.xylocopa/uploads/` (added once to the repo's `.git/info/exclude`), so agents read them without leaving the project, previews get thumbnails, and they follow the project through archive, delete and Dropbox sync. Uploads without a project keep using `UPLOADS_DIR`; the Monitor storage chart counts both. (8fb7b122, e69a5ca4, d797aa7a)
+- **`ultracode` effort level** selectable when launching a task. (1331091e)
+
+### Changed
+
+- **Summary and insight jobs default to Opus 5.** (430c18b9)
+- **Monitor page** no longer shows the Backup and Dropbox cards — backups keep running on their schedule with the routes unchanged, and Dropbox is managed from each project's settings. (97565877)
+- **Dependencies:** `pathspec` added for gitignore-style matching. (05d20ada)
+
 ## [0.16.2] - 2026-09-01
 
 Model support release: Claude Fable 5.1.

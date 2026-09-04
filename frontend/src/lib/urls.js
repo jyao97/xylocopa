@@ -37,6 +37,20 @@ export function uploadUrl(filename) {
   return withToken(`${API_UPLOADS_PREFIX}${encodeURIComponent(filename)}`);
 }
 
+/**
+ * Build the URL for an uploaded attachment from its backend path.
+ * Attachments stored inside a project (`<project>/.xylocopa/uploads/...`)
+ * are project files (served with thumbnails); anything else lives in the
+ * global uploads dir. Must be checked before the uploads pattern — both
+ * paths contain `.xylocopa/uploads/`.
+ */
+export function attachmentUrl(absPath) {
+  const inProject = (absPath || "").match(RE_PROJECTS_PATH);
+  if (inProject) return fileUrl(inProject[1], inProject[2]);
+  const filename = (absPath || "").split("/").pop() || absPath;
+  return uploadUrl(filename);
+}
+
 /** Build URL for a project file. */
 export function fileUrl(project, relPath) {
   const segments = relPath.split("/").map(encodeURIComponent).join("/");

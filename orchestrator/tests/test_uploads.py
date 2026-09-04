@@ -295,3 +295,34 @@ async def test_upload_requests_a_dropbox_check_only_for_synced_projects(client, 
     )
     assert resp.status_code == 200 and resp.json()["storage"] == "project"
     assert (len(calls) == 1) is sync_enabled
+
+
+@pytest.mark.anyio
+async def test_legacy_upload_routes_find_project_stored_files(client, db_engine, tmp_path):
+    """/api/uploads/<name> and exists-batch {upload} resolve attachments stored inside a project."""
+    Session = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    db = Session()
+    db.add(Project(
+        name="legacy-proj", display_name="Legacy", path=str(tmp_path),
+        max_concurrent=2, default_model="claude-opus-4-7",
+    ))
+    db.commit()
+    db.close()
+
+    resp = await client.post(
+        "/api/upload",
+        files={"file": ("pic.png", b"\x89PNG-bytes", "image/png")},
+        data={"project": "legacy-proj"},
+    )
+    name = resp.json()["filename"]
+    assert resp.json()["storage"] == "project"
+
+    served = await client.get(f"/api/uploads/{name}")
+    assert served.status_code == 200
+    assert served.content == b"\x89PNG-bytes"
+
+    probe = await client.post("/api/files/exists-batch", json={"items": [{"upload": name}]})
+    assert probe.json()["results"][0]["exists"] is True
+
+    missing = await client.get("/api/uploads/does-not-exist.png")
+    assert missing.status_code == 404

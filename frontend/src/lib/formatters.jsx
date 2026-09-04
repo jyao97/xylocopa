@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Copy, Check, Maximize2, X } from "lucide-react";
 import katex from "katex";
 import { serverNow } from "./serverTime";
-import { uploadUrl, fileUrl, fileUrlToThumbUrl, API_FILES_PREFIX, RE_UPLOADS_PATH, RE_PROJECTS_PATH, PROJECTS_DIR_SEGMENT } from "./urls";
+import { uploadUrl, attachmentUrl, fileUrl, fileUrlToThumbUrl, API_FILES_PREFIX, RE_UPLOADS_PATH, RE_PROJECTS_PATH, PROJECTS_DIR_SEGMENT } from "./urls";
 
 /** Code block with copy button. */
 function CodeBlock({ code }) {
@@ -507,18 +507,20 @@ function resolveFileUrl(rawPath, defaultProject) {
     return fileUrl(proj, rest);
   }
 
-  // User-uploaded file path (.xylocopa/uploads/ or legacy .agenthive/uploads/) — route to /api/uploads/
-  const uploadMatch = rawPath.match(RE_UPLOADS_PATH);
-  if (uploadMatch) {
-    return uploadUrl(uploadMatch[1]);
-  }
-
-  // Absolute path with xylocopa-projects (or legacy agenthive-projects) — extract true project
+  // Absolute path with xylocopa-projects (or legacy agenthive-projects) — extract true project.
+  // Checked before the uploads pattern: per-project attachments live under
+  // <project>/.xylocopa/uploads/ and are served as project files.
   const absMatch = rawPath.match(RE_PROJECTS_PATH);
   if (absMatch) {
     const proj = absMatch[1];
     const rest = absMatch[2];
     return fileUrl(proj, rest);
+  }
+
+  // Global user-uploaded file (~/.xylocopa/uploads/ or legacy .agenthive/uploads/) — route to /api/uploads/
+  const uploadMatch = rawPath.match(RE_UPLOADS_PATH);
+  if (uploadMatch) {
+    return uploadUrl(uploadMatch[1]);
   }
 
   // Default: use the agent's project
@@ -583,7 +585,7 @@ export function extractFileAttachments(text, project, role, metadata) {
     if (metadata?.attachments?.length) {
       return metadata.attachments.map(filePath => {
         const filename = filePath.split("/").pop();
-        const resolvedUrl = uploadUrl(filename);
+        const resolvedUrl = attachmentUrl(filePath);
         const ext = filename.match(/\.(\w+)$/)?.[1]?.toLowerCase() || "";
         const type = classifyExt(filename);
         return { path: filename, resolvedUrl, type, ext, originalPath: filePath };
@@ -599,7 +601,7 @@ export function extractFileAttachments(text, project, role, metadata) {
       if (seen.has(filename)) continue;
       seen.add(filename);
 
-      const resolvedUrl = uploadUrl(filename);
+      const resolvedUrl = attachmentUrl(filePath);
       const ext = filename.match(/\.(\w+)$/)?.[1]?.toLowerCase() || "";
       const type = classifyExt(filename);
       results.push({ path: filename, resolvedUrl, type, ext, originalPath: filePath });

@@ -319,10 +319,7 @@ async def files_exists_batch(payload: dict, db: Session = Depends(get_db)):
         it = it or {}
         full = None
         if it.get("upload"):
-            safe_name = os.path.basename(it["upload"])
-            cand = os.path.join(UPLOADS_DIR, safe_name)
-            if os.path.isfile(cand):
-                full = cand
+            full = _find_upload(it["upload"], db)
         elif it.get("project") and it.get("path"):
             full = _try_resolve(it["project"], it["path"], db)
         if full and os.path.isfile(full):
@@ -469,13 +466,32 @@ async def upload_file(request: Request, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/uploads/{filename}")
-async def serve_upload(filename: str, request: Request):
-    """Serve an uploaded file."""
-    import mimetypes
+def _find_upload(filename: str, db) -> str | None:
+    """Locate an upload by its unique filename.
+
+    Looks in the global uploads dir first, then in every project's
+    ``.xylocopa/uploads`` — so links built from just the filename (older
+    bundles, cached pages) keep working for project-stored attachments.
+    """
     safe_name = os.path.basename(filename)
-    full_path = os.path.join(UPLOADS_DIR, safe_name)
-    if not os.path.isfile(full_path):
+    if not safe_name:
+        return None
+    cand = os.path.join(UPLOADS_DIR, safe_name)
+    if os.path.isfile(cand):
+        return cand
+    for proj in db.query(Project).all():
+        cand = os.path.join(proj.path, ".xylocopa", "uploads", safe_name)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+@router.get("/api/uploads/{filename}")
+async def serve_upload(filename: str, request: Request, db: Session = Depends(get_db)):
+    """Serve an uploaded file (global dir or any project's .xylocopa/uploads)."""
+    import mimetypes
+    full_path = _find_upload(filename, db)
+    if not full_path:
         raise HTTPException(status_code=404, detail="File not found")
     media_type = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
     return _serve_file_with_range(full_path, media_type, request)
